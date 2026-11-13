@@ -26,6 +26,44 @@ export interface BranchCounts {
   productCount: number | null;
 }
 
+/**
+ * What a branch needs to say where it is: its own name, the address on file, and the place it
+ * was pinned at (null when it never was).
+ *
+ * Structural on purpose — the branch summary, a row of the branch read and the branch itself are
+ * all this shape, and a helper that demanded one concrete type would need a copy per caller.
+ */
+export interface BranchPlaceParts {
+  name: string;
+  address: string | null;
+  place: { label?: string | null; address?: string | null } | null;
+}
+
+/**
+ * Where a branch is, in one line: its address, then the place name when that adds something.
+ *
+ * Three rules, all about not repeating what the line already says:
+ *
+ *   1. **The address is shown whether or not the branch was ever pinned.** An address on file is
+ *      a fact about the branch; the pin is a fact about the map. A branch with an address and no
+ *      pin is not "no location" — the location is written down, it just has no point yet.
+ *   2. **The place name is only appended when the address does not already contain it,** so a
+ *      reverse-geocoded address does not end in the name of its own city.
+ *   3. **The store's fallback label is the branch's own name** (`location_label ?? name`), and
+ *      "… · Warehouse Branch" would say the name twice.
+ *
+ * `null` means there is genuinely nothing to say, and the caller writes its own sentence —
+ * the same split `branchContextLabel` uses above.
+ */
+export function branchPlaceLine(branch: BranchPlaceParts): string | null {
+  const address = branch.place?.address ?? branch.address ?? null;
+  const rawLabel = branch.place?.label ?? null;
+  const label =
+    rawLabel && rawLabel !== branch.name && !(address ?? "").includes(rawLabel) ? rawLabel : null;
+  const parts = [address, label].filter((value): value is string => Boolean(value));
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 export function branchContextLabel(t: Translate, branch: BranchCounts): string {
   const parts: string[] = [];
 

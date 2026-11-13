@@ -103,7 +103,7 @@ async function cleanup() {
   // and one blocked row would leave the whole list behind. `placeLocation` is where that leak was
   // measured and fixed; this is the same fix applied where the same shape occurs.
   await deleteFixtureUsers([ADMIN_B_ID, EMPLOYEE_B_ID, EMPLOYEE_A_WITH_STOCK_ROLE]);
-  await trySql('shops', sql(`DELETE FROM shops WHERE id = '${SHOP_B}'`));
+  await sql(`DELETE FROM shops WHERE id = '${SHOP_B}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {

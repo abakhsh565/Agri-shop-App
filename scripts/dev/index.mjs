@@ -28,15 +28,31 @@ const routeComponent = [];
 for (const file of ROUTER_FILES) {
   const src = fs.readFileSync(file, 'utf8');
 
-  for (const m of src.matchAll(/import\s+(\w+)\s+from\s+["']([^"']+)["']/g)) {
+  // `import Page from "..."`, and the same default import alongside named exports:
+  // `import Page, { Helper } from "..."`. The second form was invisible here, so a screen whose
+  // page and its redirect shared one import silently dropped out of the index.
+  for (const m of src.matchAll(/import\s+(\w+)\s*(?:,\s*\{[^}]*\})?\s+from\s+["']([^"']+)["']/g)) {
     if (m[2].startsWith('@/')) componentFile[m[1]] = m[2].replace('@/', 'src/');
+  }
+  // Named exports used as route elements (`SupplierDetailRedirect`): same file, different export.
+  // They were left out entirely, so a kept-alive old address had no row of its own.
+  for (const m of src.matchAll(/import\s+(?:\w+\s*,\s*)?\{([^}]*)\}\s+from\s+["']([^"']+)["']/g)) {
+    if (!m[2].startsWith('@/')) continue;
+    for (const part of m[1].split(',')) {
+      const name = part.trim().split(/\s+as\s+/).pop().trim();
+      if (name && !componentFile[name]) componentFile[name] = m[2].replace('@/', 'src/');
+    }
   }
   for (const m of src.matchAll(/const\s+(\w+)\s*=\s*React\.lazy\(\s*\(\)\s*=>\s*import\(\s*["']([^"']+)["']/g)) {
     if (m[2].startsWith('@/')) componentFile[m[1]] = m[2].replace('@/', 'src/');
   }
 
-  // Each `path: "..."` with the first JSX element that follows it inside the same object.
-  for (const m of src.matchAll(/path:\s*["']([^"']*)["']([\s\S]{0,300}?)(?=path:|$)/g)) {
+  // Each `path: "..."` with the first JSX element that follows it, up to the NEXT `path:`.
+  // A bounded window (300, then 1200 chars) was a guess at where a route ends, and a route whose
+  // next sibling sat further away — the companies block, followed by a long commented section —
+  // silently vanished from the index. The next `path:` is the real boundary: a route declares its
+  // element before the next route begins, so the search can never borrow a later screen's element.
+  for (const m of src.matchAll(/path:\s*["']([^"']*)["']([\s\S]*?)(?=path:|$)/g)) {
     const [, route, tail] = m;
     const el = tail.match(/element:\s*<\s*([A-Za-z_$][\w$]*)/) || tail.match(/<\s*([A-Za-z_$][\w$]*)\s*\/>/);
     if (el) routeComponent.push({ route, component: el[1] });

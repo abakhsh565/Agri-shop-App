@@ -58,6 +58,44 @@ export function overrideCount(overrides: Record<string, boolean>): number {
 }
 
 /**
+ * Restriction-only employee access (owner's rule, 2026-11-01).
+ *
+ * An employee may be narrowed below the role they hold; they may never be widened above it.
+ * The value is the inherited role access with the owner's chosen reductions removed, and the
+ * stored shape only contains `false` rows. A `true` row is not representable here on purpose —
+ * the database rejects one too (migration 0277), so a screen cannot accidentally create a
+ * second, unreviewable source of authority.
+ */
+export function applyRestrictions(
+  defaults: Iterable<string>,
+  restrictions: Record<string, boolean>,
+): Set<string> {
+  const set = new Set(defaults);
+  for (const [code, restricted] of Object.entries(restrictions)) {
+    if (restricted !== false) continue;
+    set.delete(code);
+  }
+  return set;
+}
+
+/** The role permissions the owner has turned off for this employee (code → false). */
+export function restrictionOverrides(
+  value: Iterable<string>,
+  defaults: Iterable<string>,
+): Record<string, boolean> {
+  const current = new Set(value);
+  const role = new Set(defaults);
+  const restrictions: Record<string, boolean> = {};
+  for (const code of role) if (!current.has(code)) restrictions[code] = false;
+  return restrictions;
+}
+
+/** How many inherited permissions are switched off for this employee. */
+export function restrictionCount(restrictions: Record<string, boolean>): number {
+  return Object.values(restrictions).filter((restricted) => restricted === false).length;
+}
+
+/**
  * The exception rows to persist when saving: the differences the owner can see,
  * plus every stored exception that is currently a no-op for the selected role.
  *

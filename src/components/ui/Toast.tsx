@@ -62,6 +62,7 @@ export default function ToastContainer() {
               : toast.type === "warning"
                 ? AlertTriangle
                 : Info;
+        const action = toast.action;
 
         return (
           <div
@@ -81,6 +82,19 @@ export default function ToastContainer() {
             <span className="ds-body flex-1" style={{ color: "inherit" }}>
               {toast.message}
             </span>
+            {action && (
+              <button
+                type="button"
+                onClick={() => {
+                  removeToast(toast.id);
+                  action.onClick();
+                }}
+                className="shrink-0 text-12 font-bold underline underline-offset-2 ds-pressable"
+                style={{ color: "inherit" }}
+              >
+                {action.label}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => removeToast(toast.id)}

@@ -14,7 +14,8 @@
  * The baseline may only go DOWN. Fixing some and leaving the number alone FAILS, so the
  * count cannot quietly rot — the same discipline the microcopy and list guards use.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { cleanupFixtures, loginViaUi, setupFixtures } from './helpers';
 
 const OWNER_PHONE = '923001234567';
@@ -23,6 +24,9 @@ const ROUTES = [
   '/admin/dashboard', '/admin/sales', '/admin/products', '/admin/customers',
   '/admin/companies', '/admin/purchases', '/admin/employees', '/admin/reports',
   '/admin/payments', '/admin/alerts', '/admin/settings', '/admin/settings/profile', '/admin/more',
+  // The fifth tab's destination. It carries the same tab bar as every other route, so it adds
+  // no structural target — but an unaudited screen is exactly the one that grows a gap.
+  '/admin/messages',
   // The location picker, because it is the one screen that puts a MAP on it — and a map library
   // builds its own DOM (a canvas, a draggable marker, its own controls) rather than the app's.
   // Unmeasured, the lane would report a clean sheet while saying nothing about the largest

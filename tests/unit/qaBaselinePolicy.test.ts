@@ -25,6 +25,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readDeclaration, classifyBaseline } from '../../scripts/dev/qa-baseline.mjs';
+import {
+  QA_FIXTURE_COMPANIES,
+  QA_FIXTURE_CUSTOMERS,
+  QA_FIXTURE_PRODUCTS,
+  QA_FIXTURE_VARIANTS,
+  QA_FIXTURE_IDS,
+} from '../setup/qa-fixtures';
 import { QA_PROJECT_REF } from '../../scripts/dev/lib.mjs';
 import { ISOLATED_IDENTITIES, SHARED_QA_SHOP_ID } from '../../scripts/dev/qa-tenant.mjs';
 
@@ -245,6 +252,135 @@ describe('QA baseline policy — the fixtures\' work context', () => {
       { phone: PHONE_EMPLOYEE, membership: { role: 'employee', status: 'active', branchScope: null } },
     ];
     expect(classifyBaseline(unscopedEmployee, withContext).failures.join(' ')).toContain('no branch scope');
+  });
+});
+
+describe('QA baseline policy — the critical VALUES (EC4)', () => {
+  const withValues = {
+    ...declaration,
+    values: [
+      {
+        table: 'customers',
+        id: QA_FIXTURE_IDS.customerA,
+        why: 'QA Customer A — the payment lanes move these columns',
+        expect: { credit_limit: 50000, outstanding_balance: 30000, total_purchases: 80000, total_paid: 50000 },
+      },
+      {
+        table: 'product_variants',
+        id: QA_FIXTURE_IDS.variantA,
+        why: 'QA Variant A — voidSaleSafety decrements this stock',
+        expect: { stock_qty: 100, selling_price: 500 },
+      },
+    ],
+  };
+
+  function valueObservation() {
+    const observed = cleanObservation();
+    observed.values = {
+      [`customers:${QA_FIXTURE_IDS.customerA}`]: {
+        // pg returns `numeric` as a string; the checker must compare values, not formatting.
+        credit_limit: '50000.00',
+        outstanding_balance: '30000.00',
+        total_purchases: '80000.00',
+        total_paid: '50000.00',
+      },
+      [`product_variants:${QA_FIXTURE_IDS.variantA}`]: { stock_qty: 100, selling_price: 500 },
+    };
+    return observed;
+  }
+
+  it('passes when every declared value matches, including numeric-as-string', () => {
+    const result = classifyBaseline(valueObservation(), withValues);
+    expect(result.failures).toEqual([]);
+    expect(result.notes.join(' ')).toContain('critical value(s) — as declared');
+  });
+
+  it('fails when a balance moved — and names the column, both numbers, and the reason', () => {
+    // The reported defect: a lane paid the shared customer and left the balance changed. The row count
+    // and the id were still right, so only a value check can see it.
+    const paid = valueObservation();
+    paid.values[`customers:${QA_FIXTURE_IDS.customerA}`].outstanding_balance = '0.00';
+    const result = classifyBaseline(paid, withValues);
+    expect(result.ok).toBe(false);
+    const message = result.failures.join(' ');
+    expect(message).toContain('customers.outstanding_balance');
+    expect(message).toContain('declared 30000');
+    expect(message).toContain('found 0.00');
+    expect(message).toContain('did not restore it');
+  });
+
+  it('fails in the other direction too: stock that fell below the declared value', () => {
+    const sold = valueObservation();
+    sold.values[`product_variants:${QA_FIXTURE_IDS.variantA}`].stock_qty = 98;
+    const result = classifyBaseline(sold, withValues);
+    expect(result.failures.join(' ')).toContain('product_variants.stock_qty');
+    expect(result.failures.join(' ')).toContain('declared 100, found 98');
+  });
+
+  it('fails when the row is present but the column is NULL', () => {
+    const nulled = valueObservation();
+    nulled.values[`customers:${QA_FIXTURE_IDS.customerA}`].credit_limit = null;
+    expect(classifyBaseline(nulled, withValues).failures.join(' ')).toContain('is NULL, declared 50000');
+  });
+
+  it('fails when a declared row was never observed — a value check must not pass by absence', () => {
+    const missing = valueObservation();
+    delete missing.values[`product_variants:${QA_FIXTURE_IDS.variantA}`];
+    const result = classifyBaseline(missing, withValues);
+    expect(result.failures.join(' ')).toContain('NOT observed');
+  });
+
+  it('fails on a malformed declaration entry rather than silently skipping it', () => {
+    const malformed = { ...declaration, values: [{ table: 'customers', why: 'no id, no expect' }] };
+    expect(classifyBaseline(cleanObservation(), malformed).failures.join(' ')).toContain('without table/id/expect');
+  });
+});
+
+describe('the critical values are the fixture declaration, not a second opinion (EC4)', () => {
+  const real = readDeclaration();
+  const declared = (real.values ?? []).filter((v: { table?: string }) => Boolean(v.table));
+
+  /** Every declared fixture row, by table and id — the single source of the values. */
+  const fixtureRows: Record<string, Record<string, unknown>> = {};
+  for (const [table, rows] of [
+    ['customers', QA_FIXTURE_CUSTOMERS],
+    ['companies', QA_FIXTURE_COMPANIES],
+    ['products', QA_FIXTURE_PRODUCTS],
+    ['product_variants', QA_FIXTURE_VARIANTS],
+  ] as const) {
+    for (const row of rows) fixtureRows[`${table}:${String(row.id)}`] = row as Record<string, unknown>;
+  }
+
+  it('declares the shared rows that carry money, credit and stock', () => {
+    const keys = declared.map((v: { table: string; id: string }) => `${v.table}:${v.id}`);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        `customers:${QA_FIXTURE_IDS.customerA}`,
+        `customers:${QA_FIXTURE_IDS.customerB}`,
+        `customers:${QA_FIXTURE_IDS.customerC}`,
+        `companies:${QA_FIXTURE_IDS.companyA}`,
+        `product_variants:${QA_FIXTURE_IDS.variantA}`,
+      ]),
+    );
+    const columns = declared.flatMap((v: { expect: Record<string, unknown> }) => Object.keys(v.expect));
+    for (const column of ['credit_limit', 'outstanding_balance', 'outstanding_payable', 'stock_qty', 'selling_price']) {
+      expect(columns, `a money/credit/stock column is missing: ${column}`).toContain(column);
+    }
+  });
+
+  it('matches `tests/setup/qa-fixtures.ts` for every declared column — the two cannot drift', () => {
+    for (const entry of declared as { table: string; id: string; expect: Record<string, unknown>; why?: string }[]) {
+      const fixture = fixtureRows[`${entry.table}:${entry.id}`];
+      expect(fixture, `${entry.table} ${entry.id} is declared for its values but no fixture declares that row`).toBeTruthy();
+      expect(entry.why, `${entry.table}.${entry.id} needs a reviewed reason`).toBeTruthy();
+      expect(Object.keys(entry.expect).length, `${entry.table}.${entry.id} declares no columns`).toBeGreaterThan(0);
+      for (const [column, expected] of Object.entries(entry.expect)) {
+        expect(
+          Number(fixture[column]),
+          `${entry.table}.${column} for ${entry.id}: the baseline says ${expected}, the fixture declares ${fixture[column]} — re-seeding would not restore what this checks`,
+        ).toBe(Number(expected));
+      }
+    }
   });
 });
 

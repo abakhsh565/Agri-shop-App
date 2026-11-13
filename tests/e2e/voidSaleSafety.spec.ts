@@ -11,7 +11,7 @@
  *
  * Real Chrome, QA database only.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import { randomUUID } from 'crypto';
 import {
   QA_IDS,
@@ -23,6 +23,13 @@ import {
   trackOwned,
   injectAdminAuth,
 } from './helpers';
+import {
+  captureSharedCells,
+  restorationStatements,
+  sharedCellLabel,
+  type CapturedSharedCell,
+} from './sharedRowRestore';
+import { runCleanupStatements, runTeardownSteps } from '../setup/ownedCleanup';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const SALE_ID = randomUUID();
@@ -30,9 +37,33 @@ const SALE_ITEM_ID = randomUUID();
 const SALE_NUMBER = `QA-VOID-${Date.now().toString(36).toUpperCase()}`;
 const QTY = 2;
 
+/** The shared cells this lane writes, with the value each had BEFORE it wrote. Filled in beforeAll. */
+const sharedCells: CapturedSharedCell[] = [];
+
 test.describe('Void sale safety', () => {
   test.beforeAll(async () => {
     await setupFixtures();
+
+    // CAPTURE BEFORE THE FIRST WRITE. This lane decrements the shared variant's stock and the void
+    // in the body is what puts it back — so when an assertion above the void failed, QA Variant A
+    // stayed at 98 for every lane that followed, and the next run read that leftover as the fixture.
+    // The original value is read here, and restored from it in afterAll.
+    //
+    // THE CUSTOMER'S MONEY IS PART OF THE SAME WRITE. The sale below is INSERTed directly, so the
+    // customer's totals were never incremented — but the void that this lane drives goes through
+    // `void_sale`, whose accounting subtracts the unpaid amount from `outstanding_balance` and the
+    // sale total from `total_purchases` (0227 lines 108/113). Measured by the full E2E run on
+    // 2026-10-18: the lane passed and left QA Customer A at 29000 / 79000 — minus exactly this
+    // sale's 1000 — which the QA baseline reported as drift two minutes later. The two columns are
+    // captured here and restored in afterAll, like every other lane that moves them.
+    sharedCells.push(
+      ...(await captureSharedCells(execSql, [
+        { table: 'product_variants', column: 'stock_qty', id: QA_IDS.variantA },
+        { table: 'customers', column: 'outstanding_balance', id: QA_IDS.customerA },
+        { table: 'customers', column: 'total_purchases', id: QA_IDS.customerA },
+      ])),
+    );
+
     await execSql(`
       INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status,
         payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at)
@@ -57,7 +88,17 @@ test.describe('Void sale safety', () => {
     // voids, items, then the sale — by this lane's own ids, with every error swallowed) are
     // replaced by the registry, which deletes the same rows in FK order and FAILS the lane if a
     // delete does not succeed.
-    await cleanupFixtures();
+    //
+    // The restore runs first and always: it is a teardown, not the body's last line, and both it
+    // and the registry report their own failures instead of swallowing them.
+    await runTeardownSteps([
+      {
+        label: `restore ${sharedCells.map(sharedCellLabel).join(', ') || 'the shared cells this lane mutates'}`,
+        run: () =>
+          runCleanupStatements(execSql, restorationStatements(sharedCells), 'voidSaleSafety shared-row restore'),
+      },
+      { label: 'remove the rows this lane owns', run: () => cleanupFixtures() },
+    ]);
   });
 
   test('the confirmation names the sale, explains the consequence, and double-tapping it voids once', async ({ page }) => {

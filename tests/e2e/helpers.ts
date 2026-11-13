@@ -29,6 +29,7 @@ import {
 } from './cleanupOwnership';
 import { randomUUID } from 'node:crypto';
 import { ISOLATED_IDENTITIES, ISOLATED_TENANT_ID } from '../../scripts/dev/qa-tenant.mjs';
+import { FIXTURE_SQL, QA_FIXTURE_IDS } from '../setup/qa-fixtures';
 
 /**
  * Load .env.qa into process.env if not already loaded.
@@ -87,24 +88,11 @@ const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 /** Local (dialable) form of the QA admin phone used by the real login flow */
 const ADMIN_LOGIN_PHONE = '03009999999'; // 923009999999 -> 03009999999
 
-/** Local (dialable) form of the fixture owner's phone used by the real login flow */
-const OWNER_LOGIN_PHONE = '03001234567'; // 923001234567 -> 03001234567
-
-/** Test user IDs */
-export const QA_IDS = {
-  shop: '00000000-0000-0000-0000-000000000001',
-  owner: '10000000-0000-0000-0000-000000000003',
-  admin: '10000000-0000-0000-0000-000000000001',
-  employee: '10000000-0000-0000-0000-000000000002',
-  customerA: '20000000-0000-0000-0000-000000000001',
-  customerB: '20000000-0000-0000-0000-000000000002',
-  customerC: '20000000-0000-0000-0000-000000000003',
-  productA: '30000000-0000-0000-0000-000000000001',
-  productB: '30000000-0000-0000-0000-000000000002',
-  variantA: '40000000-0000-0000-0000-000000000001',
-  variantB: '40000000-0000-0000-0000-000000000002',
-  companyA: '50000000-0000-0000-0000-000000000001',
-} as const;
+/**
+ * Test user IDs — declared ONCE, in `tests/setup/qa-fixtures.ts`, and re-exported here so every spec
+ * that already imports `QA_IDS` keeps working against the same rows the integration seeder writes.
+ */
+export const QA_IDS = QA_FIXTURE_IDS;
 
 /**
  * Service-role client, created LAZILY on first use — never at module load.
@@ -671,94 +659,25 @@ export async function seedShopDraft(
 }
 
 /**
- * Setup QA test fixtures via direct DB.
+ * Seed the SHARED QA baseline: the eleven rows both suites mean by `QA_IDS`.
  *
- * These rows are the SHARED baseline (see tests/setup/fixtures.ts: several suites seed and rely on
- * them between runs), so they are deliberately NOT registered as run-owned: cleanup must not delete
- * a fixture another lane is still using. What a lane creates on top of them, it registers itself.
+ * The values, the ids and the restore set live in `tests/setup/qa-fixtures.ts`, which the vitest
+ * seeder consumes too. That is deliberate, and it is the fix for a measured drift: this function used
+ * to restore product stock but only customer NAMES, while the integration seeder restored customer
+ * balances but only product names — so whichever suite ran last decided what the next one inherited.
+ *
+ * These rows are the SHARED baseline, so they are deliberately NOT registered as run-owned: cleanup
+ * must not delete a fixture another lane is still using. What a lane creates on top of them, it
+ * registers itself.
+ *
+ * Order is a relationship, not a preference: companies before the products whose `company_id` points
+ * at one. Both seeders keep the same order.
  */
 export async function setupFixtures() {
-  await execSql(`
-    INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-    VALUES
-      ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', true, true, '${QA_IDS.shop}'),
-      ('${QA_IDS.employee}', 'QA Employee', '923008888888', 'employee', false, true, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_active = true, shop_id = EXCLUDED.shop_id;
-  `);
-
-  await execSql(`
-    INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id)
-    VALUES ('${QA_IDS.companyA}', 'QA Supplier A', 15000, 50000, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, shop_id = EXCLUDED.shop_id;
-  `);
-
-  // The conflict repair restores the WHOLE declared fixture, not just the name:
-  // a fixture customer archived (or moved to another shop) by an earlier lane
-  // stays archived forever under a name-only repair, and the screens filter it
-  // out — the row exists in the database yet never renders, which reads as a
-  // 15s 'element not found' instead of a setup failure.
-  await execSql(`
-    INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
-    VALUES
-      ('${QA_IDS.customerA}', 'QA Customer A', '923001111111', 50000, 30000, 80000, 50000, '${QA_IDS.shop}', 'QA'),
-      ('${QA_IDS.customerB}', 'QA Customer B', '923002222222', 25000, 26000, 40000, 14000, '${QA_IDS.shop}', 'QA'),
-      ('${QA_IDS.customerC}', 'QA Customer C', '923003333333', 10000, 0, 15000, 15000, '${QA_IDS.shop}', 'QA')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_archived = false, shop_id = EXCLUDED.shop_id;
-  `);
-
-  // QUICK ALERTS NEEDS ONE KNOWN PENDING REQUEST.
-  //
-  // dashboardScope test 1 asserts that a pending credit-limit request in the DB
-  // is surfaced in Quick Alerts with its real count. The row it counted was
-  // ambient leftover state no test seeded, so the premise was whatever a
-  // previous lane left behind. Seed exactly one pending row for QA Customer B
-  // (over its limit, so a request is realistic) and delete any other pending
-  // rows for the fixture shop first, so the count is a controlled value (1).
-  // The delete is scoped to the WHOLE shop, not just customers A/B/C: a probe
-  // (run 42371381906) proved a stale row from 2026-10-31 for "Testing
-  // customer" (requested_by "Kamran 422") survived every A/B/C-only delete
-  // and made the gate count 2 while the seeded row was the only controlled
-  // one. The isolation tenant is untouched — the delete is shop-scoped, and
-  // its customers belong to a different shop.
-  await execSql(`
-    DELETE FROM credit_limit_requests WHERE customer_id IN (SELECT id FROM customers WHERE shop_id = '${QA_IDS.shop}') AND status = 'pending';
-  `);
-  const [seededRequest] = await execSql(`
-    INSERT INTO credit_limit_requests (customer_id, customer_name, requested_by, current_limit, requested_limit, status)
-    VALUES ('${QA_IDS.customerB}', 'QA Customer B', 'QA', 25000, 40000, 'pending')
-    RETURNING id;
-  `);
-  if (seededRequest?.id) trackOwned(runOwnership, 'credit_limit_requests', seededRequest.id);
-
-  // STOCK IS PART OF THE FLOOR, NOT ONLY OF THE FIRST INSERT.
-  //
-  // These two rows used to be restored by name alone (`DO UPDATE SET name`), so the numbers above
-  // were read once at INSERT and never again. Measured 2026-10-14: `QA Product A`'s variant stood at
-  // 99, and every lane that reasons about stock from these figures inherited a lane's leftover —
-  // voidSaleSafety sold 2 off it and asserted the void put the fixture back at 100, which is what
-  // the declaration says the fixture IS, and failed on 99 while the void had restored exactly what
-  // it took. The premise of a lane must be the declared floor, not whichever lane ran last.
-  await execSql(`
-    INSERT INTO products (id, name, company_id, category, stock_qty, shop_id)
-    VALUES
-      ('${QA_IDS.productA}', 'QA Product A', '${QA_IDS.companyA}', 'seed', 100, '${QA_IDS.shop}'),
-      ('${QA_IDS.productB}', 'QA Product B', '${QA_IDS.companyA}', 'fertilizer', 0, '${QA_IDS.shop}')
-    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, stock_qty = EXCLUDED.stock_qty, shop_id = EXCLUDED.shop_id;
-
-    INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty)
-    VALUES
-      ('${QA_IDS.variantA}', '${QA_IDS.productA}', '1kg', 500, 300, 1, 10, 100),
-      ('${QA_IDS.variantB}', '${QA_IDS.productB}', '5kg', 2000, 1500, 5, 5, 0)
-    ON CONFLICT (id) DO UPDATE SET
-      name = EXCLUDED.name,
-      selling_price = EXCLUDED.selling_price,
-      cost_price = EXCLUDED.cost_price,
-      unit_size = EXCLUDED.unit_size,
-      low_stock_threshold = EXCLUDED.low_stock_threshold,
-      -- 0 for QA Product B is a fixture with a job: the dashboard's "out of stock" alert exists
-      -- because of it, so the floor has to restore that zero as deliberately as it restores the 100.
-      stock_qty = EXCLUDED.stock_qty;
-  `);
+  await execSql(FIXTURE_SQL.users);
+  await execSql(FIXTURE_SQL.companies);
+  await execSql(FIXTURE_SQL.customers);
+  await execSql(FIXTURE_SQL.productsAndVariants);
 }
 
 // ── Run-scoped ownership ─────────────────────────────────────

@@ -165,10 +165,9 @@ export default function ReturnConfirmPage() {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder={t("returns.reasonPlaceholder")}
-              className="w-full h-11 rounded-full px-4 text-sm outline-none"
+              className="w-full h-12 rounded-full px-4 text-sm outline-none"
               style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--divider)",
+                background: "var(--field-bg)",
                 color: "var(--text-primary)",
               }}
             />
@@ -219,10 +218,9 @@ export default function ReturnConfirmPage() {
                       step="1"
                       value={item.editedUnitPrice}
                       onChange={(e) => updatePrice(i, e.target.value)}
-                      className="w-24 h-8 rounded-[var(--radius-tile)] px-3 text-xs font-bold outline-none text-center"
+                      className="w-24 h-12 rounded-[var(--radius-field)] px-3 text-13 font-bold outline-none text-center"
                       style={{
-                        background: "var(--surface-2)",
-                        border: "1px solid var(--divider)",
+                        background: "var(--field-bg)",
                         color: "var(--text-primary)",
                       }}
                     />

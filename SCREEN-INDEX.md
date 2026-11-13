@@ -9,6 +9,10 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `/` | SplashPage | `src/pages/auth/SplashPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/welcome` | IntroPage | `src/pages/onboarding/IntroPage` | accessibility, crossScreenSync, education, imageSync, skeletonCoverage |
 | `/login` | LoginPage | `src/pages/auth/LoginPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
+| `/login/recover` | AccountRecoveryPage | `src/pages/auth/AccountRecoveryPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
+| `/login/invitations` | InvitationsPage | `src/pages/auth/InvitationsPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
+| `/login/business` | BusinessSelectPage | `src/pages/auth/BusinessSelectPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
+| `/identity` | IdentityPage | `src/pages/auth/IdentityPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/otp` | OTPVerifyPage | `src/pages/auth/OTPVerifyPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/account-ready` | AccountReadyPage | `src/pages/auth/AccountReadyPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/pin-set` | PINSetPage | `src/pages/auth/PINSetPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
@@ -26,11 +30,16 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `/admin` | AdminLayout | `src/components/layout/AdminLayout` | accessibility, actionCenter, crossScreenSync, education, overlayAboveNav |
 | `dashboard` | AdminDashboardPage | `src/pages/admin/dashboard/AdminDashboardPage` | accessibility, actionCenter, adminMicrocopy, crossScreenSync, dashboardScope, dependencyContinuity, imageSync, setupCompletion, skeletonCoverage |
 | `assistant` | AssistantPage | `src/pages/assistant/AssistantPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
-| `more` | MoreMenuPage | `src/pages/admin/more/MoreMenuPage` | accessibility, adminMicrocopy, crossScreenSync, education, imageSync, marketplaceListing, skeletonCoverage |
+| `more` | AdminMorePage | `src/pages/admin/more/MorePage` | accessibility, adminMicrocopy, crossScreenSync, education, imageSync, marketplaceListing, skeletonCoverage |
+| `messages` | AdminMessagesPage | `src/pages/admin/messages/AdminMessagesPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `guide` | AppGuidePage | `src/pages/shared/AppGuidePage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `search` | SearchPage | `src/pages/employee/search/SearchPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `customers` | CustomersListPage | `src/pages/employee/customers/CustomersListPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `customers/new` | AddCustomerPage | `src/pages/employee/customers/AddCustomerPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
+| `customers/outstanding` | OutstandingCreditPage | `src/pages/admin/customers/OutstandingCreditPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `customers/payments` | CustomerPaymentsPage | `src/pages/admin/customers/CustomerPaymentsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `customers/credit-requests` | CreditLimitRequestsPage | `src/pages/admin/customers/CreditLimitRequestsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `customers/reminders` | PaymentRemindersPage | `src/pages/admin/customers/PaymentRemindersPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `customers/:customerId` | CustomerProfilePage | `src/pages/employee/customers/CustomerProfilePage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `customers/:customerId/purchases` | CustomerPurchaseHistoryPage | `src/pages/employee/customers/CustomerPurchaseHistoryPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `customers/:customerId/payments` | CustomerPaymentHistoryPage | `src/pages/employee/customers/CustomerPaymentHistoryPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
@@ -39,8 +48,14 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `products` | ProductsListPage | `src/pages/employee/products/ProductsListPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, productOpeningStock, skeletonCoverage |
 | `products/:productId` | ProductDetailPage | `src/pages/employee/products/ProductDetailPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, productOpeningStock, skeletonCoverage |
 | `inventory/new` | AddProductPage | `src/pages/admin/inventory/AddProductPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
+| `inventory/catalogue` | InventoryCataloguePage | `src/pages/admin/inventory/InventoryCataloguePage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
+| `inventory/categories` | CategoriesPage | `src/pages/admin/inventory/CategoriesPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
+| `inventory/units` | UnitsPage | `src/pages/admin/inventory/UnitsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
+| `inventory/categories/new` | CategoryFormPage | `src/pages/admin/inventory/CategoryFormPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
+| `inventory/categories/:categoryId` | CategoryFormPage | `src/pages/admin/inventory/CategoryFormPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `inventory/:productId/edit` | AddProductPage | `src/pages/admin/inventory/AddProductPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `inventory/:productId/adjust` | InventoryAdjustPage | `src/pages/admin/inventory/InventoryAdjustPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
+| `inventory/stockvalues` | StockManagementPage | `src/pages/admin/inventory/StockManagementPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `inventory/movements` | StockMovementHistoryPage | `src/pages/admin/inventory/StockMovementHistoryPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `inventory/reorder` | ReorderSuggestionsPage | `src/pages/admin/inventory/ReorderSuggestionsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
 | `inventory/barcodes` | BarcodeGeneratePage | `src/pages/admin/inventory/BarcodeGeneratePage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
@@ -56,36 +71,97 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `sales/:saleId/return/success` | AdminReturnSuccessPage | `src/pages/admin/returns/AdminReturnSuccessPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `purchases` | AdminPurchasesPage | `src/pages/admin/purchases/AdminPurchasesPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `purchases/new` | RecordPurchasePage | `src/pages/admin/purchases/RecordPurchasePage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `purchases/payments` | SupplierPaymentsPage | `src/pages/admin/purchases/SupplierPaymentsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `purchases/payments/:paymentId` | SupplierPaymentDetailPage | `src/pages/admin/purchases/SupplierPaymentDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `purchases/:purchaseId` | PurchaseDetailPage | `src/pages/admin/purchases/PurchaseDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
-| `payments` | AdminPaymentsPage | `src/pages/admin/payments/AdminPaymentsPage` | accessibility, adminMicrocopy, crossScreenSync, doubleTapSafety, imageSync, skeletonCoverage |
+| `payments` | MoneyStatementPage | `src/pages/admin/finance/MoneyStatementPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `payments/supplier/:companyId` | RecordSupplierPaymentPage | `src/pages/admin/payments/RecordSupplierPaymentPage` | accessibility, adminMicrocopy, crossScreenSync, doubleTapSafety, imageSync, skeletonCoverage |
 | `payments/daily-cash` | DailyCashReconciliationPage | `src/pages/admin/payments/DailyCashReconciliationPage` | accessibility, adminMicrocopy, crossScreenSync, doubleTapSafety, imageSync, skeletonCoverage |
+| `payments/cash-position` | CashPositionPage | `src/pages/admin/payments/CashPositionPage` | accessibility, adminMicrocopy, crossScreenSync, doubleTapSafety, imageSync, skeletonCoverage |
 | `companies` | CompaniesListPage | `src/pages/admin/companies/CompaniesListPage` | accessibility, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `companies/new` | AddCompanyPage | `src/pages/admin/companies/AddCompanyPage` | accessibility, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `companies/:companyId` | CompanyDetailPage | `src/pages/admin/companies/CompanyDetailPage` | accessibility, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `purchases/payables` | PurchasesPayablesPage | `src/pages/admin/purchases/PurchasesPayablesPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `employees` | EmployeesListPage | `src/pages/admin/employees/EmployeesListPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
 | `employees/new` | AddEmployeePage | `src/pages/admin/employees/AddEmployeePage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
 | `employees/:employeeId` | EmployeeDetailPage | `src/pages/admin/employees/EmployeeDetailPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
+| `employees/:employeeId/role` | EmployeeRolePage | `src/pages/admin/employees/EmployeeRolePage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
+| `employees/:employeeId/branches` | EmployeeBranchesPage | `src/pages/admin/employees/EmployeeBranchesPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
+| `employees/:employeeId/salary` | EmployeeSalaryPage | `src/pages/admin/employees/EmployeeSalaryPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
+| `employees/:employeeId/performance` | EmployeePerformancePage | `src/pages/admin/employees/EmployeePerformancePage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
+| `employees/:employeeId/invitation` | EmployeeInvitationPage | `src/pages/admin/employees/EmployeeInvitationPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
 | `reports` | AdminReportsPage | `src/pages/admin/reports/AdminReportsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
-| `settings` | AdminSettingsPage | `src/pages/admin/settings/AdminSettingsPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
-| `settings/profile` | ProfileDetailsPage | `src/pages/admin/settings/ProfileDetailsPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `reports/directory` | AdminReportsHubPage | `src/pages/admin/reports/AdminReportsHubPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `reports/profit` | AdminProfitReportPage | `src/pages/admin/reports/AdminProfitReportPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings` | AdminSettingsPage | `src/pages/admin/settings/AdminSettingsPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/profile` | ProfileDetailsPage | `src/pages/admin/settings/ProfileDetailsPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/security` | SecuritySettingsPage | `src/pages/admin/settings/SecuritySettingsPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/preferences` | PreferencesPage | `src/pages/admin/settings/PreferencesPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/hub/branches` | AdminBranchesSectionPage | `src/pages/admin/settings/AdminBranchesSectionPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/hub/people` | AdminPeopleHubPage | `src/pages/admin/people/AdminPeopleHubPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/people/employees` | AdminEmployeesDirectoryPage | `src/pages/admin/people/AdminEmployeesDirectoryPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/people/activity` | AdminEmployeeActivityPage | `src/pages/admin/people/AdminEmployeeActivityPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/people/activity/:employeeId` | AdminEmployeeActivityDetailPage | `src/pages/admin/people/AdminEmployeeActivityDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/people/co-owners` | CoOwnersPage | `src/pages/admin/people/CoOwnersPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/people/co-owners/new` | CoOwnerWizardPage | `src/pages/admin/people/CoOwnerWizardPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/people/co-owners/transfer` | OwnerOwnershipTransferPage | `src/pages/admin/people/OwnerOwnershipTransferPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/people/co-owners/:grantId` | CoOwnerDetailPage | `src/pages/admin/people/CoOwnerDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/people/co-owners/:grantId/edit` | CoOwnerWizardPage | `src/pages/admin/people/CoOwnerWizardPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/roles` | RolesAccessPage | `src/pages/admin/settings/RolesAccessPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/roles/new` | RoleEditorPage | `src/pages/admin/people/RoleEditorPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/roles/:roleId` | RoleEditorPage | `src/pages/admin/people/RoleEditorPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/sales` | AdminSalesSectionPage | `src/pages/admin/sales/AdminSalesSectionPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage, voidSaleSafety |
+| `settings/hub/inventory` | AdminInventorySectionPage | `src/pages/admin/inventory/AdminInventorySectionPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
+| `settings/hub/customers` | AdminCustomersSectionPage | `src/pages/admin/customers/AdminCustomersSectionPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/purchases` | AdminPurchasesSectionPage | `src/pages/admin/purchases/AdminPurchasesSectionPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/finance` | AdminFinanceSectionPage | `src/pages/admin/finance/AdminFinanceSectionPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/finance/record` | RecordMoneyPage | `src/pages/admin/finance/RecordMoneyPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/finance/money` | MoneyStatementPage | `src/pages/admin/finance/MoneyStatementPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/finance/reminders` | PaymentRemindersBookPage | `src/pages/admin/finance/PaymentRemindersBookPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/hub/:sectionId` | SectionHubPage | `src/pages/admin/settings/SectionHubPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/overview/customers` | CustomerReceivablePage | `src/pages/admin/settings/CustomerReceivablePage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/overview/customers/pending` | CustomerCreditPage | `src/pages/admin/settings/CustomerCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/overview/customers/overdue` | CustomerCreditPage | `src/pages/admin/settings/CustomerCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/overview/suppliers` | SupplierPayablePage | `src/pages/admin/settings/SupplierPayablePage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/overview/suppliers/pending` | SupplierCreditPage | `src/pages/admin/settings/SupplierCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/overview/suppliers/overdue` | SupplierCreditPage | `src/pages/admin/settings/SupplierCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
+| `settings/overview/suppliers/:companyId` | SupplierDetailRedirect | `src/pages/admin/companies/CompanyDetailPage` | accessibility, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `settings/business` | BusinessProfilePage | `src/pages/admin/settings/BusinessProfilePage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `settings/branches/:branchId` | BranchDetailPage | `src/pages/admin/more/BranchDetailPage` | accessibility, adminMicrocopy, crossScreenSync, education, imageSync, marketplaceListing, skeletonCoverage |
-| `settings/roles` | RolesAccessPage | `src/pages/admin/settings/RolesAccessPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `activity` | ActivityLogPage | `src/pages/employee/activity/ActivityLogPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
+| `co-owner-approvals` | CoOwnerApprovalsPage | `src/pages/co-owner/CoOwnerApprovalsPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
+| `ownership-transfer` | CoOwnerOwnershipTransferPage | `src/pages/co-owner/CoOwnerOwnershipTransferPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `notifications` | AdminNotificationsPage | `src/pages/admin/notifications/AdminNotificationsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, notificationsBranchTabs, skeletonCoverage |
 | `alerts/credit-overrides` | CreditOverridesPage | `src/pages/admin/alerts/CreditOverridesPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `alerts/credit-overrides/:customerId` | CreditOverrideDetailPage | `src/pages/admin/alerts/CreditOverrideDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `alerts/reminders` | RemindersOverviewPage | `src/pages/admin/alerts/RemindersOverviewPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `alerts/harvest` | HarvestAlertPage | `src/pages/admin/alerts/HarvestAlertPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `alerts/inventory` | InventoryAlertsPage | `src/pages/admin/alerts/InventoryAlertsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `alerts/expiry` | ExpiryAlertsPage | `src/pages/admin/alerts/ExpiryAlertsPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `alerts/credit-requests/:requestId` | CreditRequestDetailPage | `src/pages/admin/alerts/CreditRequestDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `alerts/groups/:groupId` | GroupDetailPage | `src/pages/admin/alerts/GroupDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `/co-owner/accept` | CoOwnerAcceptPage | `src/pages/co-owner/CoOwnerAcceptPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
+| `/co-owner` | CoOwnerLayout | `src/components/layout/CoOwnerLayout` | accessibility, actionCenter, crossScreenSync, education, overlayAboveNav |
+| `dashboard` | CoOwnerDashboardPage | `src/pages/co-owner/CoOwnerDashboardPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
+| `approvals` | CoOwnerApprovalsPage | `src/pages/co-owner/CoOwnerApprovalsPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
+| `more` | CoOwnerMorePage | `src/pages/co-owner/CoOwnerMorePage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
+| `settings` | CoOwnerSettingsPage | `src/pages/co-owner/CoOwnerSettingsPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
+| `team` | CoOwnerTeamPage | `src/pages/co-owner/CoOwnerTeamPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
+| `team/new` | AddEmployeePage | `src/pages/admin/employees/AddEmployeePage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
+| `team/:employeeId` | EmployeeDetailPage | `src/pages/admin/employees/EmployeeDetailPage` | accessibility, accessUx, adminMicrocopy, crossScreenSync, employeeStatusSafety, imageSync, roleDeleteSafety, skeletonCoverage |
+| `finance` | MoneyStatementPage | `src/pages/admin/finance/MoneyStatementPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `team/activity` | AdminEmployeeActivityPage | `src/pages/admin/people/AdminEmployeeActivityPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
+| `team/activity/:employeeId` | AdminEmployeeActivityDetailPage | `src/pages/admin/people/AdminEmployeeActivityDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `/employee` | EmployeeLayout | `src/components/layout/EmployeeLayout` | accessibility, actionCenter, crossScreenSync, education, overlayAboveNav |
 | `dashboard` | DashboardPage | `src/pages/employee/dashboard/DashboardPage` | accessibility, actionCenter, crossScreenSync, dashboardScope, dependencyContinuity, employeeStatusSafety, imageSync, setupCompletion, skeletonCoverage |
 | `sales` | SalesListPage | `src/pages/employee/sales/SalesListPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage, voidSaleSafety |
 | `sales/:saleId/return` | ReturnSelectItemsPage | `src/pages/employee/returns/ReturnSelectItemsPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `sales/:saleId/return/confirm` | ReturnConfirmPage | `src/pages/employee/returns/ReturnConfirmPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `sales/:saleId/return/success` | ReturnSuccessPage | `src/pages/employee/returns/ReturnSuccessPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
+| `stock` | StockManagementPage | `src/pages/admin/inventory/StockManagementPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, marketplaceListing, productOpeningStock, skeletonCoverage |
+| `team` | EmployeeTeamPage | `src/pages/employee/team/TeamPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `settings` | SettingsPage | `src/pages/employee/settings/SettingsPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, setupCompletion, skeletonCoverage, systemDrive |
+| `reports` | MyReportsPage | `src/pages/employee/reports/MyReportsPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `notifications` | EmployeeNotificationsPage | `src/pages/employee/notifications/EmployeeNotificationsPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, notificationsBranchTabs, skeletonCoverage |
 | `more` | EmployeeMorePage | `src/pages/employee/more/MorePage` | accessibility, crossScreenSync, education, employeeStatusSafety, imageSync, skeletonCoverage |
 

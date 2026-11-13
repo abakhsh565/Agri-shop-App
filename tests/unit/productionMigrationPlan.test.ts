@@ -1,8 +1,10 @@
 /**
  * productionMigrationPlan — production cannot be planned for by accident.
  *
- * The report that opened this work: production's ledger holds 8 entries through 0016 while the
- * repository holds 198 files, so "apply the migrations" could damage data or break the app. The answer
+ * The report that opened this work: production's ledger held 8 entries through 0016 while the
+ * repository holds 198 files, so "apply the migrations" could damage data or break the app. (Where
+ * production stands today is recorded in `supabase/baseline/production-baseline.json` and read from
+ * there — this comment is history, not a measurement.) The answer
  * is `docs/PRODUCTION_MIGRATION_PLAN.md`: what production actually has, what it can take unchanged
  * (measured, as a batch), what it cannot, and the order in which the difference closes.
  *
@@ -12,8 +14,7 @@
  *      production the day it is written, not the day someone remembers to think about production. The
  *      first test below fails until the plan says what should happen to it.
  *   2. **A premise drifts while the plan keeps its old numbers.** The plan rests on two measured
- *      facts — production's recorded position (48 / 0304, re-derived 2026-11-10 from the 2026-11-10
- *      pg_dump capture) and the batch results — plus one policy
+ *      facts — production's recorded position (read from the baseline record) and the batch results — plus one policy
  *      (the migration tool refuses production before connecting). Each is asserted here, so changing
  *      the baseline record or re-opening production in the tool fails the suite instead of quietly
  *      invalidating a reviewed document.
@@ -35,8 +36,16 @@ const migrateTool = readFileSync(join(ROOT, 'scripts/migrate.mjs'), 'utf8');
 const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort();
 const versionOf = (file: string) => file.slice(0, 4);
 
-/** Production's recorded position, from the frozen baseline record. */
-const PRODUCTION_POSITION = '0304';
+/**
+ * Production's recorded position — READ from the frozen baseline record, never a second copy of it.
+ *
+ * This used to be the literal `'0016'`. A literal is a claim that stops being true the moment
+ * production moves (it is at 0304 as recorded on 2026-11-10), and the guard then fails on a branch
+ * that is merely behind main rather than on a branch that is actually wrong. Reading the record
+ * makes `supabase/baseline/production-baseline.json` the single source of truth: to change the
+ * position, re-capture the record and update the plan — not this file.
+ */
+const PRODUCTION_POSITION = String(baseline.ledgerOnServer.latest);
 /** Every file at or after the first one production has not recorded. */
 const PENDING = files.filter((f) => versionOf(f) >= '0177');
 
@@ -120,7 +129,10 @@ describe('the plan’s premises cannot drift unnoticed', () => {
       'the production baseline record moved. The plan’s whole shape depends on where production is; ' +
         're-derive §§1–2 and update docs/PRODUCTION_MIGRATION_PLAN.md before changing this record.',
     ).toBe(PRODUCTION_POSITION);
-    expect(plan).toContain('48 rows, latest `0304`');
+    // The plan must quote the record it rests on — count and version both, read from the baseline.
+    expect(plan).toContain(
+      `${baseline.ledgerOnServer.count} rows, latest \`${PRODUCTION_POSITION}\``,
+    );
   });
 
   test('the tool still refuses production before connecting, except for a named, gated batch', () => {

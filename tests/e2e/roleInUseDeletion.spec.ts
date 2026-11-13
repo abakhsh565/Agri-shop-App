@@ -19,7 +19,7 @@
  *
  * QA database only; the throwaway role and its assignment are removed again.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import {
   QA_IDS,
   execSql,
@@ -30,6 +30,7 @@ import {
   trackOwned,
   injectOwnerAuth,
 } from './helpers';
+import { runCleanupStatements } from '../setup/ownedCleanup';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const ROLE_ID = 'bbbb0000-0000-4000-8000-000000000001';
@@ -98,14 +99,19 @@ test.describe('Role deletion — assigned role revokes its access', () => {
     // throwaway role would match nothing and leave the shared QA Employee fixture
     // without any role — which silently breaks every later lane that reads their
     // permissions (it did: appSettingsIsolation's employee reader).
-    await execSql(`
-      UPDATE memberships SET role_id = ${previousRoleId ? `'${previousRoleId}'` : 'NULL'}, updated_at = now()
-      WHERE user_id = '${QA_IDS.employee}' AND tenant_id = '${QA_IDS.shop}'
-    `).catch(() => {});
-    await execSql(`
-      UPDATE memberships SET role_id = ${previousRoleId2 ? `'${previousRoleId2}'` : 'NULL'}, updated_at = now()
-      WHERE user_id = '${EMPLOYEE_2}' AND tenant_id = '${QA_IDS.shop}'
-    `).catch(() => {});
+    // …and REPORTED. `.catch(() => {})` on these two meant the restore could be refused (a policy,
+    // a missing row) while the lane reported clean, leaving the shared QA Employee fixture without a
+    // role — the exact breakage the comment above describes, invisible the second time it happens.
+    await runCleanupStatements(
+      execSql,
+      [
+        `UPDATE memberships SET role_id = ${previousRoleId ? `'${previousRoleId}'` : 'NULL'}, updated_at = now()
+         WHERE user_id = '${QA_IDS.employee}' AND tenant_id = '${QA_IDS.shop}'`,
+        `UPDATE memberships SET role_id = ${previousRoleId2 ? `'${previousRoleId2}'` : 'NULL'}, updated_at = now()
+         WHERE user_id = '${EMPLOYEE_2}' AND tenant_id = '${QA_IDS.shop}'`,
+      ],
+      'roleInUseDeletion restore of the employees’ own roles',
+    );
 
     // CLEANUP IS OWNERSHIP-BASED NOW. The five deletes that used to run here (role_permissions,
     // roles, memberships, audit_events, users — all by the throwaway ids this lane fixed itself)

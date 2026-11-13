@@ -26,10 +26,24 @@ name: CI — gates for a candidate commit
 #     path is what keeps this gate fast enough to actually be required.
 
 on:
+  # The permanent chain is dev -> staging -> main. A check that only runs at the last step is how
+  # drift accumulated unnoticed before: the branch people work on was the one no workflow watched.
+  # Gates therefore run on every push to all three branches, and on every PR into staging or main.
   pull_request:
-    branches: [main]
+    branches: [staging, main]
+    # A documentation-only change cannot alter the bundle, the schema or a policy. Running the
+    # 11–29 minute QA + E2E path for it was pure queue time — and on a metered account it was also
+    # the minutes that starved the release. `gates` still runs for anything that can reach the app.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'device-evidence/**'
   push:
-    branches: [main, staging-snapshot]
+    branches: [dev, staging, main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'device-evidence/**'
   workflow_dispatch:
     inputs:
       run_e2e:
@@ -38,17 +52,19 @@ on:
         required: false
         default: false
 
-concurrency:
-  # A superseded candidate is not worth finishing; the newest commit on the branch is the truth.
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
 jobs:
   gates:
     name: Gates (tsc · unit guards · safety proofs · build)
+    concurrency:
+      # A superseded candidate is not worth finishing, so the CHEAP gate still cancels — but only
+      # the gate. Cancelling the whole run (what the workflow-level block used to do) also killed a
+      # `qa` or `e2e` job mid-suite, and a QA writer killed while it holds the advisory lock leaves
+      # its run-owned rows behind.
+      group: ci-gates-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -87,7 +103,10 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Unit guards (migrations · production seeding · environment · cleanup ownership)
-        run: npx vitest run tests/unit --reporter=verbose
+        # 73s / 94 files locally; on a runner it is the smallest part of this job. Sharding it was
+        # measured and rejected: the whole `gates` job takes ~1 minute, so three extra jobs would
+        # add installs and queue slots to save a few seconds. The cost is in `qa` and `e2e`.
+        run: npx vitest run tests/unit --reporter=dot
 
       - name: Backup workflow safety proof
         run: node scripts/verify-workflow-safety.mjs
@@ -114,19 +133,43 @@ jobs:
           echo "> did not run — not one that passed. Run it where the artifact exists:" >> "$GITHUB_STEP_SUMMARY"
           echo "> \`npm run verify:baseline -- --baseline staging --since <version>\`." >> "$GITHUB_STEP_SUMMARY"
 
+      # A red gate used to leave nothing but an expiring log. This seeds the five fields in the run's
+      # own summary, so the observed failure survives the session. `if: failure()` keeps it off a
+      # green run, and `continue-on-error` keeps a bug in this reporting step from replacing the
+      # reason the job actually failed.
+      - name: Failure record — required when this job fails
+        if: failure()
+        continue-on-error: true
+        run: |
+          {
+            echo "### CI failure — the five fields are required"
+            echo ""
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- run: \`${{ github.run_id }}\` — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- job: \`${{ github.job }}\`"
+            echo "- observed: the failing step above; its log is the evidence"
+            echo "- root cause: **not yet confirmed**"
+            echo "- prevention: pending"
+            echo "- regression: name the test that must pass, and its result"
+            echo ""
+            echo "Add a reviewed entry to \`docs/FAILURE-LOG.md\` before this failure is closed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   qa:
     name: QA (migration ledger · integration suites)
+    concurrency:
+      # ONE QA-MUTATING JOB AT A TIME. This literal group is shared by this workflow's `e2e` job and
+      # by build-apk.yml's `test` job: concurrency group names share one repository-wide namespace,
+      # so a push to main no longer starts ci.qa and apk.test against the same database together.
+      #
+      # `cancel-in-progress: false` is load-bearing — a cancelled integration suite leaves its
+      # run-owned rows behind (tests/e2e/cleanupOwnership.ts) and can strand the QA advisory lock
+      # (tests/setup/qa-lock.ts) until its socket dies. A newer run WAITS here; it never kills this.
+      group: qa-database
+      cancel-in-progress: false
     needs: [gates]
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    concurrency:
-      # One QA database is shared by every workflow and every branch. Two
-      # QA-touching jobs running at once corrupt each other's fixtures
-      # (proven 2026-11-06: a main push ran CI and the APK workflow together
-      # and both failed). This group serializes them; cancel is off on
-      # purpose, because a cancelled QA job leaves fixture rows behind.      
-      group: qa-database      
-      cancel-in-progress: false      
     env:
       # Same IPv4 preference as build-apk.yml: Supabase's direct host publishes AAAA but no A.
       NODE_OPTIONS: --dns-result-order=ipv4first
@@ -169,9 +212,10 @@ jobs:
         run: node scripts/check-qa-connectivity.mjs
 
       - name: Migration ledger must contain every candidate migration
-        # Phase 2 imported the branch/access migrations (0233–0289) into the repo and
-        # applied them to QA, so the old QA-only allowlist is closed: every ledger row
-        # now has a file, and any ledger-only row still fails this step.
+        # Fail closed: every candidate file must be recorded on QA with its hash, and QA must not
+        # hold a row whose file is gone. The reviewed allowlist (`.github/qa-ledger-only.txt`) was
+        # retired once the QA-ahead rows were reconciled — see docs/PRODUCTION_MIGRATION_PLAN.md §5
+        # — so the flag is gone and a ledger-only row fails this step instead of being excused.
         run: node scripts/migrate.mjs verify --env staging
 
       - name: Provision QA Auth Sessions
@@ -186,25 +230,54 @@ jobs:
           QA_DB_USER: ${{ secrets.QA_DB_USER }}
           QA_DB_PASS: ${{ secrets.QA_DB_PASS }}
 
-      - name: Integration suites (one file at a time — they share the QA database)
+      - name: Integration suites (measured shard, then serial remainder)
         # Each suite creates and removes its own controlled tenants. QA's own shops and history
         # are never the fixture, and nothing here deletes them afterwards.
-        run: npx vitest run tests/integration --fileParallelism=false --reporter=verbose
+        # The shared runner enforces the exact partition and runs both ordered projects in one
+        # Vitest process, so the QA lock stays held across the measured four-worker shard and the
+        # serial remainder. `dot` keeps log volume bounded across the full suite.
+        run: node scripts/dev/run-integration.mjs --reporter=dot
+
+      # Same seed as the gates job: whichever step in this job failed — credentials, reachability,
+      # ledger, or an integration suite — the summary names the run and requires the record.
+      - name: Failure record — required when this job fails
+        if: failure()
+        continue-on-error: true
+        run: |
+          {
+            echo "### CI failure — the five fields are required"
+            echo ""
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- run: \`${{ github.run_id }}\` — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- job: \`${{ github.job }}\`"
+            echo "- observed: the failing step above; its log is the evidence"
+            echo "- root cause: **not yet confirmed**"
+            echo "- prevention: pending"
+            echo "- regression: name the test that must pass, and its result"
+            echo ""
+            echo "Add a reviewed entry to \`docs/FAILURE-LOG.md\` before this failure is closed."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   e2e:
     name: E2E lanes against QA
+    concurrency:
+      # The same QA database as `qa` above. Playwright writes the same fixtures and now claims the
+      # same advisory lock (tests/e2e/global-setup.ts → tests/setup/qa-lock.ts), so this group and
+      # the lock agree: the group orders CI jobs, and the lock is the only thing that can also see a
+      # developer's machine, which no concurrency group can.
+      group: qa-database
+      cancel-in-progress: false
     needs: [gates, qa]
-    if: github.event_name == 'pull_request' || inputs.run_e2e
+    # E2E blocks `main` only. It is the slow lane (the full Playwright suite runs ~40-50 minutes
+    # against one shared QA database), and putting it in front of every staging iteration is how
+    # a 12-minute promotion becomes an hour-long one. `staging` is where iterations happen, so
+    # there Gates + QA integration are required and E2E is opt-in; `main` — the branch production
+    # deploys from — still cannot advance without it.
+    if: >
+      (github.event_name == 'pull_request' && github.base_ref == 'main') ||
+      inputs.run_e2e
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    concurrency:
-      # One QA database is shared by every workflow and every branch. Two
-      # QA-touching jobs running at once corrupt each other's fixtures
-      # (proven 2026-11-06: a main push ran CI and the APK workflow together
-      # and both failed). This group serializes them; cancel is off on      
-      # purpose, because a cancelled QA job leaves fixture rows behind.      
-      group: qa-database      
-      cancel-in-progress: false      
     env:
       NODE_OPTIONS: --dns-result-order=ipv4first
       QA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
@@ -219,6 +292,10 @@ jobs:
     steps:
       - name: Checkout the candidate commit
         uses: actions/checkout@v7
+        with:
+          # The affected-spec selection needs the base commit to diff against; a depth-1 checkout
+          # has no merge-base and the selector would fall back to the full suite every time.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -235,8 +312,20 @@ jobs:
       - name: Provision QA Auth Sessions
         run: node scripts/provision-auth-sessions.mjs
 
+      # Run only the specs this change can reach. `scripts/dev/affected-e2e.mjs` maps the changed
+      # files through the SAME lane-map the local gate uses and prints every spec when the answer is
+      # not certain (tests, fixtures, migrations, workflows, or a source file no lane names). A
+      # skipped spec is a check that did not run, so the fallback is the whole suite, never a subset.
+      - name: Select the specs this change can reach
+        id: affected
+        run: |
+          specs=$(node scripts/dev/affected-e2e.mjs --base "${{ github.event.pull_request.base.sha || '' }}")
+          if [ -z "$specs" ]; then specs=$(node scripts/dev/affected-e2e.mjs --all); fi
+          echo "Running $(echo $specs | wc -w) spec file(s)"
+          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+
       - name: Run Playwright E2E
-        run: npx playwright test
+        run: npx playwright test ${{ steps.affected.outputs.specs }}
 
       - name: Upload Playwright Report
         if: failure()
@@ -245,6 +334,26 @@ jobs:
           name: playwright-report
           path: tests/e2e/results.json
           retention-days: 7
+
+      # Same seed as the gates and integration jobs. Run 39131593134 failed here with
+      # no summary at all, because this job was the one the loop missed.
+      - name: Failure record — required when this job fails
+        if: failure()
+        continue-on-error: true
+        run: |
+          {
+            echo "### CI failure — the five fields are required"
+            echo ""
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- run: \`${{ github.run_id }}\` — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- job: \`${{ github.job }}\`"
+            echo "- observed: the failing step above; its log is the evidence"
+            echo "- root cause: **not yet confirmed**"
+            echo "- prevention: pending"
+            echo "- regression: name the test that must pass, and its result"
+            echo ""
+            echo "Add a reviewed entry to \`docs/FAILURE-LOG.md\` before this failure is closed."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # Nothing cleans QA here on purpose. Each spec owns the rows it created
       # (tests/e2e/cleanupOwnership.ts); emptying the QA database is an owner action.

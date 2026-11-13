@@ -63,7 +63,9 @@ export default function QuantityCounter({
     }
   }
 
-  const btnSize = isSmall ? "w-8 h-8 text-sm" : "w-9 h-9 text-base";
+  // 48px tall, like every other field in the app: a stepper is something you type into, and it
+  // used to be the one control that answered a thumb tap with 32px.
+  const btnSize = isSmall ? "w-9 h-12 text-sm" : "w-11 h-12 text-base";
 
   // Format qty display: show decimals only if step < 1
   const displayQty = step < 1
@@ -114,13 +116,13 @@ export default function QuantityCounter({
           max={max}
           step={step}
           autoFocus
-          className={`${inputWidth} text-center font-bold text-foreground bg-card border border-border-control rounded-[var(--radius-tile)] outline-none focus:border-[var(--brand)] ${isSmall ? "text-base" : "text-lg"}`}
+          className={`${inputWidth} h-12 text-center font-bold text-foreground bg-card border border-transparent rounded-[var(--radius-tile)] outline-none focus:border-[var(--brand)] ${isSmall ? "text-base" : "text-lg"}`}
         />
       ) : (
         <button
           type="button"
           onClick={() => { setIsFocused(true); setInputValue(""); }}
-          className={`${inputWidth} text-center font-bold text-foreground bg-transparent border border-transparent rounded-[var(--radius-tile)] hover:border-gray-200 ${isSmall ? "text-base min-w-[2.5rem]" : "text-lg min-w-[3rem]"}`}
+          className={`${inputWidth} h-12 text-center font-bold text-foreground bg-transparent border border-transparent rounded-[var(--radius-tile)] ${isSmall ? "text-base min-w-[2.5rem]" : "text-lg min-w-[3rem]"}`}
         >
           {displayQty}
         </button>

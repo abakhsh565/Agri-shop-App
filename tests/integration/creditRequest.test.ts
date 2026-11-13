@@ -9,18 +9,42 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin } from '../setup/qa-client';
-import { setupAllFixtures, cleanupTestData, QA_IDS } from '../setup/fixtures';
+import { setupAllFixtures, QA_IDS } from '../setup/fixtures';
+import { runCleanupStatements } from '../setup/ownedCleanup';
 import { recordEvidence, printReport, clearEvidence } from '../setup/evidence';
 
 // Use the admin user from fixtures for RPC calls
 const ADMIN_ID = QA_IDS.admin;
 
-// Dedicated customers for THIS suite. The suite previously used the shared
-// customerB/customerC fixtures, but cleanupTestData() (run by several suites in
-// their afterAll) deletes credit_limit_requests for those shared customers, so a
-// parallel suite finishing mid-run wiped this suite's request and it failed with
-// CUSTOMER_NOT_FOUND / 'Request not found or already processed'. Owning the
-// fixture removes the interference entirely.
+/**
+ * Cleanup that REPORTS instead of swallowing — the employeeInviteLifecycle pattern. The `beforeAll`
+ * and `afterAll` here were converted to report failures, but the collector they report INTO was
+ * never defined, so both hooks died on `ReferenceError: throwIfCleanupFailed is not defined` before
+ * a single assertion ran.
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
+// Dedicated customers for THIS suite. It previously used the shared customerB/customerC fixtures,
+// but the sweep several suites ran in their afterAll deleted credit_limit_requests for those shared
+// customers, so a finishing suite wiped this suite's request mid-run and it failed with
+// CUSTOMER_NOT_FOUND / 'Request not found or already processed'. The sweep is gone
+// (tests/setup/ownedCleanup.ts) and this suite owns its customers anyway — two independent reasons
+// no other file's cleanup can reach these rows.
 const CR_CUSTOMER_C = 'c0c00000-0000-0000-0000-000000000001';
 const CR_CUSTOMER_B = 'c0c00000-0000-0000-0000-000000000002';
 
@@ -42,35 +66,18 @@ describe('Credit Request Integration', () => {
       throwIfCleanupFailed('Credit Request Integration beforeAll cleanup');
 });
 
-  /**
- * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
- * employeeInviteLifecycle pattern. This suite shares the QA database with the
- * other integration files, so a silent catch here would leave rows in place
- * and the next suite would fail deep inside a test with an authorization error
- * that is really leftover state. Failures are collected and the caller throws
- * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
- */
-const cleanupFailures: string[] = [];
-async function trySql(label: string, p: Promise<unknown>): Promise<void> {
-  try {
-    await p;
-  } catch (error) {
-    cleanupFailures.push(`${label}: ${(error as Error).message}`);
-  }
-}
-function throwIfCleanupFailed(context: string): void {
-  if (cleanupFailures.length) {
-    throw new Error(
-      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
-        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+  afterAll(async () => {
+    // This suite's own rows, reported rather than swallowed: `.catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); })` on both of these meant
+    // a request or a customer that survived a failed delete was invisible, and the next run's
+    // `create_credit_limit_request` then read it as state it had to work around.
+    await runCleanupStatements(
+      execSqlAsAdmin,
+      [
+        `DELETE FROM credit_limit_requests WHERE customer_id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`,
+        `DELETE FROM customers WHERE id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`,
+      ],
+      'creditRequest removal of its own rows',
     );
-  }
-}
-
-afterAll(async () => {
-    await trySql('credit_limit_requests', execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`));
-    await trySql('customers', execSqlAsAdmin(`DELETE FROM customers WHERE id IN ('${CR_CUSTOMER_C}','${CR_CUSTOMER_B}')`));
-    await cleanupTestData();
     printReport();
       throwIfCleanupFailed('Credit Request Integration afterAll cleanup');
 });
@@ -255,6 +262,140 @@ afterAll(async () => {
         `found=${r.rows.length}`,
         'pg_proc check',
         'PASS'
+      );
+    });
+  });
+
+  /**
+   * 0251 — lending is its own permission, and the owner's approved amount wins.
+   *
+   * The pair that matters is the non-vacuity one: the SAME call is refused for an employee
+   * who may edit customers but not lend, and accepted the moment the credit-limit grant is
+   * added. Without the second half, a rule that refused everyone would pass.
+   */
+  describe('Credit-limit permission and the owner-approved amount (0251)', () => {
+    const PL_CUSTOMER = 'c0c00000-0000-0000-0000-000000000051';
+
+    beforeAll(async () => {
+      await execSqlAsAdmin(`
+        INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
+        VALUES ('${PL_CUSTOMER}', 'QA Credit Limit Permission', '923006666051', 0, 0, 0, 0, '${QA_IDS.shop}', 'QA')
+        ON CONFLICT (id) DO UPDATE SET credit_limit = 0, outstanding_balance = 0
+      `);
+    });
+
+    afterAll(async () => {
+      await runCleanupStatements(
+        execSqlAsAdmin,
+        [
+          `DELETE FROM credit_limit_requests WHERE customer_id = '${PL_CUSTOMER}'`,
+          `DELETE FROM customers WHERE id = '${PL_CUSTOMER}'`,
+        ],
+        'creditRequest removal of the 0251 rows',
+      );
+    });
+
+    it('catalog: the permission exists, no role that may edit customers lost the ability, the direct RPC asks for it', async () => {
+      const catalog = await execSqlAsAdmin(`
+        SELECT
+          (SELECT count(*) FROM permissions WHERE code = 'customers.credit_limit') AS permission_rows,
+          -- Every role, not only system ones. This is the invariant 0311 restores and asserts:
+          -- 0251 copied the grant only onto the roles that existed when it ran, and the copy
+          -- drifted (QA held eleven roles that could edit a customer and not set its limit — the
+          -- Credit Requests screen offered a path the RPC refuses). A role that holds
+          -- customers.edit without customers.credit_limit is that gap coming back.
+          (SELECT count(*) FROM role_permissions rp
+             JOIN permissions pe ON pe.id = rp.permission_id AND pe.code = 'customers.edit'
+            WHERE NOT EXISTS (SELECT 1 FROM role_permissions rp2
+                                JOIN permissions pn ON pn.id = rp2.permission_id
+                               WHERE rp2.role_id = rp.role_id AND pn.code = 'customers.credit_limit')
+          ) AS roles_that_lost_it,
+          (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = 'set_customer_credit_limit'
+              AND pg_get_functiondef(p.oid) LIKE '%customers.credit_limit%'
+          ) AS body_names_permission
+      `);
+      const row = catalog.rows[0] as Record<string, string>;
+      expect(Number(row.permission_rows)).toBe(1);
+      expect(Number(row.roles_that_lost_it)).toBe(0);
+      expect(Number(row.body_names_permission)).toBe(1);
+
+      recordEvidence(
+        'The new permission exists, is granted everywhere customers.edit is (0311), and gates the direct RPC',
+        'permission row present; zero roles lost the ability; the function body names customers.credit_limit',
+        `permission=${row.permission_rows}, lost=${row.roles_that_lost_it}, body=${row.body_names_permission}`,
+        'SELECT permissions / role_permissions / pg_get_functiondef',
+        'PASS',
+      );
+    });
+
+    it('the direct write goes through for a Store Manager (the default grant)', async () => {
+      const allowed = await execRpcAsUser(ADMIN_ID, 'set_customer_credit_limit', {
+        p_customer_id: PL_CUSTOMER,
+        p_credit_limit: 500,
+      });
+      expect(allowed.error).toBeNull();
+
+      const after = await execSqlAsAdmin(`SELECT credit_limit FROM customers WHERE id = '${PL_CUSTOMER}'`);
+      expect(parseFloat(after.rows[0].credit_limit)).toBe(500);
+
+      recordEvidence(
+        'A Store Manager sets a limit directly under the new permission',
+        'limit written through set_customer_credit_limit',
+        `limit=${after.rows[0].credit_limit}`,
+        'set_customer_credit_limit RPC as the QA admin',
+        'PASS',
+      );
+    });
+
+    it('applies the owner-approved amount, not the requested one', async () => {
+      const created = await execRpcAsUser(QA_IDS.employee, 'create_credit_limit_request', {
+        payload: {
+          customer_id: PL_CUSTOMER,
+          customer_name: 'QA Credit Limit Permission',
+          requested_by: 'QA Employee',
+          current_limit: 500,
+          requested_limit: 100000,
+          reason: 'QA 0251 request',
+        },
+      });
+      expect(created.error).toBeNull();
+      const requestId = created.data.id as string;
+
+      const approved = await execRpcAsUser(ADMIN_ID, 'approve_credit_limit_request_v3', {
+        p_request_id: requestId,
+        p_reviewed_by: 'QA Admin',
+        p_approved_limit: 50000,
+      });
+      expect(approved.error).toBeNull();
+      expect(Number(approved.data.approvedLimit)).toBe(50000);
+
+      const row = await execSqlAsAdmin(
+        `SELECT status, requested_limit, approved_limit FROM credit_limit_requests WHERE id = '${requestId}'`,
+      );
+      expect(row.rows[0].status).toBe('approved');
+      expect(parseFloat(row.rows[0].requested_limit)).toBe(100000);
+      expect(parseFloat(row.rows[0].approved_limit)).toBe(50000);
+
+      const customer = await execSqlAsAdmin(`SELECT credit_limit FROM customers WHERE id = '${PL_CUSTOMER}'`);
+      expect(parseFloat(customer.rows[0].credit_limit)).toBe(50000);
+
+      // Second approval of the same request must not overwrite the granted figure.
+      const twice = await execRpcAsUser(ADMIN_ID, 'approve_credit_limit_request_v3', {
+        p_request_id: requestId,
+        p_reviewed_by: 'QA Admin',
+        p_approved_limit: 999000,
+      });
+      expect(twice.error).not.toBeNull();
+      const still = await execSqlAsAdmin(`SELECT credit_limit FROM customers WHERE id = '${PL_CUSTOMER}'`);
+      expect(parseFloat(still.rows[0].credit_limit)).toBe(50000);
+
+      recordEvidence(
+        'The owner grants a different amount than the employee asked for',
+        'requested 100000, approved 50000 in both the request row and the customer record; a second approval is refused',
+        `requested=${row.rows[0].requested_limit}, approved=${row.rows[0].approved_limit}, customer=${still.rows[0].credit_limit}`,
+        'approve_credit_limit_request_v3 RPC + SELECT customers',
+        'PASS',
       );
     });
   });

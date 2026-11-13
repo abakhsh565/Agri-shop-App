@@ -23,7 +23,8 @@
  * flow and holds zero business rows, and the QA gate asserts it stays that way. The rows this lane needs
  * are created inside it and registered as this run's own, so `afterAll` removes exactly them.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import {
   WRITE_TENANT,
   claimWriteTenantLeftovers,
@@ -352,7 +353,15 @@ test.describe('Business setup status is derived and self-retiring', () => {
       'setup is complete, so the Settings block must not be rendered at all',
     ).toBeNull();
     await page.goto('/admin/dashboard');
-    await page.waitForTimeout(1800);
+    await page.reload();
+    // Home is POLLED until the guidance retires, exactly as test 4 does, instead of read after a
+    // fixed 1800 ms sleep. The checklist is derived from three asynchronously loaded stores, so the
+    // sleep read their LOADING state as "still showing the steps" and failed on a correct app —
+    // measured by the full E2E run 2026-10-18, where the same data passed the Settings half (which is
+    // polled) and the Home half failed. This does not weaken the assertion: `waitForSetupGone` polls
+    // for up to 25 s and reports `present`, so guidance that genuinely refuses to retire still fails
+    // here, by name.
+    await waitForSetupGone(page);
     expect(
       await readHomeChecklist(page),
       'setup is complete, so Home must not still be showing the steps',

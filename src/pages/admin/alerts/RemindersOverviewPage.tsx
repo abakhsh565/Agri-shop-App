@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import Photo from "@/components/ui/Photo";
 import { useCustomersStore, type CreditLimitRequest } from "@/stores/customersStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -10,6 +11,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { computeLiveSignals, type LiveSignal, type SignalCategory, type SignalSeverity, type SignalAction, type CreditRequestInput } from "@/lib/signalEngine";
 import { markSignalReviewed, isSignalSuppressed, isSignalEscalated, getSuppressionInterval, cleanupOldRecords } from "@/lib/signalSuppression";
 import { formatCurrency } from "@/lib/formatters";
+import { resolveImageUrl } from "@/lib/storage";
 import { useT, tNow } from "@/lib/i18n";
 import { generateReminders, generateReminderMessage, calculatePaymentStatus, markOccurrenceSent, categorizeReminders } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
@@ -17,6 +19,10 @@ import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle
 import GroupReminderSheet from "@/components/ui/GroupReminderSheet";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import PaymentReminderCard from "@/components/ui/PaymentReminderCard";
+import { sortReminders, usePaymentReminderBook } from "@/lib/paymentReminders";
+import { pkDateFromISO, pkToday } from "@/lib/pkDate";
+import { summariseSentToday } from "@/lib/quickAlerts";
 import {
   saveLocalGroup,
   loadLocalGroups,
@@ -25,10 +31,24 @@ import {
 } from "@/lib/localGroupRegistry";
 import {
   getCreditRequestsDB,
-  approveCreditRequest,
-  rejectCreditRequest,
   type LocalCreditRequest,
 } from "@/lib/localGroupRegistry";
+
+/**
+ * The id a pending credit-limit request carries into the signal list.
+ *
+ * The signal type has no field for the request, and the request is what the owner has to act on:
+ * a credit request is answered with an amount, not by looking at a customer. The prefix is named
+ * once so the mapping that builds the signal and the card that opens it cannot drift apart.
+ */
+const CREDIT_REQUEST_SIGNAL_PREFIX = "credit-request-";
+
+/** The request id inside a signal id, or null when this is not a credit request. */
+function creditRequestIdOf(signalId: string): string | null {
+  return signalId.startsWith(CREDIT_REQUEST_SIGNAL_PREFIX)
+    ? signalId.slice(CREDIT_REQUEST_SIGNAL_PREFIX.length)
+    : null;
+}
 
 /* ── Types ── */
 interface ReminderLogEntry {
@@ -49,13 +69,13 @@ async function loadAllReminderLogs(): Promise<ReminderLogEntry[]> {
     const { supabase } = await import("@/lib/supabase");
     // Live reminder_logs shape: subject is entity_id (entity_type = 'customer');
     // the customer's name/image come from the customer row itself.
-    const { data } = await supabase.from("reminder_logs").select("*").order("sent_at", { ascending: false }).limit(50);
+    const { data } = await supabase.from("reminder_logs").select("*").order("sent_at", { ascending: false }).limit(200);
     if (!data) return [];
     const customerIds = [...new Set(data.map((r: any) => r.entity_id).filter(Boolean))];
     let customerMap: Record<string, { name?: string; image?: string }> = {};
     if (customerIds.length > 0) {
       const { data: custs } = await supabase.from("customers").select("id, name, image_url").in("id", customerIds);
-      (custs || []).forEach((c: any) => { customerMap[c.id] = { name: c.name, image: c.image_url }; });
+      (custs || []).forEach((c: any) => { customerMap[c.id] = { name: c.name, image: resolveImageUrl(c.image_url) }; });
     }
     return data.map((r: any) => ({
       id: r.id,
@@ -121,6 +141,7 @@ function timeAgo(dateStr: string): string {
 /* ── Alert card for Action Needed — matches homepage Quick Alerts style ── */
 function AlertCard({
   icon,
+  image,
   title,
   subtitle,
   actionLabel,
@@ -130,6 +151,15 @@ function AlertCard({
   onClick,
 }: {
   icon: React.ReactNode;
+  /**
+   * The entity's own picture, when the record has one.
+   *
+   * The row used to show only a severity glyph, so a customer or product with an uploaded photo
+   * still appeared as an anonymous ring here while every other screen showed the picture. The
+   * picture is the record's identity; severity is already carried by the card's tone and by the
+   * Review label. A record without a picture keeps the glyph, which is the honest fallback.
+   */
+  image?: string | null;
   title: string;
   subtitle: string;
   actionLabel: string;
@@ -144,9 +174,15 @@ function AlertCard({
       className="w-full rounded-[var(--radius-card)] p-4 flex items-start gap-3 text-start transition-opacity active:opacity-70"
       style={{ background: cardBg }}
     >
-      <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: iconBg, color: iconColor }}>
-        {icon}
-      </div>
+      <Photo
+        src={image}
+        className="w-9 h-9 rounded-full object-cover shrink-0 mt-0.5"
+        fallback={
+          <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: iconBg, color: iconColor }}>
+            {icon}
+          </div>
+        }
+      />
       <div className="flex-1 min-w-0">
         <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>{title}</p>
         <p className="text-12 mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>{subtitle}</p>
@@ -181,7 +217,7 @@ function ReminderCard({
       <ListRow
         onClick={() => setExpanded(!expanded)}
         tile={reminder.customerImage ? (
-          <img src={reminder.customerImage} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />
+          <Photo src={reminder.customerImage} className="w-11 h-11 rounded-full object-cover shrink-0" fallback={null} />
         ) : (
           <div className="w-11 h-11 rounded-full flex items-center justify-center text-13 font-bold shrink-0" style={{ background: getAvatarColor(reminder.customerName), color: "#fff" }}>
             {getInitials(reminder.customerName)}
@@ -248,7 +284,11 @@ function ActivityItem({ log }: { log: ReminderLogEntry }) {
   const name = log.customerName || t("common.customer");
   return (
     <ListRow
-      tile={log.customerImageUrl ? (<img src={log.customerImageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />) : (<div className="w-9 h-9 rounded-full flex items-center justify-center text-11 font-bold shrink-0" style={{ background: getAvatarColor(name), color: "#fff" }}>{getInitials(name)}</div>)}
+      tile={<Photo
+        src={log.customerImageUrl}
+        className="w-9 h-9 rounded-full object-cover shrink-0"
+        fallback={<div className="w-9 h-9 rounded-full flex items-center justify-center text-11 font-bold shrink-0" style={{ background: getAvatarColor(name), color: "#fff" }}>{getInitials(name)}</div>}
+      />}
       trailing={<span className="text-11 font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: "var(--brand-light, #d9f99d)", color: "var(--brand-dark, #65a30d)" }}>{t("common.sent")}</span>}
     >
       <div className="min-w-0">
@@ -282,6 +322,19 @@ export default function RemindersOverviewPage() {
   const sales = useSalesStore((s) => s.sales);
   const products = useProductsStore((s) => s.products);
   const companies = useCompaniesStore((s) => s.companies);
+  // A reminder written in the Finance book is the same customer fact this Action Center
+  // shows. Reading it here closes the "I added it but Follow-ups says zero" gap without
+  // making the private supplier/general notes visible to an employee.
+  const paymentBook = usePaymentReminderBook();
+  const today = pkToday();
+  const savedPaymentReminders = useMemo(
+    () =>
+      sortReminders(
+        (paymentBook.rows ?? []).filter((reminder) => reminder.status === "upcoming"),
+        today,
+      ),
+    [paymentBook.rows, today],
+  );
 
   /* ── Data ── */
   const [allReminders, setAllReminders] = useState<any[]>([]);
@@ -326,8 +379,6 @@ export default function RemindersOverviewPage() {
   const [editMessage, setEditMessage] = useState("");
   const [sentOccurrenceKeys, setSentOccurrenceKeys] = useState<Set<string>>(new Set());
   const [allLogs, setAllLogs] = useState<ReminderLogEntry[]>([]);
-  const [creditAction, setCreditAction] = useState<{ request: LocalCreditRequest; action: "approve" | "reject" } | null>(null);
-
   useEffect(() => { loadAllReminderLogs().then(setAllLogs); }, []);
   useEffect(() => {
     const timer = setInterval(() => loadAllReminderLogs().then(setAllLogs), 10000);
@@ -356,7 +407,7 @@ export default function RemindersOverviewPage() {
     creditRequests
       .filter(r => r.status === "pending")
       .map(r => ({
-        id: `credit-request-${r.id}`,
+        id: `${CREDIT_REQUEST_SIGNAL_PREFIX}${r.id}`,
         category: "credit_limit" as SignalCategory,
         severity: "critical" as SignalSeverity,
         priority: 85,
@@ -426,6 +477,7 @@ export default function RemindersOverviewPage() {
   }, [allReminders, sentOccurrenceKeys, now]);
 
   const sentLogs = useMemo(() => allLogs, [allLogs]);
+  const todaySent = useMemo(() => summariseSentToday(allLogs), [allLogs]);
 
 
   /* ── Sub-tabs using live signals ── */
@@ -499,21 +551,44 @@ export default function RemindersOverviewPage() {
     setEditingReminder(null);
   }, [editingReminder, editMessage]);
 
-  /* ── Credit request actions ── */
-  const handleCreditAction = useCallback(async () => {
-    if (!creditAction) return;
-    try {
-      if (creditAction.action === "approve") {
-        await approveCreditRequest(creditAction.request.id, "Admin");
-      } else {
-        await rejectCreditRequest(creditAction.request.id, "Admin");
-      }
-      getCreditRequestsDB().then(setCreditRequests);
-      setCreditAction(null);
-    } catch (err) {
-      console.error("Credit action failed:", err);
+  /* ── Pictures for the rows ──
+   * One lookup per store the page already reads, so an action row shows the same picture the
+   * customer/product screen shows, and a photo changed there appears here on the next read of
+   * that store — there is no second copy of the image to fall out of date. */
+  const customerImageById = useMemo(() => {
+    const map = new Map<string, string>();
+    customers.forEach((c) => { if (c.imageUrl) map.set(c.id, c.imageUrl); });
+    return map;
+  }, [customers]);
+  const productImageById = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach((p) => { if (p.imageUrl) map.set(p.id, p.imageUrl); });
+    return map;
+  }, [products]);
+  /** A payable names its supplier company, whose picture is the logo on the company screen. */
+  const companyImageById = useMemo(() => {
+    const map = new Map<string, string>();
+    companies.forEach((c) => { if (c.logoUrl) map.set(c.id, c.logoUrl); });
+    return map;
+  }, [companies]);
+  /**
+   * An expiry signal names a variant, not a product; the picture belongs to the product, which is
+   * the row the product screen shows and the one an upload replaces.
+   */
+  const variantImageById = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach((p) => { p.variants?.forEach((v) => { if (p.imageUrl) map.set(v.id, p.imageUrl); }); });
+    return map;
+  }, [products]);
+  const signalImage = (signal: LiveSignal): string | null => {
+    switch (signal.entity_type) {
+      case "customer": return customerImageById.get(signal.entity_id) ?? null;
+      case "product": return productImageById.get(signal.entity_id) ?? null;
+      case "variant": return variantImageById.get(signal.entity_id) ?? null;
+      case "company": return companyImageById.get(signal.entity_id) ?? null;
+      default: return null;
     }
-  }, [creditAction]);
+  };
 
   /* ── Render action needed (signal-based) ── */
   function renderSignalCard(signal: LiveSignal) {
@@ -525,6 +600,16 @@ export default function RemindersOverviewPage() {
     const config = severityConfig[signal.severity] || severityConfig.info;
 
     const onClick = () => {
+      // A pending credit-limit request is answered with an AMOUNT, so it does not open the
+      // customer profile: that page shows the limit on record and says nothing about the
+      // request waiting on the owner, which made "Review" a dead end — the one screen where the
+      // owner can approve a different figure than the employee asked for (0251) was unreachable
+      // from the app. The request detail is that screen.
+      const requestId = creditRequestIdOf(signal.id);
+      if (requestId) {
+        navigate(`/admin/alerts/credit-requests/${requestId}`);
+        return;
+      }
       if (signal.entity_type === "customer") navigateToCustomer(signal.entity_id);
       else if (signal.entity_type === "product") navigate(`/admin/products/${signal.entity_id}`);
       else if (signal.entity_type === "company") navigate("/admin/companies");
@@ -534,6 +619,7 @@ export default function RemindersOverviewPage() {
       <AlertCard
         key={signal.id}
         icon={config.icon}
+        image={signalImage(signal)}
         title={signal.title}
         subtitle={t(signal.detailKey, signal.detailParams)}
         actionLabel={t("admin.review")}
@@ -608,7 +694,33 @@ export default function RemindersOverviewPage() {
         return sentLogs.length === 0 ? (
           <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.nothing_sent_yet")} subtitle={t("inline.sent_reminders_will_appear_here_after_you_se")} />
         ) : (
-          <div>
+          <div className="flex flex-col gap-3">
+            {todaySent.total > 0 && (
+              <div
+                className="mx-4 rounded-[var(--radius-card)] p-4"
+                style={{ background: "var(--warning-bg)" }}
+                data-testid="reminders-sent-today"
+              >
+                <div className="flex items-start gap-3">
+                  <Bell size={18} className="mt-0.5 shrink-0" style={{ color: "var(--warning)" }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {t("reminders.sentToday")}
+                    </p>
+                    <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>
+                      {t("reminders.sentTodayChannels", {
+                        whatsapp: String(todaySent.whatsapp),
+                        sms: String(todaySent.sms),
+                        customers: String(todaySent.customers),
+                      })}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-11 font-semibold" style={{ color: "var(--warning)" }}>
+                    {t("reminders.sentTodayCount", { count: String(todaySent.total) })}
+                  </span>
+                </div>
+              </div>
+            )}
             {(() => {
               const tenDaysAgo = new Date();
               tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
@@ -661,8 +773,8 @@ export default function RemindersOverviewPage() {
             />
             <button
               onClick={() => setShowGroupSheet(true)}
-              className="flex items-center justify-center gap-2 h-11 rounded-full text-13 font-bold transition-transform active:scale-[0.97]"
-              style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              className="mx-5 flex items-center justify-center gap-2 h-11 rounded-full text-13 font-bold transition-transform active:scale-[0.97]"
+              style={{ width: "calc(100% - 2.5rem)", background: "var(--brand)", color: "#0a0a0a" }}
             >
               <Plus size={15} /> {t("inline.create_group_reminder_x")}
             </button>
@@ -674,9 +786,13 @@ export default function RemindersOverviewPage() {
                 key={group.id}
                 onClick={() => navigate(`/admin/alerts/groups/${group.id}`)}
                 tile={
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#ede9fe", color: "#7c3aed" }}>
-                    <Users size={18} />
-                  </div>
+                  group.photoUrl ? (
+                    <Photo src={group.photoUrl} className="w-10 h-10 rounded-full object-cover shrink-0" fallback={null} />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "#ede9fe", color: "#7c3aed" }}>
+                      <Users size={18} />
+                    </div>
+                  )
                 }
                 trailing={<ChevronDown size={16} style={{ color: "var(--text-secondary)", transform: "rotate(-90deg)" }} className="shrink-0" />}
               >
@@ -775,6 +891,38 @@ export default function RemindersOverviewPage() {
         )}
 
         {/* Tab content */}
+        {mainTab === "followups" && savedPaymentReminders.length > 0 && (
+          <section className="flex flex-col gap-2" data-testid="saved-payment-reminders">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
+                {t("paymentBook.title")} · {savedPaymentReminders.length}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate("/admin/settings/hub/finance/reminders")}
+                className="text-11 font-semibold active:opacity-70"
+                style={{ color: "var(--brand-dark)" }}
+              >
+                {t("paymentBook.openBook")}
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {savedPaymentReminders.map((reminder) => (
+                <PaymentReminderCard
+                  key={reminder.id}
+                  reminder={reminder}
+                  today={today}
+                  testId={`action-saved-reminder-${reminder.id}`}
+                  onOpenParty={
+                    reminder.customerId
+                      ? () => navigate(`/admin/customers/${reminder.customerId}`)
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        )}
         {renderTabContent()}
       </div>
 
@@ -794,7 +942,7 @@ export default function RemindersOverviewPage() {
             <div className="px-5 pb-6 flex flex-col gap-4 overflow-y-auto" style={{ flex: 1 }}>
               <div className="flex items-center gap-3">
                 {editingReminder.customerImage ? (
-                  <img src={editingReminder.customerImage} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />
+                  <Photo src={editingReminder.customerImage} className="w-11 h-11 rounded-full object-cover shrink-0" fallback={null} />
                 ) : (
                   <div className="w-11 h-11 rounded-full flex items-center justify-center text-13 font-bold shrink-0" style={{ background: getAvatarColor(editingReminder.customerName), color: "#fff" }}>
                     {getInitials(editingReminder.customerName)}
@@ -813,7 +961,7 @@ export default function RemindersOverviewPage() {
               </div>
               <div>
                 <label className="ds-section-label block mb-2" style={{ color: "var(--text-secondary)" }}>{t("common.message")}</label>
-                <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[var(--radius-card)] px-4 py-3 text-13 outline-none resize-none" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--border-control)" }} />
+                <textarea value={editMessage} onChange={(e) => setEditMessage(e.target.value)} rows={5} className="w-full rounded-[var(--radius-card)] px-4 py-3 text-13 outline-none resize-none" style={{ background: "var(--field-bg)", color: "var(--text-primary)" }} />
               </div>
               <div className="flex gap-3">
                 <button onClick={() => handleSend("whatsapp")} className="flex-1 h-12 rounded-full text-14 font-bold flex items-center justify-center gap-2" style={{ background: "#25D366", color: "#fff" }}>
@@ -845,46 +993,6 @@ export default function RemindersOverviewPage() {
         />
       )}
 
-      {/* Credit Request Action Sheet */}
-      {creditAction && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "var(--scrim)" }} onClick={() => setCreditAction(null)}>
-          <div className="w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col p-5 gap-4" style={{ background: "var(--tone-sheet)" }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-center pb-1">
-              <div className="w-10 h-1 rounded-full" style={{ background: "var(--divider)" }} />
-            </div>
-            <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>
-              {creditAction.action === "approve" ? (t("inline.approve_request")) : (t("superAdmin.rejectRequest"))}
-            </p>
-            <div className="rounded-[var(--radius-tile)] p-3 text-13" style={{ background: "var(--surface-2)" }}>
-              <p style={{ color: "var(--text-primary)" }} className="font-semibold">{creditAction.request.customerName}</p>
-              <p className="mt-1" style={{ color: "var(--text-secondary)" }}>
-                {t("inline.current")}: {formatCurrency(creditAction.request.currentLimit)} → {t("inline.new")}: {formatCurrency(creditAction.request.requestedLimit)}
-              </p>
-              <p style={{ color: "var(--text-secondary)" }}>
-                {t("inline.by")}: {creditAction.request.requestedBy}
-              </p>
-              {creditAction.request.reason && (
-                <p className="mt-1" style={{ color: "var(--text-secondary)" }}>
-                  {t("admin.reason")}: {creditAction.request.reason}
-                </p>
-              )}
-            </div>
-            <div className="flex gap-3">
-              {creditAction.action === "reject" && (
-                <button onClick={handleCreditAction} className="flex-1 h-12 rounded-full text-14 font-bold" style={{ background: "#dc2626", color: "#fff" }}>
-                  {t("superAdmin.reject")}
-                </button>
-              )}
-              <button onClick={handleCreditAction} className="flex-1 h-12 rounded-full text-14 font-bold" style={{ background: creditAction.action === "approve" ? "var(--brand)" : "var(--surface-2)", color: creditAction.action === "approve" ? "#0a0a0a" : "var(--text-primary)" }}>
-                {creditAction.action === "approve" ? (t("superAdmin.approve")) : (t("superAdmin.reject"))}
-              </button>
-              <button onClick={() => setCreditAction(null)} className="flex-1 h-12 rounded-full text-14 font-bold" style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-                {t("common.cancel")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

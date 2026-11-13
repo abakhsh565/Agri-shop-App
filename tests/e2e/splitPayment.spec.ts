@@ -7,7 +7,7 @@
  *
  * Uses the QA database (never production).
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import {

@@ -119,13 +119,13 @@ export default function LocationPickerPage() {
   /** Leaving without a choice is a normal outcome, so it is just going back. */
   function close() {
     if (from) navigate(from, { replace: true });
-    else navigate(-1);
+    else navigate("/", { replace: true });
   }
 
   /** The chosen point, handed back to the screen that opened this one. */
   function pick(place: PickedPlace) {
     if (from) navigate(from, { state: { pickedPlace: place }, replace: true });
-    else navigate(-1);
+    else navigate("/", { replace: true });
   }
 
   async function useCurrentLocation() {
@@ -210,7 +210,7 @@ export default function LocationPickerPage() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("location.searchPlaceholder")}
           className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+          style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
           data-testid="location-search"
         />
 

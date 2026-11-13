@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import { seedShopDraft } from './helpers';
 
 // UI contract evidence only. Every remote request is intercepted; this test does not impersonate

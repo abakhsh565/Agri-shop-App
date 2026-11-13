@@ -12,7 +12,8 @@
  * in BOTH light and dark, at phone width, with the console checked for errors.
  * QA database only; nothing is written.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { execSql, setupFixtures, cleanupFixtures, QA_IDS } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';

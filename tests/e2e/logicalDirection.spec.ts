@@ -19,7 +19,8 @@
  *     migration was meant to be byte-identical, so light AND dark are asserted against the
  *     exact colours the shim produced.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';

@@ -22,6 +22,7 @@
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import { execSqlAsAdmin, execRpcAsUser, qaServiceClient } from '../setup/qa-client';
 import { QA_IDS } from '../setup/fixtures';
+import { runCleanupStatements } from '../setup/ownedCleanup';
 
 
 const T = {
@@ -46,13 +47,35 @@ function rec(test: string, expected: string, actual: string, result: 'PASS' | 'F
 async function admin(sql: string) { return execSqlAsAdmin(sql); }
 async function rpc(userId: string, name: string, params: Record<string, any>) { return execRpcAsUser(userId, name, params); }
 
+/**
+ * Undo this file's destructive work and remove its own rows — reporting EVERY failure.
+ *
+ * WHY THE ERRORS ARE NO LONGER SWALLOWED. This function used to wrap each statement in a bare
+ * `catch {}`, and the comment below records what that cost: four of the deletes addressed a column
+ * the table does not have, every one of them raised, every one was swallowed, and the rows survived —
+ * so the NEXT run failed on `voids_sale_id_fkey` and the suite could be run once after a fresh
+ * fixture and never again. A cleanup that cannot say what it failed to delete is indistinguishable
+ * from one that worked, which is why these statements now go through `runCleanupStatements`: it runs
+ * all of them, keeps every failure, and throws one error naming the statement and its error.
+ */
 async function cleanup() {
   // First undo destructive state changes BEFORE deleting (FK order matters)
-  try { await admin(`UPDATE users SET is_active = true, deactivated_at = NULL, deactivated_by = NULL WHERE id = '${T.employeeA}'`); } catch {}
-  try { await admin(`UPDATE products SET is_active = true, deleted_at = NULL WHERE id = '${T.productA}'`); } catch {}
-  try { await admin(`UPDATE customers SET is_archived = false, archived_at = NULL, archived_by = NULL WHERE id IN ('${T.customerA}','${T.customerB}')`); } catch {}
-  // Un-void any voided sales for this test's IDs before deleting
-  try { await admin(`UPDATE sales SET is_voided = false, voided_at = NULL, voided_by = NULL, void_reason = NULL WHERE id = '${T.saleA}'`); } catch {}
+  await runCleanupStatements(
+    admin,
+    [
+      `UPDATE users SET is_active = true, deactivated_at = NULL, deactivated_by = NULL WHERE id = '${T.employeeA}'`,
+      // `products` has no `deleted_at` column — the old statement raised `column "deleted_at" does not
+      // exist` on EVERY run and the bare `catch {}` reported it as success, which is why this file could
+      // not run twice against one fixture. A soft-deleted product is `is_active = false` (Product Delete
+      // section), so that flag is the whole reset. Found by the first integration run under
+      // `runCleanupStatements`, which is the point of it: 1 of 4 statement(s) failed, by name.
+      `UPDATE products SET is_active = true WHERE id = '${T.productA}'`,
+      `UPDATE customers SET is_archived = false, archived_at = NULL, archived_by = NULL WHERE id IN ('${T.customerA}','${T.customerB}')`,
+      // Un-void any voided sales for this test's IDs before deleting
+      `UPDATE sales SET is_voided = false, voided_at = NULL, voided_by = NULL, void_reason = NULL WHERE id = '${T.saleA}'`,
+    ],
+    'destructiveSafety reset of its own rows',
+  );
 
   // Delete in FK-safe order — only our specific test records.
   //
@@ -61,24 +84,24 @@ async function cleanup() {
   // `catch {}`. `voids`, `sale_items`, `inventory_movements` and `return_items` have no
   // `customer_id`, so all four raised `column "customer_id" does not exist`, the catch
   // swallowed every one of them, and the rows were never deleted.
-  //
-  // The consequence was not cosmetic: the void rows this file creates survived the run,
-  // so the NEXT run's `DELETE FROM sales` (above, in the archive test) failed on
-  // `voids_sale_id_fkey`. The suite could be run once after a fresh fixture and never
-  // again — which is how the second full-suite run of a session reported a red test that
-  // the first run had passed.
   const testSales = `SELECT id FROM sales WHERE customer_id IN ('${T.customerA}','${T.customerB}')`;
   const testReturns = `SELECT id FROM returns WHERE customer_id IN ('${T.customerA}','${T.customerB}')`;
-  try { await admin(`DELETE FROM voids WHERE sale_id IN (${testSales})`); } catch {}
-  try { await admin(`DELETE FROM sale_items WHERE sale_id IN (${testSales}) OR product_id = '${T.productA}'`); } catch {}
-  try { await admin(`DELETE FROM return_items WHERE return_id IN (${testReturns}) OR product_id = '${T.productA}'`); } catch {}
-  try { await admin(`DELETE FROM inventory_movements WHERE product_id = '${T.productA}'`); } catch {}
-  for (const t of ['returns', 'customer_payments', 'sales']) {
-    try { await admin(`DELETE FROM ${t} WHERE customer_id IN ('${T.customerA}','${T.customerB}')`); } catch {}
-  }
-  try { await admin(`DELETE FROM product_variants WHERE id = '${T.variantA}'`); } catch {}
-  try { await admin(`DELETE FROM products WHERE id = '${T.productA}'`); } catch {}
-  try { await admin(`DELETE FROM companies WHERE id = '${T.companyA}'`); } catch {}
+  await runCleanupStatements(
+    admin,
+    [
+      `DELETE FROM voids WHERE sale_id IN (${testSales})`,
+      `DELETE FROM sale_items WHERE sale_id IN (${testSales}) OR product_id = '${T.productA}'`,
+      `DELETE FROM return_items WHERE return_id IN (${testReturns}) OR product_id = '${T.productA}'`,
+      `DELETE FROM inventory_movements WHERE product_id = '${T.productA}'`,
+      ...['returns', 'customer_payments', 'sales'].map(
+        (t) => `DELETE FROM ${t} WHERE customer_id IN ('${T.customerA}','${T.customerB}')`,
+      ),
+      `DELETE FROM product_variants WHERE id = '${T.variantA}'`,
+      `DELETE FROM products WHERE id = '${T.productA}'`,
+      `DELETE FROM companies WHERE id = '${T.companyA}'`,
+    ],
+    'destructiveSafety removal of its own rows',
+  );
 }
 
 beforeAll(async () => {

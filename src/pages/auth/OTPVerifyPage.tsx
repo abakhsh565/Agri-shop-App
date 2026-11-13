@@ -9,14 +9,13 @@ import { hasPin } from "@/lib/pinLock";
 import { markPhoneVerified, rememberLastProfile } from "@/lib/loginWindow";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
+import { OTP_RESEND_DELAY_SECONDS, OTP_VALIDITY_SECONDS } from "@/lib/otpPolicy";
 
-const OTP_VALIDITY = 2 * 60;
 // There is deliberately NO cap on tries and NO lockout. A shop owner or their
 // new employee who mistypes a number must be able to keep trying — being shut
 // out of their own shop for mistyping is far worse than the risk it guards
 // against, and the code itself (later a real SMS code) is the gate. The only
 // limit left is a short cooldown between texts, so "Resend" cannot be hammered.
-const RESEND_DELAY = 30;
 /** After this many wrong codes we suggest a fresh one instead of just saying no. */
 const NUDGE_RESEND_AFTER = 3;
 
@@ -29,10 +28,10 @@ export default function OTPVerifyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [attempts, setAttempts] = useState(0);
-  const [countdown, setCountdown] = useState(OTP_VALIDITY);
+  const [countdown, setCountdown] = useState(OTP_VALIDITY_SECONDS);
   // Starts at the cooldown, not at zero: a code was just sent, so Resend arrives disabled and
   // becomes usable 30 seconds later — the same wait the person gets after pressing it.
-  const [resendCountdown, setResendCountdown] = useState(RESEND_DELAY);
+  const [resendCountdown, setResendCountdown] = useState(OTP_RESEND_DELAY_SECONDS);
   const verifying = useRef(false);
 
   useEffect(() => {
@@ -129,25 +128,26 @@ export default function OTPVerifyPage() {
       // keypad to draw.
       await markPhoneVerified(result.user.id);
       await rememberLastProfile(result.user);
+      // A pending membership is not access. It becomes one only when the person accepts that
+      // exact invitation, so the code lands on the decision screen before any workspace.
+      if (result.user.pendingInvitations?.length) {
+        navigate("/login/invitations", { replace: true });
+        return;
+      }
+      if (result.user.pendingCoOwnerInvitation) {
+        navigate("/co-owner/accept", { replace: true });
+        return;
+      }
       //
-      // Where the code lands depends on who this is, which is the difference the flow was
-      // missing:
+      // Where the code lands depends on who this is:
       //
-      //   • **never signed in before** (`firstLoginAt` null) — a brand-new account. They get the
-      //     account-ready screen, which says they are in and offers the PIN as the next small
-      //     step. Dropping them straight onto a keypad made a security prompt the first thing
-      //     the app ever said to them.
-      //   • **known account, new device** (no PIN here yet) — no celebration, because nothing
-      //     was created: straight to setting the PIN this device will use.
-      //   • **known account with a PIN here** — straight in.
-      //
-      // The code itself is identity verification, used once per device: from then on the PIN is
-      // the everyday way back in, which is why opening the app does not ask for another one.
+      //   • **never signed in before** (`firstLoginAt` null) — a brand-new account gets the
+      //     account-ready screen before setting its PIN.
+      //   • **known account, new device** (no PIN here yet) — set the PIN this device will use.
+      //   • **known account with a PIN here** — go through the workspace chooser. A single
+      //     active Shop auto-opens there; multiple Shops are a real decision, not a guess.
       const isBrandNewAccount = !result.user.firstLoginAt;
-      const dest =
-        result.user.role === "admin"
-          ? "/admin/dashboard"
-          : "/employee/dashboard";
+      const dest = "/login/business";
       if (!hasPin(result.user.id)) {
         // `returnTo` is what tells PINSetPage this is a like-for-like swap rather than a first
         // PIN: without it a returning user on a new phone was congratulated for creating nothing.
@@ -165,12 +165,18 @@ export default function OTPVerifyPage() {
 
   async function handleResend() {
     if (resendCountdown > 0) return;
-    await sendOTP(pendingPhone);
-    setResendCountdown(RESEND_DELAY);
-    setCountdown(OTP_VALIDITY);
+    // A code that was never sent must be said so: restarting the clock and the cooldown would
+    // otherwise leave the person waiting on an SMS the server refused to send.
+    setError("");
+    const result = await sendOTP(pendingPhone);
+    if (!result.success) {
+      setError(t("auth.errSendCode"));
+      return;
+    }
+    setResendCountdown(OTP_RESEND_DELAY_SECONDS);
+    setCountdown(OTP_VALIDITY_SECONDS);
     setAttempts(0);
     setOtp("");
-    setError("");
   }
 
   const expired = countdown === 0;

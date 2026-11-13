@@ -37,6 +37,8 @@ const STATE_GUARD_ALLOWED = new Map<string, string>([
 const REF_GUARDS: Record<string, string> = {
   'src/pages/admin/employees/AddEmployeePage.tsx': 'creatingRef',
   'src/pages/admin/employees/EmployeeDetailPage.tsx': 'statusBusyRef',
+  // Role deletion lives on the role list; the ref guard belongs to the component that
+  // actually sends the delete, not to the editor that no longer owns that action.
   'src/pages/admin/settings/RolesAccessPage.tsx': 'deletingRef',
   'src/components/sales/SaleDetailView.tsx': 'voidingRef',
   'src/pages/admin/inventory/AddProductPage.tsx': 'savingRef',
@@ -47,10 +49,10 @@ const REF_GUARDS: Record<string, string> = {
   'src/pages/admin/returns/AdminReturnConfirmPage.tsx': 'submittingRef',
   'src/pages/employee/customers/RecordCustomerPaymentPage.tsx': 'submittingRef',
   'src/pages/employee/returns/ReturnConfirmPage.tsx': 'submittingRef',
-  // The LIVE sale confirm screen is CartPage (route `sale/cart`); SaleReviewPage is not routed.
-  // Both are listed: deleting the ref from either is a regression, but only CartPage is reachable.
+  // The LIVE sale confirm screen is CartPage (route `sale/cart`). SaleReviewPage was an
+  // unrouted duplicate of it and was deleted in the P0 cleanup; its ref guard lives on here
+  // through CartPage, which is the only reachable confirm path.
   'src/pages/employee/sale/CartPage.tsx': 'completingRef',
-  'src/pages/employee/sale/SaleReviewPage.tsx': 'submittingRef',
 };
 
 /**
@@ -66,7 +68,6 @@ const KEY_CLAIMING = [
   'src/pages/employee/customers/RecordCustomerPaymentPage.tsx',
   'src/pages/employee/returns/ReturnConfirmPage.tsx',
   'src/pages/employee/sale/CartPage.tsx',
-  'src/pages/employee/sale/SaleReviewPage.tsx',
 ];
 
 function walk(dir: string, out: string[] = []): string[] {
