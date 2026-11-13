@@ -370,10 +370,14 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     // gate must sum this branch, not the whole shop. Round-2 probe (run
     // 42321215789): this branch holds the 2 Perm sales (Rs. 10,000); the
     // added branch holds the other 5 (Rs. 24,600).
-    const [activeBranch] = await execSql(
+    // Named `…Row` because the string `activeBranch` below is this file's own branch id, and two
+    // bindings of the same name in one scope made the whole spec fail to compile (`Identifier
+    // 'activeBranch' has already been declared`), which is how the E2E lane failed on the
+    // staging -> main promotion.
+    const [activeBranchRow] = await execSql(
       `SELECT branch_id FROM user_active_shops WHERE user_id = '${QA_IDS.owner}'`,
     );
-    const branchId = activeBranch.branch_id as string;
+    const branchId = activeBranchRow.branch_id as string;
     expect(branchId, 'the owner fixture has no active branch').toBeTruthy();
 
     // WAIT FOR THE SCREEN TO HYDRATE — data-driven, not a stopwatch.
