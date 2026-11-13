@@ -320,11 +320,16 @@ describe('QA concurrency guard — one QA database, one writer', () => {
       expect(triggerEvents(apk)).toEqual(['workflow_dispatch']);
     });
 
-    it('the CI gate still runs on a push to main, and on a pull request', () => {
+    it('the CI gate still runs on a push to every branch in the chain, and on a pull request', () => {
       const events = triggerEvents(ci);
       expect(events).toContain('push');
       expect(events).toContain('pull_request');
-      expect(ci.join('\n')).toMatch(/push:\s*\r?\n\s+branches: \[main, staging-snapshot\]/);
+      // The chain is dev -> staging -> main, and one QA database is shared by all three. A branch
+      // that runs no gates is how drift accumulated unseen, so the trigger names every branch that
+      // may reach QA, not only the release branch it used to be parked on.
+      expect(ci.join('\n'), 'a push to a branch in the chain must run the gates').toMatch(
+        /push:\s*\r?\n\s+branches: \[dev, staging, main\]/,
+      );
     });
   });
 });

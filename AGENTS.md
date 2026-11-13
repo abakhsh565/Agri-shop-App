@@ -241,3 +241,46 @@ risk, implementation and dependencies unchanged). `npm run verify:plan` computes
 lanes; `npm run registry:build` regenerates `SCREEN-INDEX.md` and runs the registry guard.
 `tests/unit/featureRegistryGuard.test.ts` fails when the registry drifts from the router,
 the tests, the dependency graph or the workflow document.
+
+---
+
+## 9. The permanent chain — mandatory for every agent
+
+```
+dev  ->  (PR)  ->  staging  ->  (PR)  ->  main  ->  production (gated dispatch)
+```
+
+The chain is the pipeline. Nothing promotes by hand: `staging` is where the app is verified by
+the real QA/E2E lanes, and `main` is what production is deployed from. `release/merge` and
+`staging-snapshot` are retired names; do not push to either.
+
+**Work only on `dev`.** One small batch per commit. A branch that is not `dev`, `staging` or `main`
+runs no CI, so work parked on one is exactly how 19 guard failures accumulated unseen. If a task
+arrives on another branch, land it on `dev` first.
+
+**Before every commit, in this order:**
+
+```bash
+npx tsc --noEmit          # must print nothing
+npx vitest run tests/unit # must be 0 failed — report the exact counts in the commit body
+```
+
+A commit message states what changed, why, and the counts it was verified with. "Tests pass"
+without a number is not evidence.
+
+**A migration and its disposition land in the same commit.** Every new file in
+`supabase/migrations/` must have a row in `docs/PRODUCTION_MIGRATION_PLAN.md` §5 saying what
+production does with it (`batch N`, gap migration, production-shaped variant, or "not applicable")
+— `tests/unit/productionMigrationPlan.test.ts` fails otherwise. Never edit a migration that is
+already recorded: add a forward file.
+
+**Never push directly to `staging` or `main`.** Promotion is a pull request that carries green
+`Gates (tsc · unit guards · safety proofs · build)` and, for `staging` and `main`, green `QA`
+(+ `E2E lanes against QA`). A failed or missing check is not an approval, and a dispatch that
+skips the gate is a release with no evidence.
+
+**Environment writes are not part of a code batch.** Applying migrations to staging happens in
+`Deploy staging — migrate, build, report URL` (push to `staging` or its dispatch), and to
+production only through `Apply migrations to production (gated batch)`. Data never moves between
+the three databases: dev is the Docker stack on this machine, staging is `bpybjrjenwccowvtrevu`,
+production is `gkswcfljxlutkfdvvqng`, and no tool here copies rows from one to another.

@@ -26,8 +26,11 @@ name: CI — gates for a candidate commit
 #     path is what keeps this gate fast enough to actually be required.
 
 on:
+  # The permanent chain is dev -> staging -> main. A check that only runs at the last step is how
+  # drift accumulated unnoticed before: the branch people work on was the one no workflow watched.
+  # Gates therefore run on every push to all three branches, and on every PR into staging or main.
   pull_request:
-    branches: [main]
+    branches: [staging, main]
     # A documentation-only change cannot alter the bundle, the schema or a policy. Running the
     # 11–29 minute QA + E2E path for it was pure queue time — and on a metered account it was also
     # the minutes that starved the release. `gates` still runs for anything that can reach the app.
@@ -36,7 +39,7 @@ on:
       - '**/*.md'
       - 'device-evidence/**'
   push:
-    branches: [main, staging-snapshot]
+    branches: [dev, staging, main]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
