@@ -21,7 +21,7 @@ import {
   claimOwned,
   ownership,
   trackOwned,
-  injectAdminAuth,
+  injectOwnerAuth,
 } from './helpers';
 import {
   captureSharedCells,
@@ -104,7 +104,11 @@ test.describe('Void sale safety', () => {
   test('the confirmation names the sale, explains the consequence, and double-tapping it voids once', async ({ page }) => {
     await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
-    await injectAdminAuth(page);
+    // AS THE OWNER: experience is server-resolved now, and the QA Admin's membership role is
+    // `admin`, which answers `employee` — so `/admin/sales/:id` bounced to the employee home and
+    // the void action never rendered. The owner holds `*`, so the screen and the action exist, and
+    // every assertion below still judges the database (one void, stock restored once).
+    await injectOwnerAuth(page);
 
     await page.goto(`${BASE_URL}/admin/sales/${SALE_ID}`);
     await page.waitForLoadState('networkidle');

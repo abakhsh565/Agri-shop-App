@@ -203,11 +203,20 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // competing notion of what the person does.
     expect(step1, 'a separate job title field is back').not.toContain('Job title');
     expect(step1, 'step 1 exposes RBAC vocabulary').not.toMatch(JARGON);
-    // The owner can see the whole journey before walking it: the three steps are
-    // named, not three anonymous dots.
-    for (const name of ['Employee', 'Role', 'Where']) {
-      expect(step1, `the step rail does not name the "${name}" step`).toContain(name);
-    }
+    // The journey is FOUR steps now (who → role → where → review), and the rail reports the
+    // position by number and names the step the owner is standing on: "1/4 · Employee". It no
+    // longer lists all four names at once, so asserting the whole list would be asserting a UI
+    // that does not exist. What is asserted is the promise behind it — the owner is told where
+    // they are and how much is left, in plain words.
+    // The counter runs straight into the step name in `innerText` ("Add Employee1/4Employee
+    // information"), so the match is anchored on non-digits rather than on word boundaries: a
+    // letter next to a digit is not a boundary, which is exactly why the first version of this
+    // assertion failed on text that was present.
+    expect(step1, 'the rail does not say which step this is of how many').toMatch(/(^|\D)1\s*\/\s*4(\D|$)/);
+    expect(step1, 'the rail does not name the step the owner is on').toContain('Employee');
+    // Four steps, not three anonymous dots: the count in "1/4" is the journey the rail reports,
+    // and it is asserted above. The last step is a REVIEW the owner can see before anything is
+    // created — its own name appears on the review screen, asserted further down this lane.
 
     await page.getByPlaceholder('e.g. Bilal Ahmed').fill(NEW_NAME);
     await page.getByPlaceholder('03001234567').fill(NEW_PHONE_LOCAL);

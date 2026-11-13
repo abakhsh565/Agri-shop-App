@@ -84,27 +84,23 @@ test.describe('Role delete safety', () => {
 
     await expect(page.getByText(ROLE_NAME).first()).toBeVisible({ timeout: 15000 });
 
-    // Removing a role is a row of its own at the foot of that role's editor sheet now —
-    // not an icon in the row, which was a target you only found if you already knew it was
-    // there. So the flow is: open the role, then press its delete row.
-    await page.getByTestId(`role-${ROLE_ID}`).click();
-    await expect(page.getByTestId('role-delete-row'), 'the role editor has no delete row').toBeVisible({ timeout: 10000 });
-    await page.getByTestId('role-delete-row').click();
+    // Removing a role is the destructive action INSIDE the role's own row now
+    // (`role-delete-<id>`), and it opens the confirmation directly — there is no editor sheet
+    // and no `role-delete-row` in between. The consequence lives in the dialog
+    // (`roles.deleteHint`), which is where it is read below.
+    await page.getByTestId(`role-delete-${ROLE_ID}`).click();
 
     await expect(page.getByText('Delete this role?')).toBeVisible({ timeout: 10000 });
-    // Read through the row that carries it: the same sentence also appears in the sheet's body,
-    // so matching the page by text resolves to two elements and would fail on strictness rather
-    // than on the fact being asserted.
     await expect(
-      page.getByTestId('role-delete-row'),
-      'the delete row does not say why this role can go',
-    ).toContainText(new RegExp(`No employee is using ${ROLE_NAME}`, 'i'));
+      page.getByText(new RegExp(`No employee is using ${ROLE_NAME}`, 'i')).first(),
+      'the confirmation does not say why this role can go',
+    ).toBeVisible({ timeout: 10000 });
 
+    // The double tap is dispatched in ONE task on the dialog's own confirm button, exactly as
+    // before: button state is not the protection being tested — the request count and the
+    // database are.
     await page.evaluate(() => {
-      const btns = Array.from(document.querySelectorAll('button')).filter(
-        (b) => (b.textContent || '').trim().toLowerCase() === 'delete role'
-      ) as HTMLButtonElement[];
-      const btn = btns[btns.length - 1];
+      const btn = document.querySelector('[data-testid="confirm-submit"]') as HTMLButtonElement | null;
       if (!btn) throw new Error('delete confirm button not found');
       if (btn.disabled) throw new Error('the confirm button was already disabled — the second tap never lands');
       btn.click();

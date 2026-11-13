@@ -85,10 +85,17 @@ test.describe('Split Payment Recording', () => {
     await page.waitForLoadState('networkidle');
     await injectAdminAuth(page);
 
-    // Navigate to customer list (triggers Zustand store bootstrap)
+    // Navigate to customer list (triggers Zustand store bootstrap).
+    //
+    // The row is addressed by the id this lane generated, not by the customer's name: the list
+    // pages and filters now, so a name match proved neither that THIS customer was on screen nor
+    // that the screen the payment flow starts from could see it.
     await page.goto(`${BASE_URL}/employee/customers`);
     await page.waitForLoadState('networkidle');
-    await page.locator('text=Split Pay Customer').first().waitFor({ timeout: 15000 });
+    await expect(
+      page.getByTestId(`customer-row-${CUST_ID}`),
+      'the customer this lane seeded is not on the customer list the payment flow starts from',
+    ).toBeVisible({ timeout: 20000 });
 
     // ─── Step 2: Navigate to record payment ──────────────────────────
     await page.goto(`${BASE_URL}/employee/customers/${CUST_ID}/record-payment`);

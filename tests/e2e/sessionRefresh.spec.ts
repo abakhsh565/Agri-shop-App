@@ -152,7 +152,11 @@ test.describe('Session refresh', () => {
     const shownBalance = 'Rs. ' + Math.round(Number(customer.outstanding_balance)).toLocaleString('en-PK');
 
     await loginViaUi(page, OWNER_PHONE);
-    await page.goto(`${BASE}/admin/customers`);
+    // `/admin/customers` is a SECTION HUB now: it opens the ledgers (outstanding, payments,
+    // reminders) and no longer renders a balance per row. The balance this lane re-checks lives on
+    // the outstanding ledger, so that is the screen it must read — same fact, the screen that
+    // actually shows it.
+    await page.goto(`${BASE}/admin/customers/outstanding`);
     await settle(page);
 
     // settle() only requires ANY rendered text, so the customer list can still
@@ -172,7 +176,7 @@ test.describe('Session refresh', () => {
     expect(settingsBefore, 'the owner was bounced out of settings before the reload').toContain('/admin/settings');
 
     // ── RELOAD: the same screen, read again from the server ──────────────────────────────────────
-    await page.goto(`${BASE}/admin/customers`);
+    await page.goto(`${BASE}/admin/customers/outstanding`);
     await page.reload();
     await settle(page);
     await expect(
@@ -189,7 +193,7 @@ test.describe('Session refresh', () => {
 
     // ── REOPEN: a new page in the same profile, i.e. the app opened again ────────────────────────
     const reopened = await page.context().newPage();
-    await reopened.goto(`${BASE}/admin/customers`);
+    await reopened.goto(`${BASE}/admin/customers/outstanding`);
     await settle(reopened);
     await expect(
       reopened.getByText(shownBalance, { exact: false }).first(),

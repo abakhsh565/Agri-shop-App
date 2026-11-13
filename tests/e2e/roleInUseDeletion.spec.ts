@@ -138,29 +138,23 @@ test.describe('Role deletion — assigned role revokes its access', () => {
     await page.waitForLoadState('networkidle');
     await expect(page.getByText(ROLE_NAME).first()).toBeVisible({ timeout: 15000 });
 
-    await page.getByTestId(`role-${ROLE_ID}`).click();
-    const deleteRow = page.getByTestId('role-delete-row');
-    await expect(deleteRow, 'the role editor has no delete row').toBeVisible({ timeout: 10000 });
+    // The destructive action is inside the role's own row and is usable for an in-use role: the
+    // owner is TOLD what will happen rather than stopped from doing it.
+    const deleteButton = page.getByTestId(`role-delete-${ROLE_ID}`);
+    await expect(deleteButton, 'the role offers no delete action at all').toBeVisible({ timeout: 10000 });
+    await expect(deleteButton, 'the delete action must be offered for an in-use role').toBeEnabled();
+    await deleteButton.click();
 
-    // The consequence is on the row itself, and the control is usable: the owner is told
-    // what will happen rather than stopped from doing it.
-    await expect(
-      deleteRow,
-      'the delete row does not say that the employees lose this access'
-    ).toContainText(/2 employees will lose this access/i);
-    await expect(deleteRow, 'the delete row must be offered for an in-use role').toBeEnabled();
-    await expect(deleteRow, 'the row offers a generic confirmation instead of the consequence')
-      .not.toContainText(/are you sure/i);
-
-    await deleteRow.click();
-
-    // The dialog repeats the consequence in the destructive step, naming the count.
+    // The dialog carries the consequence in full (roles.deleteRevokes): the count, that the
+    // access is removed, and that the account and history survive. A generic "are you sure"
+    // would say none of it, so the negative control is kept.
     const dialogText = await page.getByText(/employees use this role/i).last().innerText();
     expect(dialogText, 'the confirmation does not name how many employees lose access').toMatch(/2 employees use this role/i);
     expect(dialogText, 'the confirmation does not say the access is removed').toMatch(/removes the access/i);
     expect(dialogText, 'the confirmation does not say the account and history survive').toMatch(/keep their account and their history/i);
+    expect(dialogText, 'the confirmation is generic instead of naming the consequence').not.toMatch(/are you sure/i);
 
-    await page.getByRole('button', { name: /^delete role$/i }).last().click();
+    await page.getByTestId('confirm-submit').click();
 
     // The database is the judge: role gone, references cleared, employees intact.
     await expect.poll(async () => roleExists(), { timeout: 15000 }).toBe(false);
