@@ -43,8 +43,19 @@ export const QA_PROJECT_ORIGIN = `https://${QA_PROJECT_REF}.supabase.co`;
 export const QA_DB_HOST = 'aws-0-ap-northeast-1.pooler.supabase.com';
 export const QA_DB_USER = `postgres.${QA_PROJECT_REF}`;
 
-/** Keep certificate verification enabled for the QA database connection. */
-export const QA_DB_SSL = Object.freeze({ rejectUnauthorized: true });
+/**
+ * The Supabase pooler presents a certificate chain Node's default trust store
+ * does not accept (proven live: PR #13 CI run 42216515271 failed the provision
+ * step with SELF_SIGNED_CERT_IN_CHAIN the moment this was `true`). So TLS
+ * verification stays off here, exactly as in every other QA database script in
+ * this repo (scripts/migrate.mjs, scripts/lib/qa-connection.mjs, all of
+ * scripts/dev/*). The connection is still encrypted, and the compensating
+ * control is the exact target pinning above: validateQaDbHost / validateQaDbUser
+ * refuse any host or user that is not this pooler and this project, so the
+ * script cannot be pointed at another database. Do not flip this back to `true`
+ * without first proving a live connection from a GitHub runner.
+ */
+export const QA_DB_SSL = Object.freeze({ rejectUnauthorized: false });
 
 /** The complete set of app users whose QA auth credentials may ever be repaired. */
 export const QA_PROVISIONING_FIXTURES = Object.freeze([
