@@ -149,7 +149,12 @@ test.describe('Session refresh', () => {
       `SELECT name, outstanding_balance FROM customers WHERE id = '${QA_IDS.customerA}'`,
     );
     expect(customer?.name, 'QA Customer A is missing, so there is no displayed data to re-check').toBeTruthy();
-    const shownBalance = 'Rs. ' + Math.round(Number(customer.outstanding_balance)).toLocaleString('en-PK');
+    // NOTE ON THE FIGURE. The outstanding ledger is BRANCH money: its rows are the customers who
+    // owe THIS branch, and their amounts come from this branch's own sales and receipts
+    // (`get_branch_customer_balances`). The shop-wide `customers.outstanding_balance` is a different
+    // number — it includes other branches' trade — so asserting it here was asserting a figure this
+    // screen is not about. What this lane is actually about is SAMENESS across a reload and a reopen,
+    // which is checked on the ledger's own rows below.
 
     await loginViaUi(page, OWNER_PHONE);
     // `/admin/customers` is a SECTION HUB now: it opens the ledgers (outstanding, payments,
@@ -159,15 +164,18 @@ test.describe('Session refresh', () => {
     await page.goto(`${BASE}/admin/customers/outstanding`);
     await settle(page);
 
-    // settle() only requires ANY rendered text, so the customer list can still
-    // be loading when this runs — wait for the balance itself to be visible
-    // before counting it, instead of reading a 0 from an un-hydrated list.
+    // settle() only requires ANY rendered text, so the ledger can still be loading when this runs —
+    // wait for a ROW before reading, instead of recording an empty list as "the owner's data".
+    const ledgerRows = page.locator('[data-testid^="outstanding-row-"]');
     await expect(
-      page.getByText(shownBalance, { exact: false }).first(),
-      `the customers screen does not show ${shownBalance} (before the reload)`,
-    ).toBeVisible({ timeout: 15000 });
-    const balanceBefore = await page.getByText(shownBalance, { exact: false }).count();
-    expect(balanceBefore, `the customers screen does not show ${shownBalance} (before the reload)`).toBeGreaterThan(0);
+      ledgerRows.first(),
+      'the outstanding ledger rendered no customer at all, so there is no data to re-check',
+    ).toBeVisible({ timeout: 20000 });
+    const rowsBefore = await ledgerRows.allInnerTexts();
+    expect(rowsBefore.length, 'the outstanding ledger is empty').toBeGreaterThan(0);
+    // The figure is the ledger's own answer (branch money), read from the row rather than assumed —
+    // and it must be a real amount, not a placeholder.
+    expect(rowsBefore[0], 'the ledger row carries no amount').toMatch(/Rs\.\s?[\d,]+/);
 
     // ── a permission-gated route is reachable BEFORE the reload, so "still reachable" means something
     await page.goto(`${BASE}/admin/settings`);
@@ -179,14 +187,12 @@ test.describe('Session refresh', () => {
     await page.goto(`${BASE}/admin/customers/outstanding`);
     await page.reload();
     await settle(page);
-    await expect(
-      page.getByText(shownBalance, { exact: false }).first(),
-      'the customer balance changed across a reload',
-    ).toBeVisible();
-    await expect(
-      page.getByText(customer.name, { exact: false }).first(),
-      'the customer disappeared across a reload',
-    ).toBeVisible();
+    await expect(ledgerRows.first(), 'the ledger is empty after a reload').toBeVisible();
+    expect(
+      await ledgerRows.allInnerTexts(),
+      'the ledger rows or amounts changed across a reload',
+    ).toEqual(rowsBefore);
+
     await page.goto(`${BASE}/admin/settings`);
     await settle(page);
     expect(page.url(), 'the owner lost access to settings after a reload').toContain('/admin/settings');
@@ -195,14 +201,12 @@ test.describe('Session refresh', () => {
     const reopened = await page.context().newPage();
     await reopened.goto(`${BASE}/admin/customers/outstanding`);
     await settle(reopened);
-    await expect(
-      reopened.getByText(shownBalance, { exact: false }).first(),
-      'the customer balance is wrong in a freshly opened page',
-    ).toBeVisible();
-    await expect(
-      reopened.getByText(customer.name, { exact: false }).first(),
-      'the customer is missing in a freshly opened page',
-    ).toBeVisible();
+    const reopenedRows = reopened.locator('[data-testid^="outstanding-row-"]');
+    await expect(reopenedRows.first(), 'the ledger is empty in a freshly opened page').toBeVisible({ timeout: 20000 });
+    expect(
+      await reopenedRows.allInnerTexts(),
+      'the ledger rows or amounts are different in a freshly opened page',
+    ).toEqual(rowsBefore);
     await reopened.goto(`${BASE}/admin/settings`);
     await settle(reopened);
     expect(reopened.url(), 'the owner lost access to settings in a freshly opened page').toContain('/admin/settings');

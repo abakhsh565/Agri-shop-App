@@ -29,7 +29,7 @@ import {
 } from './cleanupOwnership';
 import { randomUUID } from 'node:crypto';
 import { ISOLATED_IDENTITIES, ISOLATED_TENANT_ID } from '../../scripts/dev/qa-tenant.mjs';
-import { FIXTURE_SQL, QA_FIXTURE_IDS } from '../setup/qa-fixtures';
+import { FIXTURE_SQL, QA_FIXTURE_ACTIVE_BRANCH_CHECK_SQL, QA_FIXTURE_IDS } from '../setup/qa-fixtures';
 
 /**
  * Load .env.qa into process.env if not already loaded.
@@ -754,6 +754,20 @@ export async function seedShopDraft(
  */
 export async function setupFixtures() {
   await execSql(FIXTURE_SQL.users);
+  // The accounts must be ON the default branch before any branch-scoped screen is opened: the
+  // supplier picker, the supplier-payment page, the outstanding ledger and the sale detail all
+  // resolve their branch from the server (`current_branch_id()`, which prefers
+  // `user_active_shops`), and the fixtures live on the default branch.
+  await execSql(FIXTURE_SQL.activeBranch);
+  const branchRows = await execSql(QA_FIXTURE_ACTIVE_BRANCH_CHECK_SQL);
+  const offBranch = branchRows.filter((row) => row.on_default_branch !== true);
+  if (offBranch.length) {
+    throw new Error(
+      `[QA FIXTURE] these fixture accounts are not on their shop's default branch, so every ` +
+        `branch-scoped read is looking at a branch the fixtures are not in: ` +
+        offBranch.map((row) => `${row.user_id} → ${row.branch_id ?? 'null'}`).join(', '),
+    );
+  }
   await execSql(FIXTURE_SQL.companies);
   await execSql(FIXTURE_SQL.customers);
   await execSql(FIXTURE_SQL.productsAndVariants);

@@ -64,11 +64,20 @@ test.describe('Void sale safety', () => {
       ])),
     );
 
+    // THE SALE MUST CARRY THE BRANCH IT WAS MADE IN. It used to be INSERTed with `shop_id` only,
+    // and every branch-scoped read (`sales` is read through the caller's current branch, and
+    // `SaleDetailView` resolves the sale from it) then treated this row as belonging to no branch: the
+    // detail screen rendered without the sale's own actions, so `sale-void` never appeared and the
+    // lane failed on a control that exists. The branch is the shop's default one — the same branch
+    // the fixtures live on and the accounts are seeded onto (`default_branch_id()`'s own rule).
     await execSql(`
       INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status,
-        payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at)
+        payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, branch_id,
+        created_at, updated_at)
       VALUES ('${SALE_ID}', '${SALE_NUMBER}', '${QA_IDS.customerA}', '${QA_IDS.admin}', ${QTY * 500}, 'completed',
-        'credit', 'cash', 0, ${QTY * 500}, 0, false, '${QA_IDS.shop}', NOW(), NOW())
+        'credit', 'cash', 0, ${QTY * 500}, 0, false, '${QA_IDS.shop}',
+        (SELECT id FROM branches WHERE tenant_id = '${QA_IDS.shop}' AND is_default AND is_active ORDER BY created_at LIMIT 1),
+        NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
     await execSql(`
