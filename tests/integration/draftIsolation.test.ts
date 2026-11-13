@@ -7,6 +7,29 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execSqlAsAdmin } from '../setup/qa-client';
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the employeeInviteLifecycle pattern. This suite
+ * shares the QA database with the other integration files, so a silent catch here leaves rows in
+ * place and the next suite fails deep inside a test with an authorization error that is really
+ * leftover state. Failures are collected and the caller throws with their names.
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 const CO_A = '00000000-0000-0000-0000-aabbccdd0010';
 const CO_B = '00000000-0000-0000-0000-bbccddee0010';
 const CUST_A = '00000000-0000-0000-0000-aabbccdd0001';
@@ -25,9 +48,14 @@ async function q(sql: string) {
 describe('Draft QA Data Isolation', () => {
   beforeAll(async () => {
     // Clean — FK-safe order
-    for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
+    // `sales` is NOT in this list: it has no product_id column (sale_items carries it), so the
+    // delete raised `column "product_id" does not exist` on every run and was reported as a
+    // suppressed cleanup failure — a check that never checked anything. Sales created by this
+    // suite are removed by customer id instead.
+    for (const t of ['sale_items', 'inventory_movements', 'stock_adjustments']) {
       await q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     }
+    await q(`DELETE FROM sales WHERE customer_id IN ('${CUST_A}','${CUST_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     await q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     await q(`DELETE FROM products WHERE id IN ('${PROD_A}','${PROD_B}')`);
     await q(`DELETE FROM companies WHERE id IN ('${CO_A}','${CO_B}')`);
@@ -68,9 +96,14 @@ describe('Draft QA Data Isolation', () => {
 });
 
   afterAll(async () => {
-    for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
+    // `sales` is NOT in this list: it has no product_id column (sale_items carries it), so the
+    // delete raised `column "product_id" does not exist` on every run and was reported as a
+    // suppressed cleanup failure — a check that never checked anything. Sales created by this
+    // suite are removed by customer id instead.
+    for (const t of ['sale_items', 'inventory_movements', 'stock_adjustments']) {
       await q(`DELETE FROM ${t} WHERE product_id IN ('${PROD_A}','${PROD_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     }
+    await q(`DELETE FROM sales WHERE customer_id IN ('${CUST_A}','${CUST_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     await q(`DELETE FROM product_variants WHERE id IN ('${VAR_A}','${VAR_B}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     await q(`DELETE FROM products WHERE id IN ('${PROD_A}','${PROD_B}')`);
     await q(`DELETE FROM companies WHERE id IN ('${CO_A}','${CO_B}')`);
@@ -166,7 +199,7 @@ describe('Draft QA Data Isolation', () => {
   // ─── PART 4: Cleanup isolation — removing one draft leaves the other intact ───
 
   it('Draft A cleanup: removes A customer+product+company+variant, B survives', async () => {
-    for (const t of ['sale_items', 'sales', 'inventory_movements', 'stock_adjustments']) {
+    for (const t of ['sale_items', 'inventory_movements', 'stock_adjustments']) {
       await q(`DELETE FROM ${t} WHERE product_id = '${PROD_A}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
     }
     await trySql('cleanup-3', q(`DELETE FROM sales WHERE customer_id = '${CUST_A}'`));

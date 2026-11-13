@@ -13,6 +13,28 @@ import { QA_IDS, setupUsers } from '../setup/fixtures';
 
 import { randomUUID } from 'crypto';
 const RUN = Date.now().toString(36);
+
+/**
+ * Cleanup that REPORTS instead of swallowing — the employeeInviteLifecycle pattern. `beforeAll`
+ * called `throwIfCleanupFailed`, which was never defined here, so the suite died on a
+ * ReferenceError before a single RLS assertion ran.
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
 const EMP_ID = randomUUID();
 const CUST_ID = randomUUID();
 const EMP_PHONE = `923${RUN.slice(-8).padStart(8, '0')}`;
@@ -37,9 +59,10 @@ describe('Security Audit — RLS & Authorization', () => {
 });
 
   afterAll(async () => {
-    await execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUST_ID}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
-    await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUST_ID}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
-    await execSqlAsAdmin(`DELETE FROM users WHERE id = '${EMP_ID}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await trySql('credit_limit_requests', execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUST_ID}'`));
+    await trySql('customers', execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUST_ID}'`));
+    await trySql('users', execSqlAsAdmin(`DELETE FROM users WHERE id = '${EMP_ID}'`));
+    throwIfCleanupFailed('Security Audit — RLS & Authorization afterAll cleanup');
   });
 
   // ─── RLS: All critical tables have RLS enabled ────────────────────────────

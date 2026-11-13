@@ -33,6 +33,16 @@
 
 /** The seeded QA tenant every fixture row belongs to. */
 export const QA_SHOP_ID = '00000000-0000-0000-0000-000000000001';
+/**
+ * The fixture shop's sole active standard owner (Khalid Khan, 923001234567).
+ *
+ * `0280` allows exactly one active owner per shop, so suites that need owner power use this row
+ * instead of creating one — and never INSERT/UPDATE/DELETE it. It was dropped from this object in
+ * a refactor while the suites kept reading `QA_IDS.owner`; the value then read `undefined`, which
+ * reached `@supabase/auth-js` as `createUser({ id: undefined })` and failed twelve integration
+ * tests with "Expected parameter to be UUID but is not" instead of their real subject.
+ */
+export const QA_OWNER_ID = '10000000-0000-0000-0000-000000000003';
 /** QA Admin — keep-list account (923009999999). */
 export const QA_ADMIN_ID = '10000000-0000-0000-0000-000000000001';
 /** QA Employee — keep-list account (923008888888). */
@@ -49,11 +59,12 @@ export const QA_VARIANT_B_ID = '40000000-0000-0000-0000-000000000002';
 export const QA_COMPANY_A_ID = '50000000-0000-0000-0000-000000000001';
 
 /**
- * The eleven ids, under the names both suites already use (`QA_IDS` re-exports this object, so
+ * The twelve ids, under the names both suites already use (`QA_IDS` re-exports this object, so
  * `QA_IDS.shop` in a spec and `QA_IDS.customerA` in a helper mean the same value as before).
  */
 export const QA_FIXTURE_IDS = {
   shop: QA_SHOP_ID,
+  owner: QA_OWNER_ID,
   admin: QA_ADMIN_ID,
   employee: QA_EMPLOYEE_ID,
   customerA: QA_CUSTOMER_A_ID,
@@ -75,6 +86,15 @@ export type QaFixtureRow = Record<string, string | number | boolean>;
  * once left a row carrying another suite's number.
  */
 export const QA_FIXTURE_USERS: readonly QaFixtureRow[] = [
+  {
+    id: QA_OWNER_ID,
+    name: 'Khalid Khan',
+    phone: '923001234567',
+    role: 'admin',
+    is_original_owner: true,
+    is_active: true,
+    shop_id: QA_SHOP_ID,
+  },
   {
     id: QA_ADMIN_ID,
     name: 'QA Admin',

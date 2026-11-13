@@ -16,6 +16,29 @@ import { recordEvidence, printReport, clearEvidence } from '../setup/evidence';
 // Use the admin user from fixtures for RPC calls
 const ADMIN_ID = QA_IDS.admin;
 
+/**
+ * Cleanup that REPORTS instead of swallowing — the employeeInviteLifecycle pattern. The `beforeAll`
+ * and `afterAll` here were converted to report failures, but the collector they report INTO was
+ * never defined, so both hooks died on `ReferenceError: throwIfCleanupFailed is not defined` before
+ * a single assertion ran.
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
+
 // Dedicated customers for THIS suite. It previously used the shared customerB/customerC fixtures,
 // but the sweep several suites ran in their afterAll deleted credit_limit_requests for those shared
 // customers, so a finishing suite wiped this suite's request mid-run and it failed with
@@ -276,6 +299,11 @@ describe('Credit Request Integration', () => {
       const catalog = await execSqlAsAdmin(`
         SELECT
           (SELECT count(*) FROM permissions WHERE code = 'customers.credit_limit') AS permission_rows,
+          -- Every role, not only system ones. This is the invariant `0311` restores and asserts:
+          -- `0251` copied the grant only onto the roles that existed when it ran, and the copy
+          -- drifted (QA held eleven roles that could edit a customer and not set its limit — the
+          -- Credit Requests screen offered a path the RPC refuses). A role that holds
+          -- `customers.edit` without `customers.credit_limit` is that gap coming back.
           (SELECT count(*) FROM role_permissions rp
              JOIN permissions pe ON pe.id = rp.permission_id AND pe.code = 'customers.edit'
             WHERE NOT EXISTS (SELECT 1 FROM role_permissions rp2
@@ -293,7 +321,7 @@ describe('Credit Request Integration', () => {
       expect(Number(row.body_names_permission)).toBe(1);
 
       recordEvidence(
-        'The new permission exists, is granted wherever customers.edit is, and gates the direct RPC',
+        'The new permission exists, is granted everywhere customers.edit is (0311), and gates the direct RPC',
         'permission row present; zero roles lost the ability; the function body names customers.credit_limit',
         `permission=${row.permission_rows}, lost=${row.roles_that_lost_it}, body=${row.body_names_permission}`,
         'SELECT permissions / role_permissions / pg_get_functiondef',

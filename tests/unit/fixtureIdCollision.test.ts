@@ -19,7 +19,7 @@
  * working if a suite is refactored — and a UUID reused deliberately must be moved
  * into a shared fixture module and referenced from there.
  *
- * THE SHARED BASELINE HAS A SECOND CONTRACT (2026-10-18). The eleven seeded rows are declared once in
+ * THE SHARED BASELINE HAS A SECOND CONTRACT (2026-10-18). The twelve seeded rows are declared once in
  * `tests/setup/qa-fixtures.ts`, and both seeders consume it. That module derives its INSERT column list
  * and its `ON CONFLICT … DO UPDATE SET` list from the declared rows, which is what makes "declared" and
  * "restored" the same set — the drift this replaced was `tests/e2e/helpers.ts` restoring product stock
@@ -243,11 +243,15 @@ function restoredAssignments(sql: string): string[] {
 }
 
 describe('the shared QA baseline — declared once, restored completely', () => {
-  it('keeps the eleven ids the specs and cleanup protection key on', () => {
+  it('keeps the twelve ids the specs and cleanup protection key on', () => {
     // Restated literally: these values are premises (QA_IDS in specs, PROTECTED_QA_IDS in cleanup,
     // the keep-list phones). A refactor may move where they are declared, never what they are.
+    // `owner` is in the list because the refactor that moved these ids into ./qa-fixtures dropped
+    // it while twelve suites kept reading `QA_IDS.owner`; the guard was rewritten to match the
+    // smaller object, so it agreed with the drift instead of catching it.
     expect(QA_FIXTURE_IDS).toEqual({
       shop: '00000000-0000-0000-0000-000000000001',
+      owner: '10000000-0000-0000-0000-000000000003',
       admin: '10000000-0000-0000-0000-000000000001',
       employee: '10000000-0000-0000-0000-000000000002',
       customerA: '20000000-0000-0000-0000-000000000001',
