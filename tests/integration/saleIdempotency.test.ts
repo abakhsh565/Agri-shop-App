@@ -26,7 +26,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'crypto';
-import { execRpcAsUser, execSqlAsAdmin, updateAsUser } from '../setup/qa-client';
+import { execRpcAsUser, execSqlAsAdmin, roleIdByName, updateAsUser } from '../setup/qa-client';
 import { QA_IDS, setupAllFixtures, cleanupOwnedTransactions } from '../setup/fixtures';
 import { runCleanupStatements } from '../setup/ownedCleanup';
 

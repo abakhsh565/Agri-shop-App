@@ -33,6 +33,7 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { randomUUID } from 'crypto';
 import { execRpcAsUser, execSqlAsAdmin, ensureTenantBranch } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 
 const TENANT = '00000000-0000-0000-0000-000000000001';
 // The fixture shop's sole owner (Khalid Khan). 0280 allows one active owner

@@ -21,6 +21,7 @@
 
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import { execSqlAsAdmin, execRpcAsUser, qaServiceClient } from '../setup/qa-client';
+import { QA_IDS } from '../setup/fixtures';
 import { runCleanupStatements } from '../setup/ownedCleanup';
 
 

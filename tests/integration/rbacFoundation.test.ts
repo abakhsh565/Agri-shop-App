@@ -34,9 +34,12 @@ beforeAll(async () => {
   // The caller is the fixture shop's owner, whose owner membership already
   // exists — that is what gives him tenant access. The Supabase Auth
   // credential is provisioned on demand by execRpcAsUser.
-  await sql(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
-    VALUES ('${admin}', 'QA RBAC Admin', '${adminPhone}', 'admin', true, true, '${tenant}')
-    ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'admin', shop_id = EXCLUDED.shop_id`);
+  //
+  // No INSERT here. This used to upsert his row from an `adminPhone` that was never declared, and
+  // the file's own contract says that row is the seeded owner and must never be written. What the
+  // suite needs is the row's EXISTENCE, which the fixtures guarantee.
+  const [{ rows: ownerRows }] = [await sql(`SELECT id FROM users WHERE id = '${admin}'`)];
+  expect(ownerRows.length, 'the seeded owner row this suite acts as must exist').toBe(1);
   await qaServiceClient.auth.admin.updateUserById(employee, { password: `QA-test-${employee}-2024!` }).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`DELETE FROM audit_events WHERE entity_id IN ('${employee}') OR details->>'name'='QA RBAC Employee'`);
   await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
