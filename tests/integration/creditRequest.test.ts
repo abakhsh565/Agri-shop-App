@@ -299,11 +299,11 @@ describe('Credit Request Integration', () => {
       const catalog = await execSqlAsAdmin(`
         SELECT
           (SELECT count(*) FROM permissions WHERE code = 'customers.credit_limit') AS permission_rows,
-          -- Every role, not only system ones. This is the invariant `0311` restores and asserts:
-          -- `0251` copied the grant only onto the roles that existed when it ran, and the copy
+          -- Every role, not only system ones. This is the invariant 0311 restores and asserts:
+          -- 0251 copied the grant only onto the roles that existed when it ran, and the copy
           -- drifted (QA held eleven roles that could edit a customer and not set its limit — the
           -- Credit Requests screen offered a path the RPC refuses). A role that holds
-          -- `customers.edit` without `customers.credit_limit` is that gap coming back.
+          -- customers.edit without customers.credit_limit is that gap coming back.
           (SELECT count(*) FROM role_permissions rp
              JOIN permissions pe ON pe.id = rp.permission_id AND pe.code = 'customers.edit'
             WHERE NOT EXISTS (SELECT 1 FROM role_permissions rp2

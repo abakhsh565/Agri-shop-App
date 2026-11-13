@@ -103,7 +103,7 @@ async function cleanup() {
     DELETE FROM audit_events
     WHERE user_id IN (SELECT id FROM users WHERE phone = '${EMP_PHONE}')
        OR entity_id IN (SELECT id FROM users WHERE phone = '${EMP_PHONE}')
-  `).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  `));
   await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE phone = '${EMP_PHONE}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`DELETE FROM users WHERE phone = '${EMP_PHONE}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }

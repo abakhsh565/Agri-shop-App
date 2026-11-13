@@ -97,7 +97,7 @@ async function cleanup() {
     DELETE FROM inventory_movements
     WHERE created_by IN (SELECT id FROM users WHERE phone IN ('923009770001','923009770002','923009770031','923009770032') OR name LIKE 'QA Enforce%')
        OR product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')
-  `).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  `));
   await sql(`DELETE FROM stock_adjustments WHERE product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`DELETE FROM product_variants WHERE product_id IN (SELECT id FROM products WHERE name = 'QA Enforce Product')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   await sql(`DELETE FROM products WHERE name = 'QA Enforce Product'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
