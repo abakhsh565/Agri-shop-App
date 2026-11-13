@@ -442,17 +442,18 @@ export async function loginViaUi(
   // (owner / employee) are both rendered — never a redirect into an existing session.
   await startFromAnonymousBrowser(page);
   await page.goto(`${BASE_URL}/login`);
-  // One phone, one door: the login page asks which door this number belongs at and
-  // refuses a number that answers the other one, so the tab is part of the flow.
-  if (side === 'employee') await page.getByTestId('auth-tab-employee').click();
+  // ONE PHONE, ONE DOOR (2026-11-13). The login page used to open an owner/employee TAB first, and a
+  // number had to answer the tab it belonged to. That chooser is gone from the product —
+  // `src/pages/auth/LoginPage.tsx` no longer renders `auth-tab-employee` or `shop-id-input`, because
+  // one number maps to one account and the account's membership decides the experience. The helper
+  // kept clicking the removed tab, so every employee lane waited 10 s for a button that does not
+  // exist and failed before it reached the app (6 tests across branchRemoval, dashboardScope,
+  // dependencyContinuity and education). `side` is kept as documentation of intent — the flow no
+  // longer differs — and `shopCode` still selects the shop when the chooser appears.
   // The field takes the local 03… form. A 92… constant is re-read by the field's own
   // paste rule as a country code and becomes a 10-digit number the validator refuses,
   // so the caller's constant is normalised here rather than in every spec.
   await page.getByPlaceholder('e.g. 03001234567').fill(/^92\d{10}$/.test(phone) ? `0${phone.slice(2)}` : phone);
-  // The employee door is TWO answers: a number on its own does not say which shop invited it,
-  // so `Send Code` refuses to spend a code until the shop is named. The fixture shops all have
-  // a stable id, which the field accepts as readily as the six-character code read out loud.
-  if (side === 'employee') await page.getByTestId('shop-id-input').fill(shopCode);
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 
