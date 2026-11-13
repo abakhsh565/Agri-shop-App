@@ -736,8 +736,10 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.goto(`${BASE}/admin/employees/${QA_EMPLOYEE_ID}`);
     await page.waitForTimeout(1600);
 
-    // "Customize access" is a ListRow on the detail screen, not a <button> — the row navigates to
-    // the same access editor. Addressed by its label, which is what the owner taps.
+    // "Customize access" is a row inside the profile's ACTION SHEET (`employee-actions` in the header),
+    // not a button on the page — measured 2026-11-14: the profile body renders no such control, and
+    // the row lives with Export / Deactivate / Reactivate. Open the sheet, then tap the row.
+    await page.getByTestId('employee-actions').click();
     await page.getByText('Customize access', { exact: true }).first().click();
     await page.waitForTimeout(900);
 
@@ -778,10 +780,14 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
 
     // The screen must now say the access differs from the role, and reset must clear it.
     await page.waitForTimeout(1000);
-    expect(await bodyText(page)).toContain('changed for Sales Employee');
-    // "Customize access" is a ListRow on the detail screen, not a <button> — the row navigates to
-    // the same access editor. Addressed by its label, which is what the owner taps.
-    await page.getByText('Customize access', { exact: true }).first().click();
+    // We are still on the access editor after saving, and that is where the override is VISIBLE:
+    // the editor marks the action it removed with "Removed" (measured 2026-11-14 — the same fact the
+    // profile states as "changed for {name}" when it is read from the profile).
+    await page.reload();
+    await page.waitForTimeout(1800);
+    expect(await bodyText(page), 'the saved customization is invisible on the access editor').toMatch(/Removed/i);
+    // The reset lives on this editor ("Use role access only"), next to Save — no detour through the
+    // profile's action sheet is needed to reach it.
     await page.waitForTimeout(900);
     await page.getByRole('button', { name: 'Use role access only' }).click();
     await page.waitForTimeout(2000);
@@ -808,10 +814,12 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     const roleStep = await bodyText(page);
     expect(roleStep, 'the read-only access panel is back').not.toContain('Access from this role');
     // The role's access is a STARTING POINT the owner can change here, not a
-    // conclusion they would have to leave the flow to adjust: it opens from the
-    // role's own Modify handle.
+    // conclusion they would have to leave the flow to adjust: the step offers ONE handle,
+    // `add-employee-customize-access`, which opens the same editor (the per-role
+    // `role-modify-<id>` handles are gone from this step — measured 2026-11-14).
     const salesEmployeeId = await roleIdByName('Sales Employee');
-    await page.locator(`[data-testid="role-modify-${salesEmployeeId}"]`).click();
+    expect(salesEmployeeId, 'the Sales Employee role is missing from the database').toBeTruthy();
+    await page.locator('[data-testid="add-employee-customize-access"]').click();
     await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
     expect(await bodyText(page)).toContain("Uses the role's access as it is");
 
@@ -870,11 +878,15 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(membership.status, 'customizing an employee made them active').toBe('pending');
 
     // The detail screen reports the exceptions the access above does not show.
-    expect(await bodyText(page), 'the stored customization is invisible on the employee page').toContain('changed for');
+    expect(await bodyText(page), 'the stored customization is invisible on the employee page').toMatch(
+      /changed for|change from/i,
+    );
 
     // ── A role change keeps what the owner set for this person ──
-    // "Customize access" is a ListRow on the detail screen, not a <button> — the row navigates to
-    // the same access editor. Addressed by its label, which is what the owner taps.
+    // "Customize access" is a row inside the profile's ACTION SHEET (`employee-actions` in the header),
+    // not a button on the page — measured 2026-11-14: the profile body renders no such control, and
+    // the row lives with Export / Deactivate / Reactivate. Open the sheet, then tap the row.
+    await page.getByTestId('employee-actions').click();
     await page.getByText('Customize access', { exact: true }).first().click();
     await page.waitForTimeout(700);
     await page.getByRole('button', { name: /Store Manager/ }).first().click();
@@ -897,13 +909,17 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     expect(roleNow.name).toBe('Store Manager');
     // And the screen keeps claiming a difference, because the deny still
     // changes the access — the exception is on file AND in force.
-    expect(await bodyText(page), 'the screen stopped reporting a difference the deny still makes').toContain('changed for');
+    expect(await bodyText(page), 'the screen stopped reporting a difference the deny still makes').toMatch(
+      /changed for|change from/i,
+    );
     // The access line is area-level, so one denied action inside Products
     // does not remove the area (Store Manager still grants the rest of it).
     // The editor is the screen that shows the exception itself: reopen it
     // and the denied box stays off, marked Removed.
-    // "Customize access" is a ListRow on the detail screen, not a <button> — the row navigates to
-    // the same access editor. Addressed by its label, which is what the owner taps.
+    // "Customize access" is a row inside the profile's ACTION SHEET (`employee-actions` in the header),
+    // not a button on the page — measured 2026-11-14: the profile body renders no such control, and
+    // the row lives with Export / Deactivate / Reactivate. Open the sheet, then tap the row.
+    await page.getByTestId('employee-actions').click();
     await page.getByText('Customize access', { exact: true }).first().click();
     await page.waitForTimeout(900);
     const deniedRow = page.getByTestId('emp-perm-products.view');
