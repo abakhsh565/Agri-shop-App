@@ -575,20 +575,47 @@ export async function loginViaUi(
 
 /** Inject admin auth state into the page's localStorage */
 export async function injectAdminAuth(page: Page) {
-  // The QA admin's REAL membership in the QA database is owner/active, and the
-  // admin routes are gated by PermissionGuard, which reads membershipRole and
-  // permissions from this persisted user. Omitting them makes deep /admin/*
-  // navigation silently redirect to the dashboard (guards deny), so the fixture
-  // must mirror the authoritative membership row rather than a legacy role only.
+  /**
+   * THE INJECTED IDENTITY MUST TELL THE TRUTH ABOUT THE MEMBERSHIP.
+   *
+   * MEASURED 2026-11-14. This helper used to write `membershipRole: 'owner'` and
+   * `permissions: ['*']` for QA Admin, whose real membership in the QA database is `role = 'admin'`
+   * (Store Manager, 29 codes — it holds `customers.view` and `customers.payments`, it does NOT hold
+   * the owner's authority). Since experience became SERVER-resolved, `experienceOf()` falls back to
+   * `membershipRole === 'owner' ? 'owner' : 'employee'`, so that false claim made the account an
+   * "owner" in the client — and the employee shell (`ProtectedRoute allowedExperiences={["employee"]}`)
+   * correctly refused to open `/employee/customers`, bouncing to `/employee/dashboard`.
+   *
+   * That bounce was the single cause of every remaining payment/customer failure in the smoke lane:
+   * the screens rendered nothing because the routes after them never mounted. The guard was right;
+   * the fixture was lying. So the identity written here is the account's ACTUAL one — `admin` role,
+   * `admin` membership, and its OWN permission codes read from the database (never `['*']`, which no
+   * Store Manager holds). Lanes that need owner power use `injectOwnerAuth`.
+   */
+  const permissionRows = await execSql(
+    `SELECT p.code FROM memberships m
+       JOIN users u ON u.id = m.user_id
+       JOIN role_permissions rp ON rp.role_id = m.role_id
+       JOIN permissions p ON p.id = rp.permission_id
+      WHERE u.phone = '923009999999' AND m.status = 'active'`,
+  );
+  const adminPermissions = permissionRows.map((row) => String(row.code)).filter(Boolean);
+  if (!adminPermissions.length) {
+    throw new Error(
+      '[QA FIXTURE] QA Admin (923009999999) holds no permission codes in the database — the ' +
+        'identity this helper injects would be a guess, so it refuses to inject one.',
+    );
+  }
+
   const adminUser = {
     id: QA_IDS.admin,
     name: 'QA Admin',
     phone: '923009999999',
     role: 'admin',
     tenantId: QA_IDS.shop,
-    membershipRole: 'owner',
-    permissions: ['*'],
-    isOriginalOwner: true,
+    membershipRole: 'admin',
+    permissions: adminPermissions,
+    isOriginalOwner: false,
     isActive: true,
     firstLoginAt: new Date().toISOString(),
     lastLoginAt: new Date().toISOString(),
