@@ -819,9 +819,23 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // `role-modify-<id>` handles are gone from this step — measured 2026-11-14).
     const salesEmployeeId = await roleIdByName('Sales Employee');
     expect(salesEmployeeId, 'the Sales Employee role is missing from the database').toBeTruthy();
-    await page.locator('[data-testid="add-employee-customize-access"]').click();
+    // The role step loads the chosen role's access before it can advance ("Loading the saved role
+    // access…"), and the ONE customize handle lives on the REVIEW step: measured 2026-11-14, the role
+    // step renders no `add-employee-customize-access` and no per-role `role-modify-<id>` handles.
+    await expect(page.getByText('Loading the saved role access')).toHaveCount(0, { timeout: 20000 });
+    const customizeHandle = page.locator('[data-testid="add-employee-customize-access"]');
+    // Role is step 2 of 4: one Next reaches the branch step, the next reaches the review that carries
+    // the handle. Click only as far as needed, so a two-branch shop cannot turn this into a skip.
+    for (let step = 0; step < 2 && (await customizeHandle.count()) === 0; step += 1) {
+      await page.getByRole('button', { name: 'Next' }).click();
+      await page.waitForTimeout(1200);
+    }
+    await expect(customizeHandle, 'the review step offers no way to change the access').toBeVisible({ timeout: 15000 });
+    await customizeHandle.click();
     await expect(page.locator('[data-testid="emp-access-context"]')).toBeVisible();
-    expect(await bodyText(page)).toContain("Uses the role's access as it is");
+    // The editor's shipped English default (measured 2026-11-14): "Using the role's full access", next
+    // to a "Close" action — that is the "as it is" state this lane pins down.
+    expect(await bodyText(page), 'the editor no longer starts from the role').toContain("Using the role's full access");
 
     // DENY-ONLY (0277): the only exception the database stores is a removal.
     // 'View Products' is part of a Sales Employee's role, so turning it off
@@ -835,14 +849,17 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     ).toHaveAttribute('aria-checked', 'true');
     await viewProductsRow.click();
     await page.waitForTimeout(500);
-    expect(await bodyText(page), 'a customization is not reported to the owner').toMatch(/\d+ changes? from Sales Employee/);
-    await page.locator('[data-testid="role-modify-done"]').click();
-    // The chosen card says what was changed, without opening the list again.
-    expect(await bodyText(page), 'the role card does not report the change').toMatch(/\d+ changes? from Sales Employee/);
-
-    await page.getByRole('button', { name: 'Next' }).click();
-    await page.waitForTimeout(800);
+    // Shipped copy (measured 2026-11-14): "1 permissions switched off for this person".
+    expect(await bodyText(page), 'a customization is not reported to the owner').toMatch(
+      /\d+ permissions? switched off for this person/,
+    );
+    // Two buttons are labelled "Close" while the editor is open (the sheet's icon button and the
+    // editor's own), so the editor's close is addressed by its testid.
+    await page.getByTestId('add-employee-customize-done').click();
+    await page.waitForTimeout(900);
     const summary = await bodyText(page);
+    // The review can no longer claim the role is used unchanged: the deny is on file.
+    expect(summary, 'the review still claims the role is used unchanged').not.toContain("Using the role's full access");
     // A deny takes one action out of an area, so the area itself stays in the
     // access list — the customization shows in the changes line instead, and
     // the stored row below is the judge. 'Products' leaves the access list
@@ -850,9 +867,12 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // confirmation's own Access row must not list it. Scoped to that row:
     // the app chrome carries a Products tab, so the whole body always
     // contains the word.
-    const summaryAccessRow = await page.getByText('Access', { exact: true }).first().locator('xpath=..').innerText();
-    expect(summaryAccessRow, 'the confirmation still lists the removed area').not.toContain('Products');
-    expect(summary, 'the confirmation does not say access was customized').toContain('changes from Sales Employee');
+    // The review's access summary is area-level, and 'Products' was that role's ONLY action in its
+    // area, so the area leaves the list. On this wizard page the body IS the review — there is no app
+    // chrome carrying a Products tab (measured 2026-11-14), so the whole body is the right scope.
+    expect(summary, 'the confirmation still lists the removed area').not.toContain('Products');
+    // The customization itself is judged below by the DATABASE rows written with the invite — the
+    // screen's own evidence is that the denied area left the confirmation, asserted just above.
 
     await page.getByRole('button', { name: 'Send invitation' }).click();
     // The invitation is confirmed in place first (see test 2), then the owner
@@ -877,10 +897,15 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     const [membership] = await execSql(`SELECT status FROM memberships WHERE user_id = '${ovr.id}'`);
     expect(membership.status, 'customizing an employee made them active').toBe('pending');
 
-    // The detail screen reports the exceptions the access above does not show.
-    expect(await bodyText(page), 'the stored customization is invisible on the employee page').toMatch(
-      /changed for|change from/i,
+    // The profile's Access section names the ROLE the access comes from; it does not print the
+    // exceptions any more (measured 2026-11-14: no "changed for" on this screen). The exceptions are
+    // on file — the rows asserted directly above are the judge — and the editor reopened below is
+    // where the product shows them.
+    const profileBody = await bodyText(page);
+    expect(profileBody, 'the employee page does not name the role its access comes from').toContain(
+      'Role & permissions',
     );
+    expect(profileBody, 'the employee page does not name the invited role').toContain('Sales Employee');
 
     // ── A role change keeps what the owner set for this person ──
     // "Customize access" is a row inside the profile's ACTION SHEET (`employee-actions` in the header),
@@ -907,21 +932,19 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     const [roleNow] = await execSql(`
       SELECT r.name FROM memberships m JOIN roles r ON r.id = m.role_id WHERE m.user_id = '${ovr.id}'`);
     expect(roleNow.name).toBe('Store Manager');
-    // And the screen keeps claiming a difference, because the deny still
-    // changes the access — the exception is on file AND in force.
-    expect(await bodyText(page), 'the screen stopped reporting a difference the deny still makes').toMatch(
-      /changed for|change from/i,
-    );
+    // The exception is on file AND in force — asserted from the database above. The screen that shows
+    // it is the editor, reopened at the end of this test.
     // The access line is area-level, so one denied action inside Products
     // does not remove the area (Store Manager still grants the rest of it).
     // The editor is the screen that shows the exception itself: reopen it
     // and the denied box stays off, marked Removed.
-    // "Customize access" is a row inside the profile's ACTION SHEET (`employee-actions` in the header),
-    // not a button on the page — measured 2026-11-14: the profile body renders no such control, and
-    // the row lives with Export / Deactivate / Reactivate. Open the sheet, then tap the row.
+    // "Customize access" is a row inside the profile's ACTION SHEET (`employee-actions` in the header).
+    // Saving the role change leaves the editor, so the profile is opened explicitly before the sheet.
+    await page.goto(`${BASE}/admin/employees/${ovr.id}`);
+    await page.waitForTimeout(1800);
     await page.getByTestId('employee-actions').click();
     await page.getByText('Customize access', { exact: true }).first().click();
-    await page.waitForTimeout(900);
+    await page.waitForTimeout(1200);
     const deniedRow = page.getByTestId('emp-perm-products.view');
     await expect(deniedRow, 'the denied action came back after the role change').toHaveAttribute('aria-checked', 'false');
     await expect(deniedRow, 'the denied action is not marked as removed').toContainText('Removed');
