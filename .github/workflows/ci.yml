@@ -374,10 +374,13 @@ jobs:
           fi
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
 
-      # `--max-failures=2`: a broken candidate stops after two failures instead of burning the whole
-      # allowance. It never turns red into green — a stopped run is a failed run.
+      # NO `--max-failures`. It was here to bound a broken run, and it is why this gate took two days
+      # to clear: with `--max-failures=2`, a ~160-test lane stopped after the second failure, so the
+      # ~150 tests behind it never ran, never went red, and every 35-minute round revealed exactly one
+      # more stale spec. A gate must show its whole answer in one run. The smoke lane is 21 tests
+      # (~10 min); losing ten minutes of runner time is cheap next to another loop like that.
       - name: Run Playwright E2E (${{ steps.lane.outputs.kind }} lane)
-        run: npx playwright test ${{ steps.lane.outputs.specs }} --max-failures=2
+        run: npx playwright test ${{ steps.lane.outputs.specs }}
 
       - name: Upload Playwright Report
         if: failure()
