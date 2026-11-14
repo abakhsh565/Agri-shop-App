@@ -108,6 +108,25 @@ async function bodyText(page: Page): Promise<string> {
   return (await page.textContent('body')) || '';
 }
 
+/**
+ * Advance the wizard past its branch question, whether or not this shop has one.
+ *
+ * A shop with ONE active branch has nothing to decide, so the wizard collapses the branch step and the
+ * review takes its place. Measured 2026-11-14: this lane passed with two branches and failed the
+ * moment the shop was down to one — an assertion on a screen that legitimately does not exist is a
+ * data coin-flip, not a check. Returns true when the branch step really was shown.
+ */
+async function passBranchStep(page: Page, branchId: string): Promise<boolean> {
+  if (!/branch assignment/i.test(await bodyText(page))) return false;
+  await expect(
+    page.getByTestId(`add-branch-${branchId}`),
+    'the branch step does not open on the account’s working branch',
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.waitForTimeout(700);
+  return true;
+}
+
 /** Job areas a role grants, straight from role_permissions. */
 async function dbAreasForRole(roleName: string): Promise<string[]> {
   const rows = await execSql(`
@@ -324,14 +343,12 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // tap), so CLICKING it DESELECTS it and Next then refuses — which is what the earlier version of
     // this lane did. The assertion is that the default branch is the one already chosen; the tap the
     // wizard needs is none.
-    await expect(
-      page.getByTestId(`add-branch-${defaultBranch.id}`),
-      'the branch step does not open on the shop’s default branch',
-    ).toHaveAttribute('aria-pressed', 'true');
-
-    // The review is step 4, and it is the screen that says what will happen when the owner confirms.
-    await page.getByRole('button', { name: 'Next' }).click();
-    await page.waitForTimeout(600);
+    // The default branch is chosen for the owner; the wizard only needs Next — and only when it
+    // actually shows the branch question (one active branch collapses it into the review).
+    // The review is the screen that says what will happen when the owner confirms. `passBranchStep`
+    // presses the Next a branch step needs; when the shop has one branch there is no such step and the
+    // wizard is ALREADY on the review, so a second Next here waits for a button that is not on screen.
+    await passBranchStep(page, defaultBranch.id);
     await page.waitForTimeout(800);
     const step4 = await bodyText(page);
     // The review's headline is "Review & invite" and its rows are the facts the owner is about to
@@ -389,9 +406,7 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(600);
     // Same as above: the branch is already chosen, so the step only needs Next.
-    await expect(page.getByTestId(`add-branch-${defaultBranch.id}`)).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: 'Next' }).click();
-    await page.waitForTimeout(600);
+    await passBranchStep(page, defaultBranch.id);
     await expect(page.getByRole('button', { name: 'Send invitation' })).toBeVisible({ timeout: 15000 });
     await page.getByRole('button', { name: 'Send invitation' }).click();
     await expect(page.getByTestId('invite-sent-title')).toContainText(NEW_NAME);
@@ -429,6 +444,17 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     await page.getByRole('button', { name: /Sales Manager/ }).first().click();
     await page.waitForTimeout(600);
 
+    // THE STEP IS NOT READY WHEN THE ROLE IS CHOSEN. It resolves that role's access first and says so
+    // ("Loading the saved role access…"); a Next pressed during that load is accepted by Playwright
+    // (the button is momentarily enabled) and ignored by the screen, which leaves the wizard on 2/4.
+    // Measured 2026-11-14 from the failure screenshot: Sales Manager selected, the loading line still
+    // on screen, and the next assertion looking for the branch step that was never reached. That is
+    // timing, not data — so the lane now waits for the screen to leave that state.
+    await expect(
+      page.getByText(/loading the saved role access/i),
+      'the role step never finished loading the selected role’s access',
+    ).toBeHidden({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled();
     await page.getByRole('button', { name: 'Next' }).click();
     await page.waitForTimeout(800);
 
@@ -458,12 +484,7 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // The default is already chosen, and the wizard is FOUR steps — so the branch step needs its
     // own Next to reach the review. Without it this lane read the branch screen and looked for the
     // review's rows on it.
-    await expect(
-      page.getByTestId(`add-branch-${branch.id}`),
-      'the branch step does not open on the owner’s working branch',
-    ).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: 'Next' }).click();
-    await page.waitForTimeout(800);
+    await passBranchStep(page, branch.id);
 
     const review = await bodyText(page);
     expect(review).toContain('Sales Manager');
@@ -796,8 +817,16 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // the editor marks the action it removed with "Removed" (measured 2026-11-14 — the same fact the
     // profile states as "changed for {name}" when it is read from the profile).
     await page.reload();
-    await page.waitForTimeout(1800);
-    expect(await bodyText(page), 'the saved customization is invisible on the access editor').toMatch(/Removed/i);
+    // NO FIXED WAIT. A reload re-fetches the employee, so the screen legitimately reads "Loading…"
+    // for as long as that takes; a 1.8 s guess asserted against the loading screen and CI failed with
+    // body text "Role and accessLoading…" (2026-11-14, smoke lane). The promise is that the editor
+    // EVENTUALLY states the override — so poll for the state, and fail only if it never arrives.
+    await expect
+      .poll(async () => await bodyText(page), {
+        message: 'the saved customization is invisible on the access editor',
+        timeout: 25_000,
+      })
+      .toMatch(/Removed/i);
     // The reset lives on this editor ("Use role access only"), next to Save — no detour through the
     // profile's action sheet is needed to reach it.
     await page.waitForTimeout(900);
