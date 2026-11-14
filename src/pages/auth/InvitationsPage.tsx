@@ -48,7 +48,7 @@ export default function InvitationsPage() {
 
   async function continueAfterDecision(updatedUser: User) {
     if (!hasPin(updatedUser.id)) {
-      navigate("/login/pin-set", { replace: true, state: { celebrate: true } });
+      navigate("/login/pin-set", { replace: true });
       return;
     }
     const opened = await openWorkspace(updatedUser);

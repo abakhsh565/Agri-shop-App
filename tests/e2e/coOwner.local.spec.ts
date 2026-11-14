@@ -71,9 +71,8 @@ async function login(page: Page, phone: string, side: "owner" | "employee" = "ow
     for (const digit of PIN) await page.getByRole("button", { name: digit, exact: true }).first().click();
     await page.waitForTimeout(350);
     for (const digit of PIN) await page.getByRole("button", { name: digit, exact: true }).first().click();
-    await page.waitForTimeout(900);
-    const done = page.getByTestId("pin-done-open");
-    if (await done.count()) await done.click();
+    // Setting the PIN opens the shop by itself — there is no success screen to dismiss.
+    await page.waitForURL(/\/admin\/dashboard/, { timeout: 30000 });
   }
   await page.waitForTimeout(1400);
 }

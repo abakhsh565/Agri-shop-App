@@ -44,7 +44,7 @@ export default function AccountReadyPage() {
         <div className="flex flex-col gap-2 p-6">
           <button
             type="button"
-            onClick={() => navigate("/login/pin-set", { replace: true, state: { celebrate: true } })}
+            onClick={() => navigate("/login/pin-set", { replace: true })}
             data-testid="account-ready-pin"
             className="ds-btn-brand w-full h-12 text-15 font-bold"
           >
