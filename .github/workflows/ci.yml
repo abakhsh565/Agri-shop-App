@@ -379,8 +379,14 @@ jobs:
       # ~150 tests behind it never ran, never went red, and every 35-minute round revealed exactly one
       # more stale spec. A gate must show its whole answer in one run. The smoke lane is 21 tests
       # (~10 min); losing ten minutes of runner time is cheap next to another loop like that.
+      # `--retries=1`: ONE retry, and it is not a way to turn red into green. These lanes drive a live
+      # QA database, so a screen that re-fetches after a reload can still be "Loading…" when the test
+      # looks — the three smoke failures of 2026-11-14 were all that shape (a fixed 1.8 s wait, a role
+      # step still loading, a branch step that collapses for a one-branch shop), and each was fixed at
+      # its cause in the spec. A retry absorbs the remainder of that class without weakening a single
+      # assertion: a real regression fails BOTH attempts, and the lane still reports the failure.
       - name: Run Playwright E2E (${{ steps.lane.outputs.kind }} lane)
-        run: npx playwright test ${{ steps.lane.outputs.specs }}
+        run: npx playwright test ${{ steps.lane.outputs.specs }} --retries=1
 
       - name: Upload Playwright Report
         if: failure()

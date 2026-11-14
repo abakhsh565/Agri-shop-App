@@ -817,8 +817,16 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // the editor marks the action it removed with "Removed" (measured 2026-11-14 — the same fact the
     // profile states as "changed for {name}" when it is read from the profile).
     await page.reload();
-    await page.waitForTimeout(1800);
-    expect(await bodyText(page), 'the saved customization is invisible on the access editor').toMatch(/Removed/i);
+    // NO FIXED WAIT. A reload re-fetches the employee, so the screen legitimately reads "Loading…"
+    // for as long as that takes; a 1.8 s guess asserted against the loading screen and CI failed with
+    // body text "Role and accessLoading…" (2026-11-14, smoke lane). The promise is that the editor
+    // EVENTUALLY states the override — so poll for the state, and fail only if it never arrives.
+    await expect
+      .poll(async () => await bodyText(page), {
+        message: 'the saved customization is invisible on the access editor',
+        timeout: 25_000,
+      })
+      .toMatch(/Removed/i);
     // The reset lives on this editor ("Use role access only"), next to Save — no detour through the
     // profile's action sheet is needed to reach it.
     await page.waitForTimeout(900);
