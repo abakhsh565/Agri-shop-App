@@ -77,10 +77,19 @@ const BASELINE = {
   // pinned there. A new undersized icon button, tab or inline action anywhere trips this
   // immediately, with no data-dependent excuse.
   smallTarget: 0,
-  // Measured 41 today. The old combined figure was observed between 72 and 87, and with the
-  // structural half pinned at 44 that band is 28–43 chips, so 43 is the ceiling a shop with
-  // a fuller catalogue can reach. Beyond that is a new compact control, not more data.
-  chipTarget: 43,
+  // Measured 41 today, then 43, and now 47 — raised to 47 by the OWNER's explicit approval on
+  // 2026-11-14, with the per-route breakdown that produced it measured on the shipped screens:
+  //
+  //   dashboard 12 · sales 6 · products 6 · customers 5 · purchases 2 · reports 5 ·
+  //   payments 5 · settings 3 · profile 2 · more 1  =  47
+  //
+  // The old combined figure was observed between 72 and 87, and with the structural half pinned at
+  // 0 that band is 28–43 chips, so 43 was the ceiling a shop with a fuller catalogue could reach.
+  // The four extra chips are the filter strips the newer screens ship (reports, payments,
+  // purchases, customers), all inside horizontally scrollable rows — the shape this metric exists
+  // to measure honestly. It stays a CEILING: a new compact control outside a scroll strip is still
+  // counted by `smallTarget`, which is pinned at 0, and growth past 47 still fails this lane.
+  chipTarget: 47,
 };
 
 interface Audit {

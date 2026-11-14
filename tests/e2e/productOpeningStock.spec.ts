@@ -15,7 +15,7 @@
  * QA database only; the product it creates is deleted again.
  */
 import { test, expect } from './base';
-import { QA_IDS, execSql, setupFixtures, cleanupFixtures, claimOwned, injectAdminAuth } from './helpers';
+import { QA_IDS, execSql, setupFixtures, cleanupFixtures, claimOwned, injectOwnerAuth } from './helpers';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const PRODUCT_NAME = `QA Opening Stock ${Date.now().toString(36).toUpperCase()}`;
@@ -38,7 +38,13 @@ test.describe('Product opening stock', () => {
   });
 
   test('the stock typed on the form is what the variant is created with', async ({ page }) => {
-    await injectAdminAuth(page);
+    // AS THE OWNER, not the QA Admin. The experience is resolved by the SERVER now
+    // (`experienceOf(user)` reads `user.experience`, falling back to membershipRole === 'owner'),
+    // and the QA Admin's membership role is `admin` — so it answers `employee` and every `/admin/*`
+    // route bounces to the employee home. Signing in as the fixture owner keeps this lane on the
+    // screen it is about, with full rights, and changes nothing about what is asserted: the
+    // database still judges the stock.
+    await injectOwnerAuth(page);
     await page.goto(`${BASE_URL}/admin/inventory/new`);
     await page.waitForLoadState('networkidle');
 

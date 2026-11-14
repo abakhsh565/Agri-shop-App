@@ -20,7 +20,7 @@
  */
 import { test, expect } from './base';
 import type { Page } from '@playwright/test';
-import { execSql, setupFixtures, cleanupFixtures, QA_IDS } from './helpers';
+import { execSql, setupFixtures, cleanupFixtures, QA_IDS, loginViaUi } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -175,42 +175,17 @@ async function branchStaffCount(branchId: string): Promise<number> {
 }
 
 
-/** Sign in through the real flow: phone -> dev OTP -> set & confirm PIN. */
+/**
+ * Sign in through the real flow — by DELEGATING, so this file cannot drift from the product again.
+ *
+ * This used to be a second copy of the sign-in sequence, and it kept clicking `auth-tab-employee`
+ * and filling `shop-id-input` after the login page dropped both (one phone, one door:
+ * `tests/unit/loginDoor.test.ts` pins their absence). Its employee tests therefore waited 10 s for a
+ * button that does not exist. There is now ONE implementation of signing in — `loginViaUi` — and
+ * every lane uses it.
+ */
 async function login(page: Page, phone: string) {
-  await page.goto(`${BASE}/login`);
-  // One phone, one door: an employee's number has to be entered on the employee tab,
-  // which the page enforces before it sends anything.
-  if (phone === EMPLOYEE_PHONE) {
-    await page.getByTestId('auth-tab-employee').click();
-    // An invited number also has to name the shop it was invited by before a code is spent.
-    await page.getByTestId('shop-id-input').fill(QA_IDS.shop);
-  }
-  await page.getByPlaceholder('e.g. 03001234567').fill(phone);
-  await page.getByRole('button', { name: 'Send Code' }).click();
-  await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
-
-  // Six OTP boxes, addressed by role: the component also renders an off-screen
-  // autofill input, and a code typed one box off submits and reports nothing.
-  const boxes = page.locator('[data-testid^="otp-digit-"]');
-  await expect(boxes).toHaveCount(6);
-  // Type it as a person would (focus advances by itself); filling by index raced
-  // with that advance and could leave the code a digit short.
-  await boxes.first().click();
-  await page.keyboard.type(OTP);
-  for (let i = 0; i < OTP.length; i++) {
-    await expect(boxes.nth(i), `OTP digit ${i + 1} is not the one that was typed`).toHaveValue(OTP[i]);
-  }
-
-  // Auto-verify navigates to PIN setup (first login) or straight to a dashboard.
-  await page.waitForURL(/pin-set|\/admin\/dashboard|\/employee\/dashboard/, { timeout: 30000 });
-
-  if (page.url().includes('pin-set')) {
-    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
-    await page.waitForTimeout(400);
-    for (const d of PIN) await page.getByRole('button', { name: d, exact: true }).first().click();
-    await page.waitForURL(/\/(admin|employee)\/dashboard/, { timeout: 30000 });
-  }
-  await page.waitForTimeout(1500); // let the stores hydrate from Supabase
+  await loginViaUi(page, phone, phone === EMPLOYEE_PHONE ? 'employee' : 'owner');
 }
 
 async function setLanguage(page: Page, lang: 'en' | 'ur') {

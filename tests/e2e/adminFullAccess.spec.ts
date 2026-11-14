@@ -191,9 +191,14 @@ test.describe('admin full access + the account-deletion gate', () => {
         // Edit button next to the name and number.
         await page.locator('[data-testid="settings-open-profile"]').click();
         await expect(page).toHaveURL(/\/admin\/settings\/profile$/, { timeout: 8000 });
-        await page.locator('[data-testid="settings-edit-profile"]').click();
-        await page.locator('input:not([type="file"])').first().fill(temporary);
-        await page.getByRole('button', { name: /^save$/i }).first().click();
+
+        // The profile screen edits the name IN PLACE: a Change-name action turns the row into an
+        // input with its own save. There is no `settings-edit-profile` sheet any more (measured
+        // 2026-11-14 — that testid does not exist in `src/`), so the lane drives the shipped controls:
+        // `profile-change-name` → `profile-name-input` → `profile-name-save`.
+        await page.locator('[data-testid="profile-change-name"]').click();
+        await page.locator('[data-testid="profile-name-input"]').fill(temporary);
+        await page.locator('[data-testid="profile-name-save"]').click();
 
         await expect
           .poll(

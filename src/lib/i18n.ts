@@ -1774,7 +1774,10 @@ export const translations = {
     "addEmployee.infoTitle":   "Employee information",
     "addEmployee.infoHint":    "Enter employee details and the phone number they will verify.",
     "addEmployee.roleHeading": "Assign role",
-    "addEmployee.roleHint":    "Select the employee's role and permissions.",
+    // "…and permissions" was the one word on this step that asked the owner to think in access
+    // administration: the choice is which role the person gets, and what that role allows is the
+    // app's answer, not the owner's homework. Same decision, said in the shop's words.
+    "addEmployee.roleHint":    "Select the employee's role and what they can do.",
     "addEmployee.branchHint":  "Select the branches where this employee works and can access data.",
     "addEmployee.reviewHeading":"Review & invite",
     "addEmployee.reviewHint":  "Confirm inherited access before sending a pending invitation.",
@@ -6892,7 +6895,7 @@ export const translations = {
     "addEmployee.infoTitle":   "ملازم کی معلومات",
     "addEmployee.infoHint":    "ملازم کی تفصیلات اور وہ فون نمبر درج کریں جس کی وہ تصدیق کریں گے۔",
     "addEmployee.roleHeading": "کردار تفویض کریں",
-    "addEmployee.roleHint":    "ملازم کا کردار اور اجازتیں منتخب کریں۔",
+    "addEmployee.roleHint":    "ملازم کا کردار اور وہ کیا کر سکتا ہے منتخب کریں۔",
     "addEmployee.branchHint":  "وہ برانچیں منتخب کریں جہاں یہ ملازم کام کرے گا اور ڈیٹا تک رسائی رکھے گا۔",
     "addEmployee.reviewHeading":"جائزہ اور دعوت",
     "addEmployee.reviewHint":  "دعوت بھیجنے سے پہلے وراثتی رسائی کی تصدیق کریں۔",

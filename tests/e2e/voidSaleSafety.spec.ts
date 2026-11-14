@@ -21,7 +21,7 @@ import {
   claimOwned,
   ownership,
   trackOwned,
-  injectAdminAuth,
+  injectOwnerAuth,
 } from './helpers';
 import {
   captureSharedCells,
@@ -64,11 +64,20 @@ test.describe('Void sale safety', () => {
       ])),
     );
 
+    // THE SALE MUST CARRY THE BRANCH IT WAS MADE IN. It used to be INSERTed with `shop_id` only,
+    // and every branch-scoped read (`sales` is read through the caller's current branch, and
+    // `SaleDetailView` resolves the sale from it) then treated this row as belonging to no branch: the
+    // detail screen rendered without the sale's own actions, so `sale-void` never appeared and the
+    // lane failed on a control that exists. The branch is the shop's default one — the same branch
+    // the fixtures live on and the accounts are seeded onto (`default_branch_id()`'s own rule).
     await execSql(`
       INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status,
-        payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, created_at, updated_at)
+        payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, branch_id,
+        created_at, updated_at)
       VALUES ('${SALE_ID}', '${SALE_NUMBER}', '${QA_IDS.customerA}', '${QA_IDS.admin}', ${QTY * 500}, 'completed',
-        'credit', 'cash', 0, ${QTY * 500}, 0, false, '${QA_IDS.shop}', NOW(), NOW())
+        'credit', 'cash', 0, ${QTY * 500}, 0, false, '${QA_IDS.shop}',
+        (SELECT id FROM branches WHERE tenant_id = '${QA_IDS.shop}' AND is_default AND is_active ORDER BY created_at LIMIT 1),
+        NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
     await execSql(`
@@ -104,7 +113,11 @@ test.describe('Void sale safety', () => {
   test('the confirmation names the sale, explains the consequence, and double-tapping it voids once', async ({ page }) => {
     await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
-    await injectAdminAuth(page);
+    // AS THE OWNER: experience is server-resolved now, and the QA Admin's membership role is
+    // `admin`, which answers `employee` — so `/admin/sales/:id` bounced to the employee home and
+    // the void action never rendered. The owner holds `*`, so the screen and the action exist, and
+    // every assertion below still judges the database (one void, stock restored once).
+    await injectOwnerAuth(page);
 
     await page.goto(`${BASE_URL}/admin/sales/${SALE_ID}`);
     await page.waitForLoadState('networkidle');

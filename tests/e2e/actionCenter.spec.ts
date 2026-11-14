@@ -9,7 +9,10 @@ import { test, expect } from './base';
 import type { Page } from '@playwright/test';
 import {
   QA_IDS,
-  injectAdminAuth,
+  // The action center is an OWNER-shell screen: QA Admin's real membership is `role = admin`
+  // (employee experience), so the truthful identity is refused by `/admin/*` — correctly. This lane
+  // drives the owner shell, so it injects the owner.
+  injectOwnerAuth,
   setupFixtures,
   cleanupFixtures,
   execSql,
@@ -69,7 +72,7 @@ test.afterAll(async () => {
 
 async function loginAsAdmin(page: Page) {
   await page.goto(BASE_URL);
-  await injectAdminAuth(page);
+  await injectOwnerAuth(page);
   await page.goto(ADMIN_DASHBOARD, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1000);
 }

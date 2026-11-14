@@ -29,7 +29,7 @@ import {
 } from './cleanupOwnership';
 import { randomUUID } from 'node:crypto';
 import { ISOLATED_IDENTITIES, ISOLATED_TENANT_ID } from '../../scripts/dev/qa-tenant.mjs';
-import { FIXTURE_SQL, QA_FIXTURE_IDS } from '../setup/qa-fixtures';
+import { FIXTURE_SQL, QA_FIXTURE_ACTIVE_BRANCH_CHECK_SQL, QA_FIXTURE_IDS } from '../setup/qa-fixtures';
 
 /**
  * Load .env.qa into process.env if not already loaded.
@@ -442,17 +442,18 @@ export async function loginViaUi(
   // (owner / employee) are both rendered — never a redirect into an existing session.
   await startFromAnonymousBrowser(page);
   await page.goto(`${BASE_URL}/login`);
-  // One phone, one door: the login page asks which door this number belongs at and
-  // refuses a number that answers the other one, so the tab is part of the flow.
-  if (side === 'employee') await page.getByTestId('auth-tab-employee').click();
+  // ONE PHONE, ONE DOOR (2026-11-13). The login page used to open an owner/employee TAB first, and a
+  // number had to answer the tab it belonged to. That chooser is gone from the product —
+  // `src/pages/auth/LoginPage.tsx` no longer renders `auth-tab-employee` or `shop-id-input`, because
+  // one number maps to one account and the account's membership decides the experience. The helper
+  // kept clicking the removed tab, so every employee lane waited 10 s for a button that does not
+  // exist and failed before it reached the app (6 tests across branchRemoval, dashboardScope,
+  // dependencyContinuity and education). `side` is kept as documentation of intent — the flow no
+  // longer differs — and `shopCode` still selects the shop when the chooser appears.
   // The field takes the local 03… form. A 92… constant is re-read by the field's own
   // paste rule as a country code and becomes a 10-digit number the validator refuses,
   // so the caller's constant is normalised here rather than in every spec.
   await page.getByPlaceholder('e.g. 03001234567').fill(/^92\d{10}$/.test(phone) ? `0${phone.slice(2)}` : phone);
-  // The employee door is TWO answers: a number on its own does not say which shop invited it,
-  // so `Send Code` refuses to spend a code until the shop is named. The fixture shops all have
-  // a stable id, which the field accepts as readily as the six-character code read out loud.
-  if (side === 'employee') await page.getByTestId('shop-id-input').fill(shopCode);
   await page.getByRole('button', { name: 'Send Code' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 
@@ -574,20 +575,47 @@ export async function loginViaUi(
 
 /** Inject admin auth state into the page's localStorage */
 export async function injectAdminAuth(page: Page) {
-  // The QA admin's REAL membership in the QA database is owner/active, and the
-  // admin routes are gated by PermissionGuard, which reads membershipRole and
-  // permissions from this persisted user. Omitting them makes deep /admin/*
-  // navigation silently redirect to the dashboard (guards deny), so the fixture
-  // must mirror the authoritative membership row rather than a legacy role only.
+  /**
+   * THE INJECTED IDENTITY MUST TELL THE TRUTH ABOUT THE MEMBERSHIP.
+   *
+   * MEASURED 2026-11-14. This helper used to write `membershipRole: 'owner'` and
+   * `permissions: ['*']` for QA Admin, whose real membership in the QA database is `role = 'admin'`
+   * (Store Manager, 29 codes — it holds `customers.view` and `customers.payments`, it does NOT hold
+   * the owner's authority). Since experience became SERVER-resolved, `experienceOf()` falls back to
+   * `membershipRole === 'owner' ? 'owner' : 'employee'`, so that false claim made the account an
+   * "owner" in the client — and the employee shell (`ProtectedRoute allowedExperiences={["employee"]}`)
+   * correctly refused to open `/employee/customers`, bouncing to `/employee/dashboard`.
+   *
+   * That bounce was the single cause of every remaining payment/customer failure in the smoke lane:
+   * the screens rendered nothing because the routes after them never mounted. The guard was right;
+   * the fixture was lying. So the identity written here is the account's ACTUAL one — `admin` role,
+   * `admin` membership, and its OWN permission codes read from the database (never `['*']`, which no
+   * Store Manager holds). Lanes that need owner power use `injectOwnerAuth`.
+   */
+  const permissionRows = await execSql(
+    `SELECT p.code FROM memberships m
+       JOIN users u ON u.id = m.user_id
+       JOIN role_permissions rp ON rp.role_id = m.role_id
+       JOIN permissions p ON p.id = rp.permission_id
+      WHERE u.phone = '923009999999' AND m.status = 'active'`,
+  );
+  const adminPermissions = permissionRows.map((row) => String(row.code)).filter(Boolean);
+  if (!adminPermissions.length) {
+    throw new Error(
+      '[QA FIXTURE] QA Admin (923009999999) holds no permission codes in the database — the ' +
+        'identity this helper injects would be a guess, so it refuses to inject one.',
+    );
+  }
+
   const adminUser = {
     id: QA_IDS.admin,
     name: 'QA Admin',
     phone: '923009999999',
     role: 'admin',
     tenantId: QA_IDS.shop,
-    membershipRole: 'owner',
-    permissions: ['*'],
-    isOriginalOwner: true,
+    membershipRole: 'admin',
+    permissions: adminPermissions,
+    isOriginalOwner: false,
     isActive: true,
     firstLoginAt: new Date().toISOString(),
     lastLoginAt: new Date().toISOString(),
@@ -753,6 +781,20 @@ export async function seedShopDraft(
  */
 export async function setupFixtures() {
   await execSql(FIXTURE_SQL.users);
+  // The accounts must be ON the default branch before any branch-scoped screen is opened: the
+  // supplier picker, the supplier-payment page, the outstanding ledger and the sale detail all
+  // resolve their branch from the server (`current_branch_id()`, which prefers
+  // `user_active_shops`), and the fixtures live on the default branch.
+  await execSql(FIXTURE_SQL.activeBranch);
+  const branchRows = await execSql(QA_FIXTURE_ACTIVE_BRANCH_CHECK_SQL);
+  const offBranch = branchRows.filter((row) => row.on_default_branch !== true);
+  if (offBranch.length) {
+    throw new Error(
+      `[QA FIXTURE] these fixture accounts are not on their shop's default branch, so every ` +
+        `branch-scoped read is looking at a branch the fixtures are not in: ` +
+        offBranch.map((row) => `${row.user_id} → ${row.branch_id ?? 'null'}`).join(', '),
+    );
+  }
   await execSql(FIXTURE_SQL.companies);
   await execSql(FIXTURE_SQL.customers);
   await execSql(FIXTURE_SQL.productsAndVariants);

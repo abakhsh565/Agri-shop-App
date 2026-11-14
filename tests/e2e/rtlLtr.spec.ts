@@ -411,8 +411,12 @@ test.describe('RTL/LTR + Urdu Support', () => {
 
   // ─── 16. Multiple pages render without errors ─────────────────────────
   test('16. Multiple pages render in RTL', async ({ page }) => {
-    await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    // Twelve routes, each with a language re-mount: the 120s default was a coin flip once the
+    // suite had already run for twenty minutes (measured: one CI run timed out on
+    // `networkidle` inside this loop, with no product change). The budget is this test's own.
+    test.setTimeout(240_000);
+
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
     await injectAdminAuth(page);
 
     const routes = [
@@ -445,14 +449,24 @@ test.describe('RTL/LTR + Urdu Support', () => {
     ];
 
     for (const route of routes) {
-      await page.goto(`${BASE_URL}${route}`);
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(500);
+      // `networkidle` never settles deterministically here: the app holds long-lived requests
+      // (realtime/session refresh), so "no traffic for 500ms" is a race against whatever the shell
+      // is doing, and under CI load it lost that race. The route is settled when the React root has
+      // mounted and the language has been applied — both observable, neither timing-based.
+      await page.goto(`${BASE_URL}${route}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => (document.getElementById('root')?.children.length ?? 0) > 0, null, {
+        timeout: 20_000,
+      });
       await setLanguageViaStorage(page, 'ur');
-      await page.waitForTimeout(300);
 
-      const dir = await page.evaluate(() => document.documentElement.dir);
-      expect(dir).toBe('rtl');
+      // The direction is the assertion, so it gets the wait: poll the document until the Urdu
+      // re-render lands, instead of sleeping 300ms and hoping.
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.dir), {
+          message: `${route} did not switch to RTL in Urdu`,
+          timeout: 15_000,
+        })
+        .toBe('rtl');
     }
   });
 });
