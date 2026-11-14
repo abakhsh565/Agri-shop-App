@@ -481,11 +481,6 @@ function isUnreachable(error: { status?: number } | null | undefined): boolean {
 }
 
 async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: string }> {
-  // This bridge turns a phone number into a password-derivable Supabase identity. It belongs to
-  // demo sign-in only, so it refuses to run where demo sign-in is not allowed — belt and braces
-  // with the `isDemoOtpMode` check at every call site.
-  assertDemoOtpAllowed();
-
   const { email, password } = phoneToAuthCredentials(phone);
 
   // A session that belongs to a DIFFERENT account is not this person's identity.
@@ -502,7 +497,23 @@ async function ensureAuthSession(phone: string): Promise<{ ok: boolean; error?: 
   }
   if (session) {
     if (session.user?.email === email) return { ok: true };
+    // A real SMS build has no derived email on its session: the phone on it is the identity.
+    // Without this, every resume (business chooser, PIN unlock, invitations) read as "offline"
+    // on production while the person was signed in the whole time.
+    if (session.user?.phone && normalizePhone(session.user.phone) === normalizePhone(phone)) {
+      return { ok: true };
+    }
     await supabase.auth.signOut();
+  }
+
+  // Everything below turns a phone number into a password-derivable identity, which belongs to
+  // demo sign-in only — belt and braces with the `isDemoOtpMode` check at every call site. It is
+  // reached only when this device holds no session for this phone, because in a real build there
+  // is no derived identity to sign in with and the person has to authenticate instead.
+  try {
+    assertDemoOtpAllowed();
+  } catch {
+    return { ok: false, error: LOGIN_NOT_READY };
   }
 
   // Sign in with the identity the server provisioned for this phone. Nothing else is tried.

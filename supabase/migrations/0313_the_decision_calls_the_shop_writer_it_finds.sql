@@ -1,6 +1,6 @@
 -- 0313_the_decision_calls_the_shop_writer_it_finds.sql
 --
--- WHY THIS EXISTS (2026-11-14, measured on production `gkswcfljxlutkfdvvqng`):
+-- WHY THIS EXISTS (2026-11-14, measured on the production database):
 --
 -- 0312 made `shop_requests.status` a dropdown and gave it a trigger that provisions on approval.
 -- The owner picked `approved` and production answered:

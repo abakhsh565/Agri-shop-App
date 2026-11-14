@@ -1,6 +1,6 @@
 -- 0314_a_decision_provisions_with_or_without_the_shop_writer.sql
 --
--- WHY THIS EXISTS (2026-11-14, measured on production `gkswcfljxlutkfdvvqng`):
+-- WHY THIS EXISTS (2026-11-14, measured on the production database):
 --
 -- 0313 made the approval trigger call whichever `create_shop_internal` the database has, and
 -- production answered `SHOP_WRITER_MISSING`: that database has NO shop writer at all. Its
@@ -201,3 +201,29 @@ begin
     raise exception '0314: shop_request_provision is missing, so a dropdown approval could not provision';
   end if;
 end $$;
+
+-- ─── 4. Server-only, in the ledger's own words ───────────────────────────────────────────
+-- The functions this release adds are EXECUTE-revoked from every client role, and the ledger's
+-- server-only set (`scripts/lib/rpc-contract.mjs`) is what the ACL guards compare themselves to.
+-- Naming them here is what keeps `tests/unit/writeRpcAnonGuard.test.ts` true in both directions.
+do $acl$
+declare
+  v_server_only constant text[] := array[
+    'shop_requests_apply_decision',
+    'shop_request_make_shop',
+    'shop_request_provision'
+  ];
+  r record;
+begin
+  for r in
+    select p.oid::regprocedure as sig
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and p.prokind = 'f'
+       and p.proname = any (v_server_only)
+  loop
+    execute format('revoke execute on function %s from public, anon, authenticated', r.sig);
+  end loop;
+end
+$acl$;
