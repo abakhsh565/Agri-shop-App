@@ -7,6 +7,16 @@ import type { Experience, User } from "@/types";
  */
 export function experienceOf(user: User | null | undefined): Experience {
   if (!user) return "employee";
+  // THE ORIGINAL OWNER IS THE SHOP. Ownership is an attribute of the account, not of a role row,
+  // so no membership can demote it — the Owner shell, and every screen behind it, must always be
+  // reachable by the person who owns the business.
+  //
+  // This is a rule, not a fallback. Measured 2026-11-14: the QA shop's owner (is_original_owner =
+  // true) had a membership pointing at the system role "Store Manager", and the tenant had no
+  // Owner role at all, so the server's answer was "employee" — and the owner was locked out of
+  // /admin/companies/new and the account-deletion sheet. A lost role row must never cost someone
+  // their own shop.
+  if (user.isOriginalOwner === true) return "owner";
   if (user.experience) return user.experience;
   // Older stored sessions do not carry the field yet. The membership role is
   // still a safe fallback for owner vs employee, never for co-owner.
@@ -14,7 +24,9 @@ export function experienceOf(user: User | null | undefined): Experience {
 }
 
 export function isCoOwner(user: User | null | undefined): boolean {
-  return experienceOf(user) === "co_owner";
+  // Read the SERVER's answer directly: a Co-Owner is never the original owner, so this must not
+  // inherit the ownership rule above if a stored session carried a stale flag.
+  return user?.experience === "co_owner";
 }
 
 /** Where a signed-in account belongs. */
