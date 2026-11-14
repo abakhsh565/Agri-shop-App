@@ -20,6 +20,7 @@ import { pinAllowedOnThisDevice, rememberLastProfile } from "@/lib/loginWindow";
 import type { User } from "@/types";
 import { useT } from "@/lib/i18n";
 import { homePathForUser } from "@/lib/experience";
+import { openWorkspace } from "@/lib/workspace";
 
 /**
  * Single-step PIN login screen.
@@ -142,9 +143,13 @@ export default function PINLoginPage() {
       setError(t("auth.sessionFailed"));
       return;
     }
-    setUser(resumed.user);
-    void rememberLastProfile(resumed.user);
-    navigate(destFor(resumed.user), { replace: true });
+    // Open the account's own shop before leaving the keypad: the chooser screen is gone, so the
+    // active shop has to be set here or the dashboard opens with no tenant.
+    const opened = await openWorkspace(resumed.user);
+    const next = opened.ok ? opened.user : resumed.user;
+    setUser(next);
+    void rememberLastProfile(next);
+    navigate(homePathForUser(next), { replace: true });
   }
 
   /** Where each kind of account lands once it is in. */

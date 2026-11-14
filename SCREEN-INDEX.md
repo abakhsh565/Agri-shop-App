@@ -9,10 +9,7 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `/` | SplashPage | `src/pages/auth/SplashPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/welcome` | IntroPage | `src/pages/onboarding/IntroPage` | accessibility, crossScreenSync, education, imageSync, skeletonCoverage |
 | `/login` | LoginPage | `src/pages/auth/LoginPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
-| `/login/recover` | AccountRecoveryPage | `src/pages/auth/AccountRecoveryPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/invitations` | InvitationsPage | `src/pages/auth/InvitationsPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
-| `/login/business` | BusinessSelectPage | `src/pages/auth/BusinessSelectPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
-| `/identity` | IdentityPage | `src/pages/auth/IdentityPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/otp` | OTPVerifyPage | `src/pages/auth/OTPVerifyPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/account-ready` | AccountReadyPage | `src/pages/auth/AccountReadyPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |
 | `/login/pin-set` | PINSetPage | `src/pages/auth/PINSetPage` | accessibility, crossScreenSync, imageSync, otpResume, skeletonCoverage |

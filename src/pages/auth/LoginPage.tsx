@@ -143,14 +143,6 @@ export default function LoginPage() {
               autoComplete="tel"
               onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
             />
-            <button
-              type="button"
-              onClick={() => navigate("/login/recover")}
-              className="text-13 font-semibold text-start underline underline-offset-2 self-start"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              {t("auth.forgotNumber")}
-            </button>
           </div>
         </div>
 

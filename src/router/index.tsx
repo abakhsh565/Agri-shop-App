@@ -5,10 +5,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 // Auth
 import SplashPage from "@/pages/auth/SplashPage";
 import LoginPage from "@/pages/auth/LoginPage";
-import AccountRecoveryPage from "@/pages/auth/AccountRecoveryPage";
 import InvitationsPage from "@/pages/auth/InvitationsPage";
-import BusinessSelectPage from "@/pages/auth/BusinessSelectPage";
-import IdentityPage from "@/pages/auth/IdentityPage";
 import OTPVerifyPage from "@/pages/auth/OTPVerifyPage";
 import AccountReadyPage from "@/pages/auth/AccountReadyPage";
 import PINSetPage from "@/pages/auth/PINSetPage";
@@ -186,10 +183,7 @@ export const router = createBrowserRouter([
   // Shown once per device, before sign-in: what the app is for, in three screens.
   { path: "/welcome", element: <IntroPage /> },
   { path: "/login", element: <LoginPage /> },
-  { path: "/login/recover", element: <AccountRecoveryPage /> },
   { path: "/login/invitations", element: <InvitationsPage /> },
-  { path: "/login/business", element: <BusinessSelectPage /> },
-  { element: <ProtectedRoute />, children: [{ path: "/identity", element: <IdentityPage /> }] },
   { path: "/login/otp", element: <OTPVerifyPage /> },
   // A brand-new account lands here instead of on the PIN keypad: signed in, told so, and
   // offered the PIN as the next small step rather than as the first thing the app says.

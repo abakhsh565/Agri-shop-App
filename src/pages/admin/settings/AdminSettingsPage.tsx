@@ -352,14 +352,6 @@ export default function AdminSettingsPage() {
               title={user && hasPin(user.id) ? t("settings.changePin") : t("settings.setupPin")}
               trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
             />
-            <ListRow
-              onClick={() => navigate("/identity")}
-              icon={ShieldCheck}
-              title={t("identity.title")}
-              meta={t("identity.settingsMeta")}
-              testId="settings-identity"
-              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-            />
             {/* Fingerprint login — the second way into a phone that already belongs to
                 someone. The row has no action when the phone cannot do it: a row that
                 looks tappable and then refuses is worse than one that reads as a fact. */}

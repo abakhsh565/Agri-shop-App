@@ -11,6 +11,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useEducationStore } from "@/stores/educationStore";
 import { useT } from "@/lib/i18n";
 import { homePathForUser } from "@/lib/experience";
+import { openWorkspace } from "@/lib/workspace";
 
 export default function PINSetPage() {
   const t = useT();
@@ -19,7 +20,7 @@ export default function PINSetPage() {
   const state = location.state as { returnTo?: string; celebrate?: boolean } | null;
   const returnTo = state?.returnTo;
   const celebrate = state?.celebrate === true;
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const [done, setDone] = useState(false);
   const [step, setStep] = useState<"set" | "confirm">("set");
   const [firstPin, setFirstPin] = useState("");
@@ -115,7 +116,7 @@ export default function PINSetPage() {
       // ceremony. Standing the PIN up for the first time (onboarding it) earns the success
       // screen, which says what changed and offers the two things a new owner wants next.
       if (returnTo && !celebrate) {
-        navigate(returnTo, { replace: true });
+        void enter();
       } else {
         setDone(true);
       }
@@ -123,6 +124,18 @@ export default function PINSetPage() {
   }
 
   const dest = homePathForUser(user);
+
+  /** The PIN is the last step: from here the account's own shop opens, with no chooser. */
+  async function enter() {
+    const opened = user ? await openWorkspace(user) : { ok: false as const };
+    const next = opened.ok ? opened.user : user;
+    if (next && opened.ok) setUser(next);
+    if (!opened.ok) {
+      setSaveError(true);
+      return;
+    }
+    navigate(homePathForUser(next), { replace: true });
+  }
 
   const pin = step === "set" ? firstPin : confirmPin;
   const setter = step === "set" ? setFirstPin : setConfirmPin;
@@ -195,7 +208,7 @@ export default function PINSetPage() {
             )}
             <button
               type="button"
-              onClick={() => navigate(dest, { replace: true })}
+              onClick={() => { void enter(); }}
               data-testid="pin-done-open"
               className="ds-btn-brand w-full h-12 text-15 font-bold"
             >
@@ -205,7 +218,7 @@ export default function PINSetPage() {
               type="button"
               onClick={() => {
                 useEducationStore.getState().startTour();
-                navigate(dest, { replace: true });
+                void enter();
               }}
               data-testid="pin-done-tour"
               className="w-full h-11 text-14 font-semibold"
