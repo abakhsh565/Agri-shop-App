@@ -317,7 +317,16 @@ export default function ProfileDetailsPage() {
       <NavHeader title={t("profile.title")} backTo={`${base}/settings`} />
 
       <div className="flex flex-col items-center px-5 pt-7 pb-7" data-testid="profile-hero">
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+        {/* Hidden, opened by the named button below — but still an <input> in the tree, so it carries
+            the same name as the control that opens it (the accessibility floor counts unnamed inputs). */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          aria-label={t("profile.changePhoto")}
+          onChange={handleAvatarUpload}
+        />
         <div className="relative">
           <button
             type="button"
