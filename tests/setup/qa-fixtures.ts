@@ -33,6 +33,16 @@
 
 /** The seeded QA tenant every fixture row belongs to. */
 export const QA_SHOP_ID = '00000000-0000-0000-0000-000000000001';
+/**
+ * The fixture shop's sole active standard owner (Khalid Khan, 923001234567).
+ *
+ * `0280` allows exactly one active owner per shop, so suites that need owner power use this row
+ * instead of creating one — and never INSERT/UPDATE/DELETE it. It was dropped from this object in
+ * a refactor while the suites kept reading `QA_IDS.owner`; the value then read `undefined`, which
+ * reached `@supabase/auth-js` as `createUser({ id: undefined })` and failed twelve integration
+ * tests with "Expected parameter to be UUID but is not" instead of their real subject.
+ */
+export const QA_OWNER_ID = '10000000-0000-0000-0000-000000000003';
 /** QA Admin — keep-list account (923009999999). */
 export const QA_ADMIN_ID = '10000000-0000-0000-0000-000000000001';
 /** QA Employee — keep-list account (923008888888). */
@@ -49,11 +59,12 @@ export const QA_VARIANT_B_ID = '40000000-0000-0000-0000-000000000002';
 export const QA_COMPANY_A_ID = '50000000-0000-0000-0000-000000000001';
 
 /**
- * The eleven ids, under the names both suites already use (`QA_IDS` re-exports this object, so
+ * The twelve ids, under the names both suites already use (`QA_IDS` re-exports this object, so
  * `QA_IDS.shop` in a spec and `QA_IDS.customerA` in a helper mean the same value as before).
  */
 export const QA_FIXTURE_IDS = {
   shop: QA_SHOP_ID,
+  owner: QA_OWNER_ID,
   admin: QA_ADMIN_ID,
   employee: QA_EMPLOYEE_ID,
   customerA: QA_CUSTOMER_A_ID,
@@ -75,6 +86,15 @@ export type QaFixtureRow = Record<string, string | number | boolean>;
  * once left a row carrying another suite's number.
  */
 export const QA_FIXTURE_USERS: readonly QaFixtureRow[] = [
+  {
+    id: QA_OWNER_ID,
+    name: 'Khalid Khan',
+    phone: '923001234567',
+    role: 'admin',
+    is_original_owner: true,
+    is_active: true,
+    shop_id: QA_SHOP_ID,
+  },
   {
     id: QA_ADMIN_ID,
     name: 'QA Admin',
@@ -266,8 +286,57 @@ const VARIANTS_SQL = upsertSql('product_variants', QA_FIXTURE_VARIANTS);
  * bilities stay where they were: `tests/e2e/helpers.ts#setupFixtures` remains one call that seeds
  * everything, and `tests/setup/fixtures.ts` keeps its four named functions plus `setupAllFixtures`.
  */
+/**
+ * Put every fixture account on its shop's DEFAULT branch.
+ *
+ * WHY THIS IS A FIXTURE AND NOT A SPEC DETAIL. The app's active branch comes from the server:
+ * `current_branch_id()` orders candidate branches by
+ *
+ *     (b.id = user_active_shops.branch_id) DESC NULLS LAST, b.is_default DESC, b.created_at, b.id
+ *
+ * so a row in `user_active_shops` beats the default branch. The fixture owner carried
+ * `branch_id = 6253561f…` — the second branch, "Malik agro" — while every fixture customer,
+ * supplier, product and ledger lives on the default branch "Khan Traders". Every branch-scoped
+ * read (the supplier picker, the supplier-payment screen, the outstanding ledger, the sale
+ * detail's void action) therefore looked at a branch the fixtures are not in: an RLS solve in
+ * `companies_branch_select`, and blank or empty screens everywhere else.
+ *
+ * THE BRANCH IS DERIVED, NEVER HARD-CODED: `is_default AND is_active` is the same rule
+ * `default_branch_id()` uses, so this cannot point at a branch the app would not pick.
+ */
+export const QA_FIXTURE_ACTIVE_BRANCH_SQL = `
+UPDATE user_active_shops a
+   SET branch_id = b.id, updated_at = NOW()
+  FROM branches b
+ WHERE b.tenant_id = a.shop_id AND b.is_default AND b.is_active
+   AND a.shop_id = '${QA_SHOP_ID}'
+   AND a.user_id IN ('${QA_OWNER_ID}', '${QA_ADMIN_ID}', '${QA_EMPLOYEE_ID}');
+
+INSERT INTO user_active_shops (user_id, shop_id, branch_id)
+SELECT m.user_id, m.tenant_id, b.id
+  FROM memberships m
+  JOIN branches b ON b.tenant_id = m.tenant_id AND b.is_default AND b.is_active
+ WHERE m.status = 'active'
+   AND m.user_id IN ('${QA_OWNER_ID}', '${QA_ADMIN_ID}', '${QA_EMPLOYEE_ID}')
+   AND m.tenant_id = '${QA_SHOP_ID}'
+   AND NOT EXISTS (
+     SELECT 1 FROM user_active_shops a
+      WHERE a.user_id = m.user_id AND a.shop_id = m.tenant_id
+   )`;
+
+/** Reads back what `current_branch_id()` would answer, so the seed can prove it landed. */
+export const QA_FIXTURE_ACTIVE_BRANCH_CHECK_SQL = `
+SELECT m.user_id, a.branch_id, (b.is_default AND b.is_active) AS on_default_branch
+  FROM memberships m
+  LEFT JOIN user_active_shops a ON a.user_id = m.user_id AND a.shop_id = m.tenant_id
+  LEFT JOIN branches b ON b.id = a.branch_id
+ WHERE m.status = 'active' AND m.tenant_id = '${QA_SHOP_ID}'
+   AND m.user_id IN ('${QA_OWNER_ID}', '${QA_ADMIN_ID}', '${QA_EMPLOYEE_ID}')`;
+
 export const FIXTURE_SQL = {
   users: upsertSql('users', QA_FIXTURE_USERS),
+  /** After the users, before anything branch-scoped is read. */
+  activeBranch: QA_FIXTURE_ACTIVE_BRANCH_SQL,
   companies: upsertSql('companies', QA_FIXTURE_COMPANIES),
   customers: upsertSql('customers', QA_FIXTURE_CUSTOMERS),
   products: PRODUCTS_SQL,

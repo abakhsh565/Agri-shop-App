@@ -93,3 +93,24 @@ export function canAccessModule(module: string): boolean {
   if (perms.includes("*")) return true;
   return perms.some(p => p.startsWith(module + "."));
 }
+
+// ── Dashboard visibility ─────────────────────────────────────────────────────
+
+/**
+ * May the signed-in account be shown this dashboard block?
+ *
+ * Deliberately a different question from `hasPermission()`: seeing a figure is not the
+ * right to change it, and the owner sets the two separately on a role (migration 0250).
+ *
+ * `undefined` on the user means the answer has not been read yet — an older session, or
+ * the moment before `refreshPermissions()` lands. That is treated as "do not hide": a
+ * screen that erases itself while a request is in flight is worse than one that briefly
+ * shows a block the role has since lost. `[]` is a real answer and hides everything.
+ */
+export function canSeeDashboard(key: string): boolean {
+  const user = useAuthStore.getState().user;
+  if (!user) return false;
+  if (user.membershipRole === "owner") return true;
+  if (!user.dashboards) return true;
+  return user.dashboards.includes(key);
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import EmptyState from "@/components/ui/EmptyState";
@@ -10,13 +10,23 @@ import type { Purchase } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
+import { useReturnTo } from "@/lib/useReturnTo";
+import { useShellBase } from "@/lib/useShellBase";
+import { hasPermission } from "@/lib/tenantContext";
 import { PackagePlus, Package } from "lucide-react";
 
 export default function AdminPurchasesPage() {
   const navigate = useNavigate();
+  const base = useShellBase();
+  // Two-segment path, so the journey stack is cleared on arrival; the parent has to be named.
+  // The owner's parent is the Purchases section; the employee and Co-Owner shells have no
+  // Settings tree, so their parent is More.
+  const backTo = useReturnTo(base === "/admin" ? `${base}/settings/hub/purchases` : `${base}/more`);
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const t = useT();
+  const canRecord = hasPermission("purchases.create");
+  const canPay = hasPermission("payments.view");
 
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +67,7 @@ export default function AdminPurchasesPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("purchases.listTitle")} />
+      <NavHeader title={t("purchases.listTitle")} backTo={backTo} historyBack />
 
       {/* Payable summary */}
       <div className="px-4 pt-3">
@@ -79,13 +89,21 @@ export default function AdminPurchasesPage() {
               <Skeleton w="120px" h="26px" className="mt-1" />
             )}
           </div>
-          <button
-            onClick={() => navigate("/admin/payments")}
+          {canPay && <button
+            // Paying a supplier is a job for the payable book, where every supplier can be
+            // opened and paid; the payments ledger lists money already moved and cannot take a
+            // payment for a supplier the reader has not chosen. The state keeps back on
+            // Purchase history, the screen this button was pressed on.
+            onClick={() =>
+              navigate(base === "/admin" ? `${base}/purchases/payables` : `${base}/companies`, {
+                state: { from: `${base}/purchases` },
+              })
+            }
             className="text-xs font-bold px-3 py-1.5 rounded-full whitespace-nowrap shrink-0"
             style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
           >
             {t("purchases.paySuppliers")}
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -104,6 +122,11 @@ export default function AdminPurchasesPage() {
                 className="rounded-[var(--radius-card)] p-4"
                 style={{ background: "var(--tone-card)" }}
               >
+                <Link
+                  to={`${base}/purchases/${p.id}`}
+                  className="block active:opacity-70"
+                  data-testid={`purchase-card-${p.id}`}
+                >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
                     <div
@@ -142,6 +165,24 @@ export default function AdminPurchasesPage() {
                     )}
                   </div>
                 </div>
+                </Link>
+                {base === "/admin" && unpaid && canPay && (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(`${base}/payments/supplier/${p.companyId}`, {
+                          state: { from: `${base}/purchases` },
+                        })
+                      }
+                      data-testid={`purchase-pay-${p.id}`}
+                      className="h-9 px-4 rounded-full text-11 font-bold active:opacity-70"
+                      style={{ background: "#2c2c2a", color: "var(--brand)" }}
+                    >
+                      {t("supplierPayments.record")}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -149,20 +190,20 @@ export default function AdminPurchasesPage() {
       )}
 
       {/* Floating primary action */}
-      <div
+      {canRecord && <div
         className="fixed start-0 end-0 max-w-[480px] mx-auto pointer-events-none z-40"
         style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
       >
         <div className={`flex px-4 ${isUrdu ? "justify-start" : "justify-end"}`}>
           <button
-            onClick={() => navigate("/admin/purchases/new")}
+            onClick={() => navigate(`${base}/purchases/new`)}
             className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-sm font-bold active:scale-95 transition-transform"
             style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
           >
             <PackagePlus size={20} strokeWidth={2.5} /> {t("purchase.record")}
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

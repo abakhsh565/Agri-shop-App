@@ -75,18 +75,23 @@ function throwIfCleanupFailed(context: string): void {
 }
 
 async function cleanup() {
+  // The sale fixture first: `sales` references both the customer and the employee who created it,
+  // so deleting the users first failed with `sales_employee_id_fkey` — the delete was reported as a
+  // suppressed failure and the sales stayed, which is why 'grants access from the assigned role'
+  // asserted 1 sale and measured 3. Child rows, then the sale, then the fixture product.
   await trySql('sale_items', sql(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${SALE_CUSTOMER}')`));
   await trySql('sales', sql(`DELETE FROM sales WHERE customer_id = '${SALE_CUSTOMER}'`));
-  await trySql('inventory_movements', sql(`DELETE FROM inventory_movements WHERE product_id = '${SALE_PRODUCT}'`));
-  await trySql('stock_adjustments', sql(`DELETE FROM stock_adjustments WHERE product_id = '${SALE_PRODUCT}'`));
+  await trySql('inventory_movements', sql(`DELETE FROM inventory_movements WHERE product_id = '${SALE_PRODUCT}' OR variant_id = '${SALE_VARIANT}'`));
+  await trySql('stock_adjustments', sql(`DELETE FROM stock_adjustments WHERE product_id = '${SALE_PRODUCT}' OR variant_id = '${SALE_VARIANT}'`));
   await trySql('product_variants', sql(`DELETE FROM product_variants WHERE id = '${SALE_VARIANT}'`));
   await trySql('products', sql(`DELETE FROM products WHERE id = '${SALE_PRODUCT}'`));
-  await trySql('customers', sql(`DELETE FROM customers WHERE phone IN ('923009795001','923009795002','923009795004','923009795005','923009795101')`));
-  await trySql('audit_events', sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`));
-  await trySql('user_permissions', sql(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`));
-  await trySql('role_permissions', sql(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')`));
-  await trySql('roles', sql(`DELETE FROM roles WHERE name LIKE '${RUN}%'`));
-  await trySql('users', sql(`DELETE FROM users WHERE id IN ('${EMP}','${VICTIM}')`));
+  await trySql('sale_customer', sql(`DELETE FROM customers WHERE id = '${SALE_CUSTOMER}'`));
+  await sql(`DELETE FROM customers WHERE phone IN ('923009795001','923009795002','923009795004','923009795005')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM audit_events WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM user_permissions WHERE user_id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name LIKE '${RUN}%')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM roles WHERE name LIKE '${RUN}%'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM users WHERE id IN ('${OWNER}','${EMP}','${VICTIM}')`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {

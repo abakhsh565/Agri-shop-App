@@ -28,7 +28,7 @@ const ROOT = path.resolve(__dirname, "../..");
 const SRC = path.join(ROOT, "src");
 
 // Proper nouns and formats that are intentionally identical in both languages.
-const BRANDS = ["AgriShop", "WhatsApp", "SMS", "NTN", "Rs."];
+const BRANDS = ["HisabPay", "WhatsApp", "SMS", "NTN", "Rs."];
 
 // Unreferenced design mock-ups, not shipped UI. Empty on purpose: both entries this
 // list ever held have been deleted — `src/components/ui/RTL.tsx` (zero importers) and

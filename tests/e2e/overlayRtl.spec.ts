@@ -12,7 +12,7 @@
  * confirmations that were moved off the browser's native `confirm()` into the app's
  * own dialog, because a native popup cannot mirror its buttons for Urdu.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import { QA_IDS, setupFixtures, cleanupFixtures, injectAdminAuth } from './helpers';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';

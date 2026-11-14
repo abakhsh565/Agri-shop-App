@@ -393,8 +393,9 @@ function computeLowStockSignals(
     });
 }
 
-/** S9: Product Expiry Approaching — within 30 days */
-const EXPIRY_WARNING_DAYS = 30;
+/** S9: Product Expiry Approaching — within 30 days. Exported so the overview's "expiring"
+ *  count cannot drift from the rule that raises the S9 signals. */
+export const EXPIRY_WARNING_DAYS = 30;
 
 function computeExpirySignals(
   products: Product[],

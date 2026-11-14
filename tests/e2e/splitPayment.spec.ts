@@ -7,12 +7,13 @@
  *
  * Uses the QA database (never production).
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import {
   execSql,
   QA_IDS,
+  claimOwned,
   cleanupFixtures,
   ownership,
   setupFixtures,
@@ -62,9 +63,25 @@ test.describe('Split Payment Recording', () => {
       VALUES ('${CUST_ID}', 'Split Pay Customer', '${CUST_PHONE}', 50000, ${INITIAL_BALANCE}, ${INITIAL_BALANCE}, 0, '${QA_IDS.shop}', 'QA')
       ON CONFLICT (id) DO NOTHING
     `);
-    // OWNED: this run's own customer, by the id it generated. Its payments are removed through
-    // `customer_payments.customer_id`, so they never have to be deleted table-wide here.
+    // THE BRANCH OWES WHAT THE BRANCH'S CREDIT SALES SAY IT OWES. The record-payment screen shows
+    // the branch's outstanding (`get_branch_customer_balances`), not the shop-wide
+    // `customers.outstanding_balance` column — measured 2026-11-14: seeding only the column made the
+    // screen read "Outstanding Rs. 0" and refuse the split with "Amount exceeds outstanding balance",
+    // which is the product being right. So the fixture creates one credit sale in the default branch.
+    await execSql(`
+      INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status,
+        payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, branch_id,
+        created_at, updated_at)
+      VALUES ('${randomUUID()}', 'SPLIT-SEED-${RUN.toUpperCase()}', '${CUST_ID}', '${QA_IDS.admin}',
+        ${INITIAL_BALANCE}, 'completed', 'credit', 'cash', 0, ${INITIAL_BALANCE}, 0, false,
+        '${QA_IDS.shop}',
+        (SELECT id FROM branches WHERE tenant_id = '${QA_IDS.shop}' AND is_default AND is_active ORDER BY created_at LIMIT 1),
+        NOW(), NOW())
+    `);
+    // OWNED: this run's own customer, by the id it generated, and the seed sale that carries its
+    // branch debt. Its payments are removed through `customer_payments.customer_id`.
     await trackOwned(ownership(), 'customers', CUST_ID);
+    await claimOwned('sales', `SELECT id FROM sales WHERE customer_id = '${CUST_ID}'`);
   });
 
   test.afterAll(async () => {
@@ -85,10 +102,17 @@ test.describe('Split Payment Recording', () => {
     await page.waitForLoadState('networkidle');
     await injectAdminAuth(page);
 
-    // Navigate to customer list (triggers Zustand store bootstrap)
+    // Navigate to customer list (triggers Zustand store bootstrap).
+    //
+    // The row is addressed by the id this lane generated, not by the customer's name: the list
+    // pages and filters now, so a name match proved neither that THIS customer was on screen nor
+    // that the screen the payment flow starts from could see it.
     await page.goto(`${BASE_URL}/employee/customers`);
     await page.waitForLoadState('networkidle');
-    await page.locator('text=Split Pay Customer').first().waitFor({ timeout: 15000 });
+    await expect(
+      page.getByTestId(`customer-row-${CUST_ID}`),
+      'the customer this lane seeded is not on the customer list the payment flow starts from',
+    ).toBeVisible({ timeout: 20000 });
 
     // ─── Step 2: Navigate to record payment ──────────────────────────
     await page.goto(`${BASE_URL}/employee/customers/${CUST_ID}/record-payment`);

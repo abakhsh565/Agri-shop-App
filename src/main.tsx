@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import App from './App'
+import { captureError, initErrorReporting, resolveReleaseId } from './lib/errorReporting'
 import './index.css'
 
 const isNative = Capacitor.isNativePlatform();
@@ -55,21 +56,57 @@ if (isNative) {
 
 // Error visibility. Before this, a crash on an owner's phone left nothing behind anywhere.
 //
-// The handler stays this small on purpose: it does no filtering, decides nothing about the
-// environment, and never retries. `reportClientError` owns those rules — it refuses to record when
-// the environment is not configured instead of looking like coverage, and it allow-lists the
-// payload so a caught error cannot carry a customer's details to the server.
+// Two destinations, one handler. `client_error_events` is the private record (write-only, read by the
+// service role); `src/lib/errorReporting.ts` is the notification channel that makes a broken release
+// visible to the team. Both refuse to look like coverage when they are not configured, and both own
+// their own allow-list — this handler filters nothing and decides nothing.
 //
 // It is registered before the first render, because the errors worth having include the ones that
 // happen on the way in — including before sign-in, which is why the table accepts pre-login writes.
+// The release id is resolved here, once, so the record and the alert name the same commit.
+const releaseId = resolveReleaseId(import.meta.env as unknown as Record<string, unknown>);
+
+void initErrorReporting();
+
 function reportUncaught(error: unknown): void {
   void import('./lib/monitoring').then(({ reportClientError }) =>
-    reportClientError({ error, screen: window.location.pathname }),
+    reportClientError({
+      error,
+      screen: window.location.pathname,
+      ...(releaseId ? { appVersion: releaseId } : {}),
+    }),
   );
+  void captureError(error, { screen: window.location.pathname });
 }
 
 window.addEventListener('error', (event) => reportUncaught(event.error ?? event.message));
 window.addEventListener('unhandledrejection', (event) => reportUncaught(event.reason));
+
+// A 48px field pill is mostly padding: the input inside it is only as tall as its text line, so a
+// tap on the rest of the pill did nothing, and on a phone that reads as a dead control (the owner's
+// report: "if I click in the centre then it gets active"). One delegated listener gives every
+// screen the whole-pill target, instead of each form growing its own handler and the next form
+// forgetting it. Buttons inside a field (a picker trigger, a clear mark) keep their own behaviour.
+const FIELD_OWNERS = 'input, textarea, select, button, a, [role="button"], [role="switch"]';
+
+document.addEventListener('click', (event) => {
+  const target = event.target as HTMLElement | null;
+  if (!target || typeof target.closest !== 'function') return;
+  const shell = target.closest('.ds-field');
+  if (!shell || target.closest(FIELD_OWNERS)) return;
+  const field = shell.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+    'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled])',
+  );
+  if (!field) return;
+  event.preventDefault();
+  field.focus({ preventScroll: true });
+  // A tap after a value is already there should put the caret where the person tapped, which is
+  // the end of what they typed — not select the whole value and make the next keystroke replace it.
+  if (field instanceof HTMLInputElement && field.type !== 'number' && field.type !== 'date') {
+    const end = field.value.length;
+    field.setSelectionRange?.(end, end);
+  }
+});
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

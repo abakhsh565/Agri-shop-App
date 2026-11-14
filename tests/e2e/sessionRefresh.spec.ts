@@ -24,9 +24,11 @@
  * Everything it writes lives in the dedicated tenant (its branch), and it removes it in `afterAll`.
  * QA database only.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
-import { execSql, loginViaUi, settle, cleanupFixtures, QA_IDS, setupFixtures, WRITE_TENANT } from './helpers';
+import { execSql, loginViaUi, settle, cleanupFixtures, QA_IDS, WRITE_TENANT } from './helpers';
+import { runCleanupStatements, runTeardownSteps } from '../setup/ownedCleanup';
 
 const BASE = process.env.QA_APP_URL || 'http://localhost:5173';
 const OWNER_PHONE = '03001234567'; // the QA shop's own owner (real business rows)
@@ -35,6 +37,16 @@ const ISO_OWNER = WRITE_TENANT.owner;
 
 const extraBranchId = randomUUID();
 const EXTRA_BRANCH = `Session Branch ${extraBranchId.slice(0, 8)}`;
+
+/**
+ * `user_active_shops` for the isolated tenant's owner — CAPTURED BEFORE THIS LANE WRITES IT.
+ *
+ * The row is keyed by user, and the SERVER's own writer (`set_active_branch`, 0188) creates it, so it
+ * may not exist when the lane starts. Both states are captured here: a branch id, or `null` meaning
+ * "the lane must take the row away again". Without this, the lane's UPSERT overwrote whatever branch
+ * that owner was on (and its afterAll wrote a hard-coded default rather than the captured value).
+ */
+let originalActiveBranch: string | null = null;
 
 async function activeBranchInDb(userId: string): Promise<string | null> {
   const rows = await execSql(`SELECT branch_id FROM user_active_shops WHERE user_id = '${userId}'`);
@@ -73,35 +85,62 @@ async function openBranchSwitcher(page: Page): Promise<void> {
 
 test.describe('Session refresh', () => {
   test.beforeAll(async () => {
-    await setupFixtures();
-
-    // The customers screen filters archived / other-shop rows out, so a drifted
-    // fixture fails here at setup instead of as a 15s 'element not found' later.
-    const [customerA] = await execSql(
-      `SELECT is_archived, shop_id FROM customers WHERE id = '${QA_IDS.customerA}'`,
+    const rows = await execSql(
+      `SELECT branch_id FROM user_active_shops WHERE user_id = '${ISO_OWNER.id}'`,
     );
-    expect(customerA?.is_archived, 'QA Customer A is archived, so the customers screen filters it out').toBe(false);
-    expect(customerA?.shop_id, 'QA Customer A is not in the QA shop, so the customers screen filters it out').toBe(
-      QA_IDS.shop,
-    );
+    originalActiveBranch = rows[0]?.branch_id ? String(rows[0].branch_id) : null;
   });
 
   test.afterAll(async () => {
-    // `branches` has no step in the run-ownership graph (`tests/e2e/cleanupOwnership.ts`), so this
-    // lane removes its own branch by id and READS BACK that it is gone — a cleanup that cannot report
-    // its own result is the failure mode that graph exists to prevent.
-    const [defaults] = await execSql(
-      `SELECT id FROM branches WHERE tenant_id = '${TENANT}' AND is_default AND is_active LIMIT 1`,
-    );
-    if (defaults?.id) {
-      await execSql(
-        `UPDATE user_active_shops SET branch_id = '${defaults.id}' WHERE user_id = '${ISO_OWNER.id}'`,
-      ).catch(() => undefined);
-    }
-    await execSql(`DELETE FROM branches WHERE id = '${extraBranchId}'`).catch(() => undefined);
-    const left = await execSql(`SELECT count(*)::int AS n FROM branches WHERE id = '${extraBranchId}'`);
-    console.log(`[sessionRefresh] extra branch rows left behind: ${left[0]?.n ?? 'unknown'}`);
-    await cleanupFixtures();
+    // Three steps, in this order, each reporting its own failure:
+    //
+    //   1. put the OWNER'S ACTIVE BRANCH back to the value captured before this lane wrote it — or
+    //      remove the row this lane inserted, when there was none;
+    //   2. delete the throwaway branch, and READ BACK that it is gone (a `console.log` of the count
+    //      is not a report: a leftover branch is invisible to the run that left it, and the next lane
+    //      inherits it);
+    //   3. remove the rows this run registered, by id.
+    //
+    // `branches` has no step in the run-ownership graph (`tests/e2e/cleanupOwnership.ts`), so (2) is
+    // this lane's own responsibility. Steps 1 and 2 are ordered: `user_active_shops.branch_id`
+    // references the branch, so the row has to stop pointing at it before the branch can go.
+    // Nothing is `.catch(() => undefined)` any more — a restore or delete that failed left a shared
+    // row modified or a branch behind, silently.
+    await runTeardownSteps([
+      {
+        label: `restore user_active_shops.branch_id for ${ISO_OWNER.id} (captured ${originalActiveBranch ?? 'absent'})`,
+        run: () =>
+          runCleanupStatements(
+            execSql,
+            [
+              originalActiveBranch
+                ? `UPDATE user_active_shops SET branch_id = '${originalActiveBranch}', updated_at = now() WHERE user_id = '${ISO_OWNER.id}'`
+                : `DELETE FROM user_active_shops WHERE user_id = '${ISO_OWNER.id}'`,
+            ],
+            'sessionRefresh active-branch restore',
+          ),
+      },
+      {
+        label: 'remove the throwaway branch and read the row back',
+        run: async () => {
+          await runCleanupStatements(
+            execSql,
+            [`DELETE FROM branches WHERE id = '${extraBranchId}'`],
+            'sessionRefresh branch cleanup',
+          );
+          const [left] = await execSql(
+            `SELECT count(*)::int AS n FROM branches WHERE id = '${extraBranchId}'`,
+          );
+          if (Number(left?.n ?? 0) > 0) {
+            throw new Error(
+              `[QA FIXTURE] sessionRefresh left branch ${extraBranchId} behind: the isolated tenant's\n` +
+                'branch list is what the next lane switches between.',
+            );
+          }
+        },
+      },
+      { label: 'remove the rows this run owns', run: () => cleanupFixtures() },
+    ]);
   });
 
   test('owner data and permissions are the same after a reload and after a reopen', async ({ page }) => {
@@ -110,21 +149,33 @@ test.describe('Session refresh', () => {
       `SELECT name, outstanding_balance FROM customers WHERE id = '${QA_IDS.customerA}'`,
     );
     expect(customer?.name, 'QA Customer A is missing, so there is no displayed data to re-check').toBeTruthy();
-    const shownBalance = 'Rs. ' + Math.round(Number(customer.outstanding_balance)).toLocaleString('en-PK');
+    // NOTE ON THE FIGURE. The outstanding ledger is BRANCH money: its rows are the customers who
+    // owe THIS branch, and their amounts come from this branch's own sales and receipts
+    // (`get_branch_customer_balances`). The shop-wide `customers.outstanding_balance` is a different
+    // number — it includes other branches' trade — so asserting it here was asserting a figure this
+    // screen is not about. What this lane is actually about is SAMENESS across a reload and a reopen,
+    // which is checked on the ledger's own rows below.
 
     await loginViaUi(page, OWNER_PHONE);
-    await page.goto(`${BASE}/admin/customers`);
+    // `/admin/customers` is a SECTION HUB now: it opens the ledgers (outstanding, payments,
+    // reminders) and no longer renders a balance per row. The balance this lane re-checks lives on
+    // the outstanding ledger, so that is the screen it must read — same fact, the screen that
+    // actually shows it.
+    await page.goto(`${BASE}/admin/customers/outstanding`);
     await settle(page);
 
-    // settle() only requires ANY rendered text, so the customer list can still
-    // be loading when this runs — wait for the balance itself to be visible
-    // before counting it, instead of reading a 0 from an un-hydrated list.
+    // settle() only requires ANY rendered text, so the ledger can still be loading when this runs —
+    // wait for a ROW before reading, instead of recording an empty list as "the owner's data".
+    const ledgerRows = page.locator('[data-testid^="outstanding-row-"]');
     await expect(
-      page.getByText(shownBalance, { exact: false }).first(),
-      `the customers screen does not show ${shownBalance} (before the reload)`,
-    ).toBeVisible({ timeout: 15000 });
-    const balanceBefore = await page.getByText(shownBalance, { exact: false }).count();
-    expect(balanceBefore, `the customers screen does not show ${shownBalance} (before the reload)`).toBeGreaterThan(0);
+      ledgerRows.first(),
+      'the outstanding ledger rendered no customer at all, so there is no data to re-check',
+    ).toBeVisible({ timeout: 20000 });
+    const rowsBefore = await ledgerRows.allInnerTexts();
+    expect(rowsBefore.length, 'the outstanding ledger is empty').toBeGreaterThan(0);
+    // The figure is the ledger's own answer (branch money), read from the row rather than assumed —
+    // and it must be a real amount, not a placeholder.
+    expect(rowsBefore[0], 'the ledger row carries no amount').toMatch(/Rs\.\s?[\d,]+/);
 
     // ── a permission-gated route is reachable BEFORE the reload, so "still reachable" means something
     await page.goto(`${BASE}/admin/settings`);
@@ -133,33 +184,29 @@ test.describe('Session refresh', () => {
     expect(settingsBefore, 'the owner was bounced out of settings before the reload').toContain('/admin/settings');
 
     // ── RELOAD: the same screen, read again from the server ──────────────────────────────────────
-    await page.goto(`${BASE}/admin/customers`);
+    await page.goto(`${BASE}/admin/customers/outstanding`);
     await page.reload();
     await settle(page);
-    await expect(
-      page.getByText(shownBalance, { exact: false }).first(),
-      'the customer balance changed across a reload',
-    ).toBeVisible();
-    await expect(
-      page.getByText(customer.name, { exact: false }).first(),
-      'the customer disappeared across a reload',
-    ).toBeVisible();
+    await expect(ledgerRows.first(), 'the ledger is empty after a reload').toBeVisible();
+    expect(
+      await ledgerRows.allInnerTexts(),
+      'the ledger rows or amounts changed across a reload',
+    ).toEqual(rowsBefore);
+
     await page.goto(`${BASE}/admin/settings`);
     await settle(page);
     expect(page.url(), 'the owner lost access to settings after a reload').toContain('/admin/settings');
 
     // ── REOPEN: a new page in the same profile, i.e. the app opened again ────────────────────────
     const reopened = await page.context().newPage();
-    await reopened.goto(`${BASE}/admin/customers`);
+    await reopened.goto(`${BASE}/admin/customers/outstanding`);
     await settle(reopened);
-    await expect(
-      reopened.getByText(shownBalance, { exact: false }).first(),
-      'the customer balance is wrong in a freshly opened page',
-    ).toBeVisible();
-    await expect(
-      reopened.getByText(customer.name, { exact: false }).first(),
-      'the customer is missing in a freshly opened page',
-    ).toBeVisible();
+    const reopenedRows = reopened.locator('[data-testid^="outstanding-row-"]');
+    await expect(reopenedRows.first(), 'the ledger is empty in a freshly opened page').toBeVisible({ timeout: 20000 });
+    expect(
+      await reopenedRows.allInnerTexts(),
+      'the ledger rows or amounts are different in a freshly opened page',
+    ).toEqual(rowsBefore);
     await reopened.goto(`${BASE}/admin/settings`);
     await settle(reopened);
     expect(reopened.url(), 'the owner lost access to settings in a freshly opened page').toContain('/admin/settings');

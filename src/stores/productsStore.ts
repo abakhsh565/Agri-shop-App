@@ -3,6 +3,8 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { getCachedData, setCachedData, captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { rpcResolveProductBarcode } from "@/lib/db";
+import { applyBranchStock, filterProductsForBranch } from "@/lib/branchStock";
+import { resolveImageUrl } from "@/lib/storage";
 import type { Product, ProductVariant, ProductCategory, BaseUnit } from "@/types";
 
 const CACHE_KEY = "products";
@@ -18,6 +20,10 @@ interface ProductRow {
   company: string | null;
   company_id: string | null;
   category: ProductCategory;
+  /** The owner's shelf (0259), absent on a row written before it. */
+  category_id: string | null;
+  unit_id: string | null;
+  physical_form: string | null;
   image_url: string | null;
   barcode: string | null;
   base_unit: string | null;
@@ -141,12 +147,20 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
     );
 
     try {
-      const [{ data: prods, error: pErr }, { data: vars, error: vErr }] =
+      const [{ data: prods, error: pErr }, { data: vars, error: vErr }, branchStock, branchCatalogue] =
         await Promise.all([
           supabase.from("products").select("*").eq("is_active", true).order("name"),
           isAdmin
             ? supabase.from("product_variants").select("*").eq("is_active", true)
             : supabase.from("product_variants_public").select("*"),
+          // The shelf is the branch's, not the shop's (0238). A failure here is not a reason
+          // to blank the catalogue: `applyBranchStock(null)` keeps the loaded shop quantities,
+          // which is the pre-0238 behaviour until the database carries the read.
+          supabase.rpc("get_branch_variant_stock"),
+          // Which of these products this branch carries at all (0240). A new branch has no
+          // rows, so its catalogue is empty rather than the whole shop at zero. A failed
+          // read falls back to the loaded catalogue, never to an empty screen.
+          supabase.rpc("get_branch_product_ids"),
         ]);
 
       if (!isDataContextCurrent(context)) return;
@@ -170,7 +184,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
       if (!isDataContextCurrent(context)) return;
       const companyMap = new Map(companyRows.map((c: any) => [c.id, c.name]));
 
-      const products: Product[] = ((prods as ProductRow[]) ?? []).map((p) => {
+      const mapped: Product[] = ((prods as ProductRow[]) ?? []).map((p) => {
         const variants = byProduct.get(p.id) ?? [];
         // Compute total stock from variants (not from products.stock_qty which may be stale)
         const computedStockQty = variants.length > 0
@@ -183,7 +197,10 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
           name: p.name,
           company: companyName,
           category: p.category,
-          imageUrl: p.image_url ?? undefined,
+          categoryId: p.category_id ?? undefined,
+          unitId: p.unit_id ?? undefined,
+          physicalForm: (p.physical_form as Product["physicalForm"]) ?? undefined,
+          imageUrl: resolveImageUrl(p.image_url),
           barcode: p.barcode ?? undefined,
           baseUnit: (p.base_unit as BaseUnit) ?? "piece",
           stockQty: computedStockQty,
@@ -194,7 +211,33 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
         };
       });
 
-      // Save to cache
+      // The branch read is authoritative when it answered. An empty answer is a real answer
+      // (this branch holds nothing), so only an error falls back to the shop quantities.
+      const branchQty = branchStock.error
+        ? null
+        : new Map<string, number>(
+            ((branchStock.data as { variant_id: string; qty: number | string }[] | null) ?? [])
+              .map((row) => [row.variant_id, Number(row.qty)]),
+          );
+
+      // PostgREST returns a `setof uuid` as bare strings; accept the named-object shape too,
+      // so a client built against a different PostgREST version does not silently see nothing.
+      const branchProductIds = branchCatalogue.error
+        ? null
+        : new Set<string>(
+            ((branchCatalogue.data as unknown[] | null) ?? [])
+              .map((row) =>
+                typeof row === "string"
+                  ? row
+                  : (row as { get_branch_product_ids?: string })?.get_branch_product_ids,
+              )
+              .filter((id): id is string => Boolean(id)),
+          );
+
+      const products = applyBranchStock(filterProductsForBranch(mapped, branchProductIds), branchQty);
+
+      // Save to cache. The cache is owned per shop+user+branch (localCache), so a list
+      // filtered for Malik agro cannot paint in Main Branch.
       setCachedData(CACHE_KEY, products);
       set({ products, loading: false, ready: true });
     } catch {

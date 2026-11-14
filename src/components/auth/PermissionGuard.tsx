@@ -37,9 +37,10 @@ export default function PermissionGuard({
   const allowed = requiredPerms.some((p) => hasPermission(p));
 
   if (!allowed) {
+    const home = location.pathname.startsWith("/co-owner") ? "/co-owner/dashboard" : "/admin/dashboard";
     return (
       <Navigate
-        to={fallback ?? "/admin/dashboard"}
+        to={fallback ?? home}
         replace
       />
     );

@@ -16,10 +16,10 @@ import { clearNav } from "@/lib/navContext";
  * to ignore. Home is where a question starts, the bar under it already answers "where am I",
  * and one screen with room to carry it is worth more than five screens each with a small copy.
  *
- * WHERE IT SITS. Bottom end, clear of the tab bar, inside the same 480px column the bar is
- * centred in — so on a wide window it lines up with the bar's own edge instead of drifting to
- * the far side of a monitor. `justify-end` rather than a physical right, so the column mirrors
- * in Urdu, which is where the thumb already is.
+ * WHERE IT SITS. Bottom right for everyone, clear of the tab bar, inside the same 480px column
+ * the bar is centred in — so on a wide window it lines up with the bar's own edge instead of
+ * drifting to the far side of a monitor. The row is explicitly LTR: translating the rest of the
+ * page must not move the launcher to the opposite corner from where it sits in English.
  *
  * TWO THINGS IT MUST KEEP. A name a screen reader can read, and a target 44px or wider: the
  * accessibility lane freezes both of those counts at zero (`tests/e2e/accessibility.spec.ts`),
@@ -39,7 +39,7 @@ export default function AssistantFab({ path }: { path: string }) {
       className="fixed pointer-events-none z-40"
       style={{ insetInlineStart: 0, insetInlineEnd: 0, bottom: "calc(var(--tabbar-height) + 16px)" }}
     >
-      <div className="mx-auto max-w-[480px] px-4 flex justify-end">
+      <div className="mx-auto max-w-[480px] px-4 flex justify-end" dir="ltr">
         <button
           type="button"
           onClick={() => { clearNav(); navigate(path); }}

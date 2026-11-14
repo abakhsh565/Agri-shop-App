@@ -12,7 +12,8 @@
  * "No products found" or a blank page during that window, which is a false
  * statement about data that had not arrived.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { loginViaUi, setupFixtures, cleanupFixtures, QA_IDS } from './helpers';
 
 test.use({ viewport: { width: 390, height: 844 } });

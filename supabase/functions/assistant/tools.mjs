@@ -212,10 +212,123 @@ export function shopTime(iso) {
 const SALE_COLUMNS =
   "id,sale_number,customer_id,customer_name_snapshot,customer_phone,employee_name,total_amount,amount_paid,amount_due,payment_type,payment_method,is_voided,created_at";
 
-async function salesInRange(client, range) {
-  const rows = await client.select(
+/**
+ * The branch predicate is added explicitly for restricted accounts, even though the database's
+ * branch policies also enforce it. An owner has no branch restriction; a Co-Owner or employee
+ * must never be handed another branch's rows by a tool that forgot to rely on RLS.
+ */
+function branchFilter(ctx) {
+  if (ctx.seeAllBranches === true || ctx.experience === "owner") return "";
+  if (!ctx.branchId) {
+    throw new DataError("Your branch could not be read, so I cannot show branch records.", 403);
+  }
+  return `&branch_id=eq.${encodeURIComponent(ctx.branchId)}`;
+}
+
+/** Owners may ask for the whole business; everyone else stays on their active branch. */
+function seesAllBranches(ctx) {
+  return ctx.seeAllBranches === true || ctx.experience === "owner";
+}
+
+/** The branch predicate for a read whose scope may be business-wide or one branch. */
+function branchScopedFilter(ctx, allBranches) {
+  if (seesAllBranches(ctx)) {
+    if (allBranches) return "";
+    return ctx.branchId ? `&branch_id=eq.${encodeURIComponent(ctx.branchId)}` : "";
+  }
+  return branchFilter(ctx);
+}
+
+/**
+ * A customer, supplier or product is only visible to a restricted account when the database
+ * says it belongs to that account's active branch. Tenant RLS alone is not enough: one shop can
+ * have several branches, and the app's own branch predicates are the authority here too.
+ */
+async function recordVisibleInBranch(ctx, kind, id) {
+  if (seesAllBranches(ctx)) return true;
+  if (!ctx.branchId) return false;
+  const [fn, key] =
+    kind === "customer"
+      ? ["customer_in_branch", "p_customer"]
+      : kind === "company"
+        ? ["company_in_branch", "p_company"]
+        : ["product_in_branch", "p_product"];
+  try {
+    return (await ctx.client.rpc(fn, { [key]: id, p_branch: ctx.branchId })) === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Calendar dates in the shop's day, for the date-typed finance/purchase columns. */
+function rangeDates(range) {
+  const ymd = (iso) =>
+    new Date(iso).toLocaleDateString("en-CA", { timeZone: TZ_LABEL });
+  return {
+    from: ymd(range.fromIso),
+    to: ymd(new Date(new Date(range.toIso).getTime() - 1).toISOString()),
+  };
+}
+
+/**
+ * Stock as the branch shelf reports it, not the catalogue's shop-wide legacy quantity.
+ * `get_branch_variant_stock` is the same read the app's shelf uses, so a branch-specific
+ * answer cannot disagree with the screen it is describing.
+ */
+async function branchStockRows(ctx) {
+  const [stock, variants] = await Promise.all([
+    ctx.client.rpc("get_branch_variant_stock"),
+    ctx.client.select(
+      "product_variants",
+      "select=id,product_id,name,sku,selling_price,low_stock_threshold,unit_size,qty_step,expiry_date&is_active=eq.true&order=name&limit=1000",
+    ),
+  ]);
+  const qty = new Map(
+    (stock ?? []).map((row) => [row.variant_id, Math.max(Number(row.qty) || 0, 0)]),
+  );
+  return { qty, variants: variants ?? [] };
+}
+
+async function productNames(client, ids) {
+  const unique = [...new Set((ids ?? []).filter(Boolean))];
+  const names = new Map();
+  for (let i = 0; i < unique.length; i += 120) {
+    const chunk = unique.slice(i, i + 120);
+    const rows = await client.select("products", `select=id,name&id=in.(${chunk.join(",")})`);
+    for (const row of rows ?? []) names.set(row.id, row.name);
+  }
+  return names;
+}
+
+async function myBranches(ctx) {
+  return (await ctx.client.rpc("get_my_branches")) ?? [];
+}
+
+/** The product ids on this branch's shelves, read once rather than one RPC per product. */
+async function branchProductIds(ctx) {
+  if (seesAllBranches(ctx)) return null;
+  const rows = await ctx.client.rpc("get_branch_product_ids");
+  return new Set((rows ?? []).map((row) => row.product_id ?? row.id ?? row));
+}
+
+const BRANCH_ROUTE = (ctx) =>
+  ctx.shell === "employee" ? "/more" : "/settings/branches";
+const PEOPLE_ROUTE = (ctx) =>
+  ctx.shell === "employee" ? "/team" : "/employees";
+const FINANCE_ROUTE = (ctx) =>
+  ctx.shell === "employee" ? "/finance" : "/settings/hub/finance";
+
+async function salesInRange(ctx, range, branchId = null) {
+  let filter = branchFilter(ctx);
+  if (branchId) {
+    if (!seesAllBranches(ctx) && branchId !== ctx.branchId) {
+      throw new DataError("This account cannot see another branch's sales.", 403);
+    }
+    filter = `&branch_id=eq.${encodeURIComponent(branchId)}`;
+  }
+  const rows = await ctx.client.select(
     "sales",
-    `select=${SALE_COLUMNS}&created_at=gte.${range.fromIso}&created_at=lt.${range.toIso}&order=created_at.desc&limit=1000`,
+    `select=${SALE_COLUMNS}${filter}&created_at=gte.${range.fromIso}&created_at=lt.${range.toIso}&order=created_at.desc&limit=1000`,
   );
   return (rows ?? []).filter((r) => !r.is_voided);
 }
@@ -295,11 +408,26 @@ export const TOOLS = [
         },
         from: { type: "string", description: "Start date YYYY-MM-DD, when a custom period is asked for." },
         to: { type: "string", description: "End date YYYY-MM-DD, inclusive." },
+        branch: { type: "string", description: "Branch name, when the question is about one branch. Owner only; other accounts stay in their active branch." },
       },
     },
     async run(ctx, args) {
       const range = resolveRange(args ?? {});
-      const sales = await salesInRange(ctx.client, range);
+      const requestedBranch = String(args?.branch ?? "").trim();
+      let branch = null;
+      if (requestedBranch) {
+        const matches = (await myBranches(ctx)).filter((b) =>
+          String(b.name ?? "").toLowerCase().includes(requestedBranch.toLowerCase()),
+        );
+        if (!matches.length) {
+          throw new DataError(`I could not find a branch matching "${requestedBranch}".`, 404);
+        }
+        if (matches.length > 1) {
+          throw new DataError(`More than one branch matches "${requestedBranch}". Which one?`, 400);
+        }
+        branch = matches[0];
+      }
+      const sales = await salesInRange(ctx, range, branch?.branch_id ?? null);
       let total = 0;
       let paid = 0;
       let credit = 0;
@@ -320,6 +448,8 @@ export const TOOLS = [
       const people = [...byEmployee.values()].sort((a, b) => b.total - a.total);
       const facts = {
         period: range.label,
+        scope: branch ? branch.name : seesAllBranches(ctx) ? "all branches" : "current branch",
+        branchName: branch?.name ?? null,
         saleCount: sales.length,
         total: nf.format(total),
         paidAtCounter: nf.format(paid),
@@ -330,10 +460,10 @@ export const TOOLS = [
           : null,
       };
       const spoken = sales.length
-        ? `${range.label === "today" ? "Today" : `For ${range.label}`} the shop made ${sales.length} sale${sales.length === 1 ? "" : "s"}, ${spokenMoney(total)} in total. ${spokenMoney(paid)} was taken at the counter and ${spokenMoney(credit)} is still owed.${biggest ? ` The biggest was ${biggest.sale_number} at ${spokenMoney(biggest.total_amount)}.` : ""}`
-        : `No sales were recorded ${range.label === "today" ? "today" : `for ${range.label}`}.`;
+        ? `${range.label === "today" ? "Today" : `For ${range.label}`} ${branch ? branch.name : "the shop"} made ${sales.length} sale${sales.length === 1 ? "" : "s"}, ${spokenMoney(total)} in total. ${spokenMoney(paid)} was taken at the counter and ${spokenMoney(credit)} is still owed.${biggest ? ` The biggest was ${biggest.sale_number} at ${spokenMoney(biggest.total_amount)}.` : ""}`
+        : `No sales were recorded ${range.label === "today" ? "today" : `for ${range.label}`}${branch ? ` in ${branch.name}` : ""}.`;
       return {
-        title: `Sales ${range.label}`,
+        title: `Sales ${range.label}${branch ? ` · ${branch.name}` : ""}`,
         spoken,
         facts,
         sources: [{ label: "Sales", route: routeFor(ctx.shell, "/sales") }],
@@ -360,8 +490,17 @@ export const TOOLS = [
       },
     },
     async run(ctx, args) {
+      // Cost is money: the database is asked again, as the caller, BEFORE any sales, item or
+      // cost column is requested. This tool already required reports.view, and this is the
+      // second lock — the one that holds even if the first is ever edited by mistake. Checking
+      // it after the sale_items read would still refuse the answer, but it would have fetched
+      // cogs_amount first; not fetching it is the stronger rule.
+      const allowCost = await ctx.client.hasPermission("reports.view");
+      if (!allowCost) {
+        throw new DataError("This account cannot see cost or profit.", 403);
+      }
       const range = resolveRange(args ?? {});
-      const sales = await salesInRange(ctx.client, range);
+      const sales = await salesInRange(ctx, range);
       const ids = sales.map((s) => s.id);
       let items = [];
       // Chunked: a PostgREST `in.(…)` list with a thousand uuids is a request that fails
@@ -374,13 +513,6 @@ export const TOOLS = [
           `select=sale_id,variant_id,product_name,variant_name,qty,line_total,cogs_amount&sale_id=in.(${chunk.join(",")})&limit=2000`,
         );
         items = items.concat(rows ?? []);
-      }
-      // Cost is money: the database is asked again, as the caller, before a single cost
-      // column is requested. This tool already required reports.view, and this is the second
-      // lock — the one that holds even if the first is ever edited by mistake.
-      const allowCost = await ctx.client.hasPermission("reports.view");
-      if (!allowCost) {
-        throw new DataError("This account cannot see cost or profit.", 403);
       }
       const live = await liveCosts(ctx.client, items.map((i) => i.variant_id), { allowCost: true });
       const summary = summariseProfit(sales, items, live);
@@ -437,7 +569,14 @@ export const TOOLS = [
         "customers",
         `select=id,name,phone,credit_limit,outstanding_balance,total_purchases,total_paid,due_date,is_archived&or=(name.ilike.*${encodeURIComponent(safe)}*,phone.ilike.*${encodeURIComponent(safe)}*)&order=outstanding_balance.desc&limit=10`,
       );
-      const rows = matches ?? [];
+      let rows = matches ?? [];
+      if (!seesAllBranches(ctx) && rows.length) {
+        const visible = [];
+        for (const customer of rows) {
+          if (await recordVisibleInBranch(ctx, "customer", customer.id)) visible.push(customer);
+        }
+        rows = visible;
+      }
       if (!rows.length) {
         return {
           title: "No such customer",
@@ -470,12 +609,13 @@ export const TOOLS = [
       const owed = Number(c.outstanding_balance) || 0;
       const limit = Number(c.credit_limit) || 0;
       const standing = owed <= 0 ? "clear" : limit > 0 && owed >= limit ? "over limit" : limit > 0 && owed >= limit * 0.8 ? "near the limit" : "within the limit";
-      const last = (
+      const recent = (
         await ctx.client.select(
           "sales",
-          `select=sale_number,total_amount,amount_paid,amount_due,employee_name,customer_name_snapshot,created_at,is_voided&customer_id=eq.${c.id}&order=created_at.desc&limit=1`,
+          `select=sale_number,total_amount,amount_paid,amount_due,employee_name,customer_name_snapshot,created_at,is_voided&customer_id=eq.${c.id}${branchFilter(ctx)}&order=created_at.desc&limit=5`,
         )
-      )?.[0];
+      ) ?? [];
+      const last = recent[0];
       const facts = {
         name: c.name,
         phone: c.phone ?? null,
@@ -495,6 +635,13 @@ export const TOOLS = [
               soldBy: last.employee_name,
             }
           : null,
+        recentPurchases: recent.map((sale) => ({
+          saleNumber: sale.sale_number,
+          amount: nf.format(Number(sale.total_amount)),
+          owedOnIt: nf.format(Number(sale.amount_due)),
+          at: shopTime(sale.created_at),
+          soldBy: sale.employee_name,
+        })),
       };
       const spoken = last
         ? `${c.name} owes ${spokenMoney(owed)}${limit > 0 ? `, against a limit of ${spokenMoney(limit)} — he is ${standing}.` : ", and has no credit limit set."} His last purchase was ${last.sale_number} on ${shopTime(last.created_at)}, ${spokenMoney(last.total_amount)}, sold by ${last.employee_name}.`
@@ -533,11 +680,13 @@ export const TOOLS = [
         "products",
         `select=id,name,company_id,category,barcode,is_active&name=ilike.*${encodeURIComponent(safe)}*&order=name&limit=10`,
       );
-      const rows = products ?? [];
+      const found = products ?? [];
+      const visibleIds = await branchProductIds(ctx);
+      const rows = found.filter((product) => !visibleIds || visibleIds.has(product.id));
       if (!rows.length) {
         return {
           title: "No such product",
-          spoken: `I could not find a product matching "${term}" in this shop.`,
+          spoken: `I could not find a product matching "${term}" in this branch.`,
           facts: { query: term, matches: 0 },
           sources: [{ label: "Products", route: routeFor(ctx.shell, "/products") }],
         };
@@ -545,13 +694,18 @@ export const TOOLS = [
       // Cost is read only when this account may see money — see the note at the top of this
       // file. An employee's query does not name the column at all.
       const allowCost = await ctx.client.hasPermission("reports.view");
-      const columns = `id,product_id,name,sku,selling_price,unit_size,qty_step,low_stock_threshold,stock_qty,expiry_date${allowCost ? ",cost_price" : ""}`;
-      const variants = await ctx.client.select(
-        "product_variants",
-        `select=${columns}&id=not.is.null&product_id=in.(${rows.map((p) => p.id).join(",")})&is_active=eq.true&order=name`,
-      );
+      const branchStock = await branchStockRows(ctx);
+      const variants = branchStock.variants.filter((v) => rows.some((p) => p.id === v.product_id));
+      let costs = new Map();
+      if (allowCost && variants.length) {
+        const costRows = await ctx.client.select(
+          "product_variants",
+          `select=id,cost_price&id=in.(${variants.map((v) => v.id).join(",")})`,
+        );
+        costs = new Map((costRows ?? []).map((v) => [v.id, v.cost_price == null ? null : Number(v.cost_price)]));
+      }
       const byProduct = new Map();
-      for (const v of variants ?? []) {
+      for (const v of variants) {
         const list = byProduct.get(v.product_id) ?? [];
         list.push(v);
         byProduct.set(v.product_id, list);
@@ -569,16 +723,19 @@ export const TOOLS = [
         company: companies.get(p.company_id) ?? null,
         category: p.category ?? null,
         barcode: p.barcode ?? null,
-        packs: (byProduct.get(p.id) ?? []).map((v) => ({
-          pack: v.name,
-          stock: Number(v.stock_qty ?? 0),
-          unitSize: Number(v.unit_size ?? 1),
-          sellingPrice: nf.format(Number(v.selling_price) || 0),
-          lowStockThreshold: Number(v.low_stock_threshold ?? 0),
-          low: Number(v.stock_qty ?? 0) <= Number(v.low_stock_threshold ?? 0),
-          expiry: v.expiry_date ?? null,
-          ...(allowCost ? { costPrice: v.cost_price == null ? null : nf.format(Number(v.cost_price)) } : {}),
-        })),
+        packs: (byProduct.get(p.id) ?? []).map((v) => {
+          const stock = branchStock.qty.get(v.id) ?? 0;
+          return {
+            pack: v.name,
+            stock,
+            unitSize: Number(v.unit_size ?? 1),
+            sellingPrice: nf.format(Number(v.selling_price) || 0),
+            lowStockThreshold: Number(v.low_stock_threshold ?? 0),
+            low: stock <= Number(v.low_stock_threshold ?? 0),
+            expiry: v.expiry_date ?? null,
+            ...(allowCost ? { costPrice: costs.get(v.id) == null ? null : nf.format(costs.get(v.id)) } : {}),
+          };
+        }),
       }));
       const first = shaped[0];
       const low = first.packs.filter((p) => p.low);
@@ -605,24 +762,15 @@ export const TOOLS = [
     permission: "inventory.view",
     parameters: { type: "object", properties: {} },
     async run(ctx) {
-      const variants = await ctx.client.select(
-        "product_variants",
-        "select=id,product_id,name,stock_qty,low_stock_threshold,selling_price&is_active=eq.true&order=stock_qty.asc&limit=500",
+      const { qty, variants } = await branchStockRows(ctx);
+      const low = variants.filter(
+        (v) => (qty.get(v.id) ?? 0) <= Number(v.low_stock_threshold ?? 0),
       );
-      const low = (variants ?? []).filter(
-        (v) => Number(v.stock_qty ?? 0) <= Number(v.low_stock_threshold ?? 0),
-      );
-      const names = new Map();
-      const productIds = [...new Set(low.map((v) => v.product_id))].filter(Boolean);
-      for (let i = 0; i < productIds.length; i += 120) {
-        const chunk = productIds.slice(i, i + 120);
-        const rows = await ctx.client.select("products", `select=id,name&id=in.(${chunk.join(",")})`);
-        for (const p of rows ?? []) names.set(p.id, p.name);
-      }
+      const names = await productNames(ctx.client, low.map((v) => v.product_id));
       const items = low.map((v) => ({
         product: names.get(v.product_id) ?? "unknown product",
         pack: v.name,
-        stock: Number(v.stock_qty ?? 0),
+        stock: qty.get(v.id) ?? 0,
         threshold: Number(v.low_stock_threshold ?? 0),
       }));
       const spoken = items.length
@@ -666,7 +814,7 @@ export const TOOLS = [
       if (!wanted && amount == null && !customer) {
         rows = await ctx.client.select(
           "sales",
-          `select=${SALE_COLUMNS}&order=created_at.desc&limit=5`,
+          `select=${SALE_COLUMNS}${branchFilter(ctx)}&order=created_at.desc&limit=5`,
         );
         how = "the most recent sales";
       }
@@ -675,20 +823,20 @@ export const TOOLS = [
         const term = digits || wanted;
         rows = await ctx.client.select(
           "sales",
-          `select=${SALE_COLUMNS}&sale_number=ilike.*${encodeURIComponent(term)}*&order=created_at.desc&limit=10`,
+          `select=${SALE_COLUMNS}${branchFilter(ctx)}&sale_number=ilike.*${encodeURIComponent(term)}*&order=created_at.desc&limit=10`,
         );
         how = `sale number ${wanted}`;
       } else if (amount != null && Number.isFinite(amount)) {
         rows = await ctx.client.select(
           "sales",
-          `select=${SALE_COLUMNS}&total_amount=eq.${amount}&order=created_at.desc&limit=10`,
+          `select=${SALE_COLUMNS}${branchFilter(ctx)}&total_amount=eq.${amount}&order=created_at.desc&limit=10`,
         );
         how = `a total of ${nf.format(amount)}`;
       } else if (customer) {
         const safe = customer.replace(/[(),*]/g, "").slice(0, 60);
         rows = await ctx.client.select(
           "sales",
-          `select=${SALE_COLUMNS}&customer_name_snapshot=ilike.*${encodeURIComponent(safe)}*&order=created_at.desc&limit=5`,
+          `select=${SALE_COLUMNS}${branchFilter(ctx)}&customer_name_snapshot=ilike.*${encodeURIComponent(safe)}*&order=created_at.desc&limit=5`,
         );
         how = `sales to ${customer}`;
       } else if (!how) {
@@ -772,12 +920,29 @@ export const TOOLS = [
         "companies",
         `select=id,name,contact_person,phone,outstanding_payable,due_date,is_active&order=outstanding_payable.desc&limit=100${filter}`,
       );
-      const owing = (rows ?? []).filter((c) => Number(c.outstanding_payable) > 0);
-      const total = owing.reduce((sum, c) => sum + Number(c.outstanding_payable), 0);
+      const visible = [];
+      for (const company of rows ?? []) {
+        if (await recordVisibleInBranch(ctx, "company", company.id)) visible.push(company);
+      }
+      const branchBalances = !seesAllBranches(ctx)
+        ? new Map(
+            ((await ctx.client.rpc("get_branch_company_balances")) ?? []).map((b) => [
+              b.company_id,
+              Number(b.outstanding_payable) || 0,
+            ]),
+          )
+        : null;
+      const owing = visible
+        .map((c) => ({
+          ...c,
+          branchOwed: branchBalances ? branchBalances.get(c.id) ?? 0 : Number(c.outstanding_payable) || 0,
+        }))
+        .filter((c) => c.branchOwed > 0);
+      const total = owing.reduce((sum, c) => sum + c.branchOwed, 0);
       const spoken = owing.length
         ? `${spokenMoney(total)} is owed to suppliers. ${owing
             .slice(0, 5)
-            .map((c) => `${c.name}, ${spokenMoney(c.outstanding_payable)}`)
+            .map((c) => `${c.name}, ${spokenMoney(c.branchOwed)}`)
             .join("; ")}.`
         : term
           ? `Nothing is owed to a supplier matching "${term}".`
@@ -789,7 +954,7 @@ export const TOOLS = [
           totalOwed: nf.format(total),
           suppliers: owing.map((c) => ({
             name: c.name,
-            owed: nf.format(Number(c.outstanding_payable)),
+            owed: nf.format(c.branchOwed),
             phone: c.phone ?? null,
             dueDate: c.due_date ?? null,
           })),
@@ -820,7 +985,13 @@ export const TOOLS = [
       const range = resolveRange(args ?? {});
       const term = String(args?.name ?? "").trim();
       const safe = term.replace(/[(),*]/g, "").slice(0, 60);
-      const sales = await salesInRange(ctx.client, range);
+      // `activity.view` is the log's permission, not sales.view. The log page does not hand an
+      // activity-only role every sale total, so this tool must not either. Ask the database as
+      // well as the cached list before any row from `sales` is read.
+      const canSeeSales =
+        ctx.permissions.includes("sales.view") &&
+        (await ctx.client.hasPermission("sales.view").catch(() => false));
+      const sales = canSeeSales ? await salesInRange(ctx, range) : [];
       const byEmployee = new Map();
       for (const s of sales) {
         const who = s.employee_name || "not recorded";
@@ -832,7 +1003,7 @@ export const TOOLS = [
       }
       const log = await ctx.client.select(
         "activity_log",
-        `select=action,entity_type,entity_id,details,created_at,user_id&created_at=gte.${range.fromIso}&created_at=lt.${range.toIso}&order=created_at.desc&limit=200`,
+        `select=action,entity_type,entity_id,details,created_at,user_id${branchFilter(ctx)}&created_at=gte.${range.fromIso}&created_at=lt.${range.toIso}&order=created_at.desc&limit=200`,
       );
       const people = [...byEmployee.values()].sort((a, b) => b.total - a.total);
       const events = (log ?? []).map((e) => ({
@@ -847,13 +1018,16 @@ export const TOOLS = [
             .map((p) => `${p.name} made ${p.count} sale${p.count === 1 ? "" : "s"} worth ${spokenMoney(p.total)}`)
             .join("; ")}.${events.length ? ` The activity log has ${events.length} entries in that period.` : " The activity log recorded nothing in that period."}`
         : events.length
-          ? `No sales were recorded for ${term || "anyone"} in ${range.label}, but the activity log has ${events.length} entries.`
-          : `There is nothing recorded for ${term ? `${term} in ` : ""}${range.label} — no sales and no activity entries.`;
+          ? `The activity log has ${events.length} entries for ${term ? `${term} in ` : ""}${range.label}.`
+          : canSeeSales
+            ? `There is nothing recorded for ${term ? `${term} in ` : ""}${range.label} — no sales and no activity entries.`
+            : `The activity log has no entries for ${term ? `${term} in ` : ""}${range.label}.`;
       return {
         title: "Employee activity",
         spoken,
         facts: {
           period: range.label,
+          canSeeSales,
           salesByEmployee: people.map((p) => ({ name: p.name, count: p.count, total: nf.format(p.total) })),
           activityCount: events.length,
           activity: events.slice(0, 40),
@@ -862,6 +1036,582 @@ export const TOOLS = [
           ? ["The activity log itself has no entries for this period, so this is sales only."]
           : [],
         sources: [{ label: "Activity log", route: routeFor(ctx.shell, "/activity") }],
+      };
+    },
+  },
+
+  {
+    name: "branch_overview",
+    title: "Branches",
+    description:
+      "The branches this account can see, where they are, who works there, and (for money roles) each branch's sales, stock value and customer credit. Use for 'which branches do I have', 'where is my shop', 'branch details', 'how is each branch doing'.",
+    permission: null,
+    parameters: { type: "object", properties: {} },
+    async run(ctx) {
+      const rows = await myBranches(ctx);
+      const showSales = ctx.permissions.includes("sales.view");
+      const showInventory = ctx.permissions.includes("reports.view");
+      const showCredit = ctx.permissions.includes("customers.view") || ctx.permissions.includes("reports.view");
+      const shaped = rows.map((b) => ({
+        id: b.branch_id,
+        name: b.name,
+        address: b.address ?? null,
+        isCurrent: b.is_current === true,
+        isMain: b.is_main === true,
+        employeeCount: b.employee_count == null ? null : Number(b.employee_count),
+        productCount: b.product_count == null ? null : Number(b.product_count),
+        customerCount: b.customer_count == null ? null : Number(b.customer_count),
+        ...(showSales
+          ? {
+              salesCount: b.sales_count == null ? null : Number(b.sales_count),
+              salesTotal: b.sales_total == null ? null : nf.format(Number(b.sales_total)),
+            }
+          : {}),
+        ...(showInventory
+          ? {
+              inventoryValue: b.inventory_value == null ? null : nf.format(Number(b.inventory_value)),
+              inventoryCostIncomplete: b.inventory_cost_incomplete === true,
+            }
+          : {}),
+        ...(showCredit
+          ? { creditOutstanding: b.credit_outstanding == null ? null : nf.format(Number(b.credit_outstanding)) }
+          : {}),
+      }));
+      const current = shaped.find((b) => b.isCurrent);
+      const spoken = shaped.length
+        ? `${shaped.length} branch${shaped.length === 1 ? "" : "es"} are available: ${shaped
+            .map((b) => `${b.name}${b.address ? ` at ${b.address}` : ""}${b.isCurrent ? " (current)" : ""}`)
+            .join("; ")}.`
+        : "No branch is available to this account.";
+      return {
+        title: `Branches`,
+        spoken,
+        facts: {
+          scope: seesAllBranches(ctx) ? "all branches" : "your branches",
+          count: shaped.length,
+          currentBranch: current?.name ?? null,
+          branches: shaped,
+        },
+        sources: [{ label: "Branches", route: routeFor(ctx.shell, BRANCH_ROUTE(ctx)) }],
+      };
+    },
+  },
+
+  {
+    name: "employee_directory",
+    title: "The team",
+    description:
+      "The people who work in the shop or a branch: names, phone numbers, job titles, roles and which branches they belong to. Use for 'who works here', 'list the employees', 'who is in Branch A', 'what is Ali's number'.",
+    permission: "employees.view",
+    parameters: {
+      type: "object",
+      properties: { branch: { type: "string", description: "Branch name or part of it. Omit for every branch this account can see." } },
+    },
+    async run(ctx, args) {
+      const rows = await ctx.client.rpc("get_shop_members");
+      const branches = await myBranches(ctx);
+      const branchById = new Map(branches.map((b) => [b.branch_id, b.name]));
+      const term = String(args?.branch ?? "").trim().toLowerCase();
+      const restricted = !seesAllBranches(ctx);
+      const allowed = new Set(ctx.branchScope ?? []);
+      const people = (rows ?? []).filter((r) => {
+        if (r.is_original_owner) return false;
+        if (r.membership_role === "owner" || r.membership_role === "co_owner") return false;
+        if (restricted) {
+          const scope = Array.isArray(r.branch_scope) ? r.branch_scope : [];
+          if (scope.length && !scope.some((id) => allowed.has(id))) return false;
+        }
+        if (!term) return true;
+        const names = (Array.isArray(r.branch_scope) ? r.branch_scope : [])
+          .map((id) => branchById.get(id) ?? "")
+          .join(" ");
+        return `${r.name} ${r.phone ?? ""} ${r.job_title ?? ""} ${names}`.toLowerCase().includes(term);
+      });
+      const shaped = people.map((r) => ({
+        id: r.id,
+        name: r.name,
+        phone: r.phone ?? null,
+        role: r.job_title || r.role || "employee",
+        status:
+          r.membership_status === "pending"
+            ? "pending"
+            : r.is_active === false
+              ? "deactivated"
+              : "active",
+        branchNames: (Array.isArray(r.branch_scope) ? r.branch_scope : [])
+          .map((id) => branchById.get(id) ?? "unknown branch"),
+        employeeNumber: r.employee_number ?? null,
+      }));
+      const spoken = shaped.length
+        ? `${shaped.length} employee${shaped.length === 1 ? "" : "s"}${term ? ` matching ${args.branch}` : ""}: ${shaped
+            .slice(0, 8)
+            .map((p) => `${p.name}${p.role ? `, ${p.role}` : ""}${p.branchNames.length ? ` in ${p.branchNames.join(" and ")}` : " across all branches"}`)
+            .join("; ")}.`
+        : `No employee${term ? ` matching ${args.branch}` : ""} is visible to this account.`;
+      return {
+        title: "The team",
+        spoken,
+        facts: { count: shaped.length, employees: shaped },
+        sources: [{ label: "Employees", route: routeFor(ctx.shell, PEOPLE_ROUTE(ctx)) }],
+      };
+    },
+  },
+
+  {
+    name: "employee_performance",
+    title: "An employee's performance",
+    description:
+      "One employee's sales, customers, items sold, branch breakdown and recent sales. Use for 'how is Ali selling', 'Ali's performance', 'how many sales did the employee make', 'which products did Ali sell'.",
+    permission: "employees.view",
+    parameters: {
+      type: "object",
+      properties: { name: { type: "string", description: "Employee name, or part of it." } },
+      required: ["name"],
+    },
+    async run(ctx, args) {
+      const term = String(args?.name ?? "").trim();
+      if (!term) throw new DataError("Which employee? Give a name.", 400);
+      const members = (await ctx.client.rpc("get_shop_members")) ?? [];
+      const candidates = members.filter(
+        (r) =>
+          !r.is_original_owner &&
+          r.membership_role !== "owner" &&
+          r.membership_role !== "co_owner" &&
+          String(r.name ?? "").toLowerCase().includes(term.toLowerCase()),
+      );
+      if (!candidates.length) {
+        return {
+          title: "No such employee",
+          spoken: `I could not find an employee matching "${term}" in this shop.`,
+          facts: { query: term, matches: 0 },
+          sources: [{ label: "Employees", route: routeFor(ctx.shell, PEOPLE_ROUTE(ctx)) }],
+        };
+      }
+      if (candidates.length > 1) {
+        return {
+          title: "Which employee?",
+          spoken: `I found ${candidates.length} employees matching "${term}". Which one — ${candidates
+            .slice(0, 5)
+            .map((r) => r.name)
+            .join("; ")}?`,
+          facts: { ambiguous: true, candidates: candidates.map((r) => ({ name: r.name, phone: r.phone ?? null })) },
+          sources: [{ label: "Employees", route: routeFor(ctx.shell, PEOPLE_ROUTE(ctx)) }],
+        };
+      }
+      const target = candidates[0];
+      const allowed = new Set(ctx.branchScope ?? []);
+      if (!seesAllBranches(ctx)) {
+        const scope = Array.isArray(target.branch_scope) ? target.branch_scope : [];
+        if (!scope.length || !scope.some((id) => allowed.has(id))) {
+          throw new DataError("This account cannot see that employee outside its branch.", 403);
+        }
+      }
+      const perf = await ctx.client.rpc("get_employee_performance", { p_employee_id: target.id });
+      if (!perf) throw new DataError("That employee's performance could not be read.", 502);
+      const branchRows = (Array.isArray(perf.branches) ? perf.branches : []).filter(
+        (b) => seesAllBranches(ctx) || (!!b.branchId && allowed.has(b.branchId)),
+      );
+      const recent = (Array.isArray(perf.recent) ? perf.recent : []).filter(
+        (s) => seesAllBranches(ctx) || (!!s.branchId && allowed.has(s.branchId)),
+      );
+      // The RPC totals cover the employee's whole membership. Recompute from the branches this
+      // caller may read so a restricted account never receives another branch's arithmetic.
+      const totals = branchRows.reduce(
+        (sum, b) => ({
+          salesCount: sum.salesCount + (Number(b.salesCount) || 0),
+          revenue: sum.revenue + (Number(b.revenue) || 0),
+          itemsSold: sum.itemsSold + (Number(b.itemsSold) || 0),
+          customers: sum.customers + (Number(b.customers) || 0),
+          todaySales: sum.todaySales + (Number(b.todaySales) || 0),
+          todayRevenue: sum.todayRevenue + (Number(b.todayRevenue) || 0),
+        }),
+        { salesCount: 0, revenue: 0, itemsSold: 0, customers: 0, todaySales: 0, todayRevenue: 0 },
+      );
+      const items = recent.length
+        ? await ctx.client.select(
+            "sale_items",
+            `select=sale_id,product_name,variant_name,qty,line_total&sale_id=in.(${recent.map((s) => s.id).join(",")})&limit=500`,
+          )
+        : [];
+      const products = new Map();
+      for (const item of items ?? []) {
+        const name = `${item.product_name} ${item.variant_name ?? ""}`.trim();
+        const row = products.get(name) ?? { name, qty: 0, total: 0 };
+        row.qty += Number(item.qty) || 0;
+        row.total += Number(item.line_total) || 0;
+        products.set(name, row);
+      }
+      const shapedBranches = branchRows.map((b) => ({
+        branchName: b.branchName ?? "unknown branch",
+        roleName: b.roleName ?? null,
+        salesCount: Number(b.salesCount) || 0,
+        revenue: nf.format(Number(b.revenue) || 0),
+        itemsSold: Number(b.itemsSold) || 0,
+        customers: Number(b.customers) || 0,
+        todaySales: Number(b.todaySales) || 0,
+        todayRevenue: nf.format(Number(b.todayRevenue) || 0),
+      }));
+      const spoken = totals.salesCount
+        ? `${target.name} made ${totals.salesCount} sale${totals.salesCount === 1 ? "" : "s"} worth ${spokenMoney(totals.revenue)}, sold ${totals.itemsSold} items to ${totals.customers} customers${shapedBranches.length ? ` across ${shapedBranches.map((b) => b.branchName).join(" and ")}` : ""}. Today: ${totals.todaySales} sale${totals.todaySales === 1 ? "" : "s"} worth ${spokenMoney(totals.todayRevenue)}.`
+        : `${target.name} has no recorded sales in the branches this account can see.`;
+      return {
+        title: target.name,
+        spoken,
+        facts: {
+          employeeName: target.name,
+          phone: target.phone ?? null,
+          role: target.job_title || target.role || "employee",
+          totals: {
+            salesCount: totals.salesCount,
+            revenue: nf.format(totals.revenue),
+            itemsSold: totals.itemsSold,
+            customers: totals.customers,
+            todaySales: totals.todaySales,
+            todayRevenue: nf.format(totals.todayRevenue),
+          },
+          branches: shapedBranches,
+          recent: recent.slice(0, 10).map((s) => ({
+            saleNumber: s.saleNumber ?? s.sale_number ?? null,
+            customer: s.customerName ?? null,
+            total: nf.format(Number(s.totalAmount) || 0),
+            at: s.createdAt ? shopTime(s.createdAt) : null,
+            branchName: s.branchName ?? null,
+          })),
+          products: [...products.values()]
+            .sort((a, b) => b.qty - a.qty)
+            .slice(0, 10)
+            .map((p) => ({ name: p.name, qty: p.qty, total: nf.format(p.total) })),
+        },
+        sources: [{ label: `${target.name}'s performance`, route: routeFor(ctx.shell, `/employees/${target.id}`) }],
+      };
+    },
+  },
+
+  {
+    name: "purchases_overview",
+    title: "Purchases",
+    description:
+      "Stock bought from suppliers in a period: how much was purchased, paid, still owed, and the recent purchase bills. Use for 'purchases today', 'what did I buy this month', 'stock in', 'supplier bills', 'how much do I owe on purchases'.",
+    permission: "purchases.view",
+    parameters: {
+      type: "object",
+      properties: {
+        range: { type: "string", enum: ["today", "yesterday", "week", "month", "all"], description: "The period. Default today." },
+        from: { type: "string", description: "Start date YYYY-MM-DD for a custom period." },
+        to: { type: "string", description: "End date YYYY-MM-DD, inclusive." },
+        scope: { type: "string", enum: ["current", "all"], description: "Owner only: current branch or the whole business. Default all." },
+      },
+    },
+    async run(ctx, args) {
+      const range = resolveRange(args ?? {});
+      const all = seesAllBranches(ctx) && args?.scope !== "current";
+      const filter = branchScopedFilter(ctx, all);
+      const rows = await ctx.client.select(
+        "purchases",
+        `select=id,purchase_number,company_name,company_id,total_amount,amount_paid,amount_due,status,payment_method,recorded_by_name,created_at${filter}&created_at=gte.${range.fromIso}&created_at=lt.${range.toIso}&order=created_at.desc&limit=500`,
+      );
+      const list = rows ?? [];
+      const total = list.reduce((sum, p) => sum + (Number(p.total_amount) || 0), 0);
+      const paid = list.reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
+      const owed = list.reduce((sum, p) => sum + (Number(p.amount_due) || 0), 0);
+      const bySupplier = new Map();
+      for (const p of list) {
+        const name = p.company_name || "unknown supplier";
+        const row = bySupplier.get(name) ?? { name, count: 0, total: 0, owed: 0 };
+        row.count++;
+        row.total += Number(p.total_amount) || 0;
+        row.owed += Number(p.amount_due) || 0;
+        bySupplier.set(name, row);
+      }
+      const suppliers = [...bySupplier.values()].sort((a, b) => b.total - a.total);
+      const spoken = list.length
+        ? `For ${range.label}, ${all ? "the business" : "this branch"} recorded ${list.length} purchase${list.length === 1 ? "" : "s"} totalling ${spokenMoney(total)}. ${spokenMoney(paid)} was paid and ${spokenMoney(owed)} is still owed.`
+        : `No purchases were recorded ${range.label === "today" ? "today" : `for ${range.label}`}${all ? " in the business" : " in this branch"}.`;
+      return {
+        title: `Purchases ${range.label}`,
+        spoken,
+        facts: {
+          period: range.label,
+          scope: all ? "all branches" : "current branch",
+          count: list.length,
+          total: nf.format(total),
+          paid: nf.format(paid),
+          owed: nf.format(owed),
+          suppliers: suppliers.map((s) => ({ name: s.name, count: s.count, total: nf.format(s.total), owed: nf.format(s.owed) })),
+          purchases: list.slice(0, 25).map((p) => ({
+            number: p.purchase_number,
+            supplier: p.company_name ?? null,
+            total: nf.format(Number(p.total_amount) || 0),
+            paid: nf.format(Number(p.amount_paid) || 0),
+            owed: nf.format(Number(p.amount_due) || 0),
+            status: p.status ?? null,
+            at: shopTime(p.created_at),
+            recordedBy: p.recorded_by_name ?? null,
+          })),
+        },
+        sources: [
+          { label: "Purchases", route: routeFor(ctx.shell, "/purchases") },
+          { label: "Suppliers", route: routeFor(ctx.shell, "/companies") },
+        ],
+      };
+    },
+  },
+
+  {
+    name: "finance_overview",
+    title: "Money and finance",
+    description:
+      "Recorded income, expenses, drawings, net cash, customer receivables and supplier payables for a period. Use for 'expenses this month', 'how much cash came in', 'money in and out', 'receivables', 'payables', 'net position', 'finance summary'.",
+    permission: "payments.view",
+    parameters: {
+      type: "object",
+      properties: {
+        range: { type: "string", enum: ["today", "yesterday", "week", "month", "all"], description: "The period. Default month." },
+        from: { type: "string", description: "Start date YYYY-MM-DD for a custom period." },
+        to: { type: "string", description: "End date YYYY-MM-DD, inclusive." },
+        scope: { type: "string", enum: ["current", "all"], description: "Owner only: current branch or the whole business. Default all." },
+      },
+    },
+    async run(ctx, args) {
+      const range = resolveRange({ ...(args ?? {}), range: args?.range ?? "month" });
+      const all = seesAllBranches(ctx) && args?.scope !== "current";
+      const filter = branchScopedFilter(ctx, all);
+      const dates = rangeDates(range);
+      const entries = await ctx.client.select(
+        "finance_entries",
+        `select=id,kind,amount,occurred_on,category,counterparty,method,note,branch_id,created_at&deleted_at=is.null${filter}&occurred_on=gte.${dates.from}&occurred_on=lte.${dates.to}&order=occurred_on.desc&limit=1000`,
+      );
+      const rows = entries ?? [];
+      const income = rows.filter((e) => e.kind === "income").reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      const expense = rows.filter((e) => e.kind === "expense").reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      const drawing = rows.filter((e) => e.kind === "drawing").reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      let receivables = 0;
+      let payables = 0;
+      if (all) {
+        const [customers, companies] = await Promise.all([
+          ctx.client.select("customers", "select=outstanding_balance&is_archived=eq.false&limit=2000"),
+          ctx.client.select("companies", "select=outstanding_payable&is_active=eq.true&limit=1000"),
+        ]);
+        receivables = (customers ?? []).reduce((s, c) => s + (Number(c.outstanding_balance) || 0), 0);
+        payables = (companies ?? []).reduce((s, c) => s + (Number(c.outstanding_payable) || 0), 0);
+      } else {
+        const [customerBalances, companyBalances] = await Promise.all([
+          ctx.client.rpc("get_branch_customer_balances"),
+          ctx.client.rpc("get_branch_company_balances"),
+        ]);
+        receivables = (customerBalances ?? []).reduce((s, c) => s + (Number(c.outstanding_balance) || 0), 0);
+        payables = (companyBalances ?? []).reduce((s, c) => s + (Number(c.outstanding_payable) || 0), 0);
+      }
+      const net = income - expense;
+      const branches = await myBranches(ctx);
+      const branchName = branches.find((b) => b.is_current)?.name ?? null;
+      const spoken = `For ${range.label}, ${all ? "the whole business" : branchName ? `the ${branchName} branch` : "this branch"}: income ${spokenMoney(income)}, expenses ${spokenMoney(expense)}, net ${spokenMoney(net)}${drawing ? `, drawings ${spokenMoney(drawing)}` : ""}. Customers owe ${spokenMoney(receivables)} and suppliers are owed ${spokenMoney(payables)}.`;
+      return {
+        title: `Money ${range.label}`,
+        spoken,
+        facts: {
+          period: range.label,
+          scope: all ? "all branches" : branchName || "current branch",
+          income: nf.format(income),
+          expenses: nf.format(expense),
+          drawings: nf.format(drawing),
+          net: nf.format(net),
+          receivables: nf.format(receivables),
+          payables: nf.format(payables),
+          entries: rows.slice(0, 25).map((e) => ({
+            date: e.occurred_on,
+            kind: e.kind,
+            amount: nf.format(Number(e.amount) || 0),
+            category: e.category ?? null,
+            counterparty: e.counterparty ?? null,
+            method: e.method ?? null,
+          })),
+        },
+        sources: [{ label: "Money", route: routeFor(ctx.shell, FINANCE_ROUTE(ctx)) }],
+      };
+    },
+  },
+
+  {
+    name: "inventory_overview",
+    title: "Stock overview",
+    description:
+      "The active stock in the current branch: product count, stock value (for money roles), low and out-of-stock packs. Use for 'inventory summary', 'how much stock do I have', 'stock value', 'what is low and what is out'.",
+    permission: "inventory.view",
+    parameters: { type: "object", properties: {} },
+    async run(ctx) {
+      const { qty, variants } = await branchStockRows(ctx);
+      const names = await productNames(ctx.client, variants.map((v) => v.product_id));
+      const showValue = ctx.permissions.includes("reports.view");
+      let costs = new Map();
+      if (showValue && variants.length) {
+        const rows = await ctx.client.select(
+          "product_variants",
+          `select=id,cost_price&id=in.(${variants.map((v) => v.id).join(",")})`,
+        );
+        costs = new Map((rows ?? []).map((r) => [r.id, Number(r.cost_price) || 0]));
+      }
+      const items = variants.map((v) => {
+        const stock = qty.get(v.id) ?? 0;
+        const threshold = Number(v.low_stock_threshold) || 0;
+        return {
+          product: names.get(v.product_id) ?? "unknown product",
+          pack: v.name,
+          stock,
+          threshold,
+          sellingPrice: nf.format(Number(v.selling_price) || 0),
+          low: stock <= threshold,
+        };
+      });
+      const low = items.filter((i) => i.low);
+      const out = items.filter((i) => i.stock <= 0);
+      const value = showValue
+        ? variants.reduce((sum, v) => sum + (qty.get(v.id) ?? 0) * (costs.get(v.id) ?? 0), 0)
+        : null;
+      const branches = await myBranches(ctx);
+      const branchName = branches.find((b) => b.is_current)?.name ?? null;
+      const spoken = `${branchName ? `The ${branchName} branch has` : "This branch has"} ${items.length} active pack${items.length === 1 ? "" : "s"}${showValue ? ` worth ${spokenMoney(value ?? 0)} at cost` : ""}. ${low.length} ${low.length === 1 ? "is" : "are"} at or below the low-stock level and ${out.length} ${out.length === 1 ? "is" : "are"} out of stock.`;
+      return {
+        title: "Stock overview",
+        spoken,
+        facts: {
+          scope: "current branch",
+          branchName,
+          productCount: new Set(variants.map((v) => v.product_id)).size,
+          packCount: items.length,
+          inventoryValue: value == null ? null : nf.format(value),
+          lowCount: low.length,
+          outCount: out.length,
+          items: items.sort((a, b) => Number(b.low) - Number(a.low) || a.stock - b.stock).slice(0, 40),
+        },
+        sources: [{ label: "Reorder list", route: routeFor(ctx.shell, "/inventory/reorder") }],
+      };
+    },
+  },
+
+  {
+    name: "customer_directory",
+    title: "Customers and credit",
+    description:
+      "Customers visible in the branch, with what each owes, their credit limit and due date. Use for 'who owes me money', 'all customers', 'customer list', 'who has credit', 'outstanding customers', 'receivables'.",
+    permission: "customers.view",
+    parameters: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: ["current", "all"], description: "Owner only: current branch or the whole business. Default all." },
+        owing: { type: "boolean", description: "Only customers who owe money. Default true." },
+      },
+    },
+    async run(ctx, args) {
+      const all = seesAllBranches(ctx) && args?.scope !== "current";
+      const owingOnly = args?.owing !== false;
+      let rows = [];
+      if (all) {
+        rows = (await ctx.client.select(
+          "customers",
+          "select=id,name,phone,credit_limit,outstanding_balance,total_purchases,total_paid,due_date,is_archived&is_archived=eq.false&order=outstanding_balance.desc&limit=1000",
+        )) ?? [];
+      } else {
+        const balances = (await ctx.client.rpc("get_branch_customer_balances")) ?? [];
+        const byId = new Map(balances.map((b) => [b.customer_id, b]));
+        const ids = balances.map((b) => b.customer_id).filter(Boolean);
+        if (ids.length) {
+          const found = (await ctx.client.select(
+            "customers",
+            `select=id,name,phone,credit_limit,outstanding_balance,total_purchases,total_paid,due_date,is_archived&id=in.(${ids.join(",")})&is_archived=eq.false&limit=1000`,
+          )) ?? [];
+          rows = found.map((c) => ({ ...c, outstanding_balance: byId.get(c.id)?.outstanding_balance ?? c.outstanding_balance }));
+        }
+      }
+      const visible = (owingOnly ? rows.filter((c) => Number(c.outstanding_balance) > 0) : rows).map((c) => {
+        const owed = Number(c.outstanding_balance) || 0;
+        const limit = Number(c.credit_limit) || 0;
+        return {
+          id: c.id,
+          name: c.name,
+          phone: c.phone ?? null,
+          owed: nf.format(owed),
+          creditLimit: nf.format(limit),
+          dueDate: c.due_date ?? null,
+          standing: owed <= 0 ? "clear" : limit > 0 && owed >= limit ? "over limit" : limit > 0 && owed >= limit * 0.8 ? "near the limit" : "within the limit",
+        };
+      });
+      const total = visible.reduce((s, c) => s + Number(String(c.owed).replace(/,/g, "")), 0);
+      const spoken = visible.length
+        ? `${visible.length} customer${visible.length === 1 ? "" : "s"}${all ? " in the business" : " in this branch"} owe ${spokenMoney(total)}. ${visible.slice(0, 6).map((c) => `${c.name}, ${spokenMoney(c.owed)}`).join("; ")}.`
+        : `No customer${all ? " in the business" : " in this branch"} owes money right now.`;
+      return {
+        title: "Customers and credit",
+        spoken,
+        facts: {
+          scope: all ? "all branches" : "current branch",
+          count: visible.length,
+          totalOwed: nf.format(total),
+          customers: visible.slice(0, 50),
+        },
+        sources: [{ label: "Customers", route: routeFor(ctx.shell, "/customers") }],
+      };
+    },
+  },
+
+  {
+    name: "product_catalogue",
+    title: "Products and prices",
+    description:
+      "The shop's products, their suppliers, pack prices and stock in the current branch. Use for 'what do I sell', 'product list', 'all products', 'price list', 'catalogue', 'items I stock'.",
+    permission: "products.view",
+    parameters: { type: "object", properties: {} },
+    async run(ctx) {
+      const products = (await ctx.client.select(
+        "products",
+        "select=id,name,company_id,category,barcode,is_active&is_active=eq.true&order=name&limit=500",
+      )) ?? [];
+      const visibleIds = await branchProductIds(ctx);
+      const visible = products.filter((p) => !visibleIds || visibleIds.has(p.id));
+      const kept = visible.slice(0, 200);
+      const variants = kept.length
+        ? (await ctx.client.select(
+            "product_variants",
+            `select=id,product_id,name,selling_price,low_stock_threshold,unit_size&is_active=eq.true&product_id=in.(${kept.map((p) => p.id).join(",")})&order=name&limit=1000`,
+          )) ?? []
+        : [];
+      const { qty } = await branchStockRows(ctx);
+      const companyIds = [...new Set(kept.map((p) => p.company_id).filter(Boolean))];
+      const companies = new Map();
+      for (let i = 0; i < companyIds.length; i += 120) {
+        const rows = await ctx.client.select("companies", `select=id,name&id=in.(${companyIds.slice(i, i + 120).join(",")})`);
+        for (const c of rows ?? []) companies.set(c.id, c.name);
+      }
+      const byProduct = new Map();
+      for (const v of variants) {
+        const list = byProduct.get(v.product_id) ?? [];
+        list.push(v);
+        byProduct.set(v.product_id, list);
+      }
+      const shaped = kept.map((p) => {
+        const packs = (byProduct.get(p.id) ?? []).map((v) => ({
+          name: v.name,
+          price: nf.format(Number(v.selling_price) || 0),
+          stock: qty.get(v.id) ?? 0,
+          low: (qty.get(v.id) ?? 0) <= (Number(v.low_stock_threshold) || 0),
+        }));
+        return {
+          id: p.id,
+          name: p.name,
+          category: p.category ?? null,
+          supplier: companies.get(p.company_id) ?? null,
+          packs,
+          stock: packs.reduce((s, pack) => s + pack.stock, 0),
+        };
+      });
+      const spoken = shaped.length
+        ? `${shaped.length} product${shaped.length === 1 ? "" : "s"} are available in this branch: ${shaped.slice(0, 8).map((p) => p.name).join(", ")}${shaped.length > 8 ? " and more" : ""}.`
+        : "No products are visible in this branch.";
+      return {
+        title: "Products and prices",
+        spoken,
+        facts: { count: shaped.length, products: shaped.slice(0, 60) },
+        sources: [{ label: "Products", route: routeFor(ctx.shell, "/products") }],
       };
     },
   },

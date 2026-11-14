@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Search, Check } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import usePresence from "@/hooks/usePresence";
+import Photo from "@/components/ui/Photo";
 
 /** Matches --dur-3, the sheet duration token. */
 const SHEET_MS = 280;
@@ -126,9 +127,11 @@ export default function SelectSheet({
                   style={{ background: isSel ? "rgba(132,204,22,0.08)" : "transparent" }}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    {o.imageUrl ? (
-                      <img src={o.imageUrl} alt="" className="size-9 rounded-full object-cover shrink-0" />
-                    ) : null}
+                    <Photo
+                      src={o.imageUrl}
+                      className="size-9 rounded-full object-cover shrink-0"
+                      fallback={null}
+                    />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold truncate"
                         style={{ color: isSel ? "var(--brand-dark)" : "var(--text-primary)" }}>{o.label}</p>

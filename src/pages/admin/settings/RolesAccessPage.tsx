@@ -1,496 +1,322 @@
-import { useState, useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  BriefcaseBusiness,
+  ChevronRight,
+  ClipboardList,
+  LayoutGrid,
+  Package,
+  Plus,
+  Settings2,
+  ShoppingCart,
+  Trash2,
+  Users,
+  Wallet,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import Sheet from "@/components/ui/Sheet";
-import ListCard from "@/components/ui/ListCard";
-import ListRow from "@/components/ui/ListRow";
+import SearchBar from "@/components/ui/SearchBar";
+import Button from "@/components/ui/Button";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import EmptyState from "@/components/ui/EmptyState";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import PermissionChecklist, { useSelectAll } from "@/components/admin/PermissionChecklist";
-import { useRolesStore } from "@/stores/rolesStore";
-import { useShopStore } from "@/stores/shopStore";
-import { useShellBase } from "@/lib/useShellBase";
-import { usePermissionsStore } from "@/stores/permissionsStore";
-import { useUIStore } from "@/stores/uiStore";
-import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
-import { Plus, Trash2, ChevronRight } from "lucide-react";
-import type { Role } from "@/types";
+import { useShellBase } from "@/lib/useShellBase";
+import { useThemeStore } from "@/stores/themeStore";
+import { useRolesStore } from "@/stores/rolesStore";
+import { usePermissionsStore } from "@/stores/permissionsStore";
+import { useAccessCatalogStore } from "@/stores/accessCatalogStore";
+import { useUIStore } from "@/stores/uiStore";
+import type { Role, RoleCategory } from "@/types";
+import { isOwnerRoleName } from "@/lib/roleTemplates";
+import { eligibleWidgetKeys } from "@/lib/dashboardAccess";
 
-/**
- * Roles & Access — the templates the owner hands to employees.
- *
- * The list is the app's grouped grammar (one card, rows on the card's own tone), and editing
- * opens a sheet rather than replacing the screen: the list stays behind it, so changing a
- * role is a thing you do *to a list you can still see*, not a separate journey with its own
- * save button at the bottom of a page.
- *
- * Inside the sheet, access is a checklist — every actionable thing, one tick box each, grouped
- * by the part of the shop it belongs to — with a Select all for everything at the top and a
- * box on each group that grants or clears that group alone. The rule that enforces access has
- * not changed at all: the same permission codes are written to the same tables, and the
- * database still decides what any of them allow.
- *
- * ── Flow mode ──────────────────────────────────────────────────────────────────────
- * The shop-setup wizard's "Add New role" / "Modify" land here, because this IS the screen that
- * edits a role and rebuilding it inside a sheet would be a second role editor to keep in step.
- * In that mode the screen opens the editor for you and, the moment the editor is done with,
- * returns you to the wizard on the step you left — the sheet reopens itself from the address it
- * was handed (`?setupFlow=2`), with the role you just made already listed and ticked. Closing
- * the editor without saving returns you too: the wizard is a sequence, and leaving the owner
- * standing on the roles list after they came from step 2 is what breaks one.
- */
-interface SetupFlowState {
-  returnPath: string;
-  mode: "create" | "edit";
-  roleId?: string;
+const CATEGORY_ICONS: Record<RoleCategory, LucideIcon> = {
+  sales: ShoppingCart,
+  finance: Wallet,
+  inventory: Package,
+  procurement: Package,
+  people_hr: Users,
+  operations: LayoutGrid,
+  business_management: BriefcaseBusiness,
+  other: ClipboardList,
+};
+
+interface RoleFacts {
+  permissions: number;
+  widgets: number;
+  employees: number;
 }
+
 export default function RolesAccessPage() {
-  const { language } = useThemeStore();
-  const isUrdu = language === "ur";
   const t = useT();
   const navigate = useNavigate();
-  const location = useLocation();
+  const base = useShellBase();
+  const language = useThemeStore((s) => s.language);
   const { addToast } = useUIStore();
-  // Whether this screen was opened BY the shop-setup wizard, and where to hand the owner back
-  // to. Declared up here because the auto-open effect below is also part of the same arrival.
-  const flow = (location.state as { setupFlow?: SetupFlowState } | null)?.setupFlow;
-  // One auto-open per arrival: re-running it when the roles list reloads would reopen the
-  // editor every time the store refreshes, which is what the ref is for.
-  const flowOpened = useRef(false);
-  const rolesStore = useRolesStore();
-  const permissionsStore = usePermissionsStore();
 
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editingRole, setEditingRole] = useState<Role | null>(null);
-  const [roleName, setRoleName] = useState("");
-  const [roleDesc, setRoleDesc] = useState("");
-  const [selectedPerms, setSelectedPerms] = useState<Set<string>>(new Set());
-  // A new role starts from a real, empty answer; an existing one has to be read first, and
-  // until that read lands its access is unknown — not empty.
-  const [permsState, setPermsState] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [saving, setSaving] = useState(false);
-  // A ref, not `saving`: React batches, so two taps in one task both read the pre-render
-  // `false` and both create the role. The state variable is only for the button's label.
-  const savingRef = useRef(false);
-  const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
-  /** How much each role opens, as a number. The module NAMES were the confusing part:
-   *  "Products · Purchases · Payments · Inven…" is a truncated line of database areas, not
-   *  something an owner can act on, and it crowded the row it sat in. */
-  const [rolePermCounts, setRolePermCounts] = useState<Record<string, number>>({});
+  const roles = useRolesStore((s) => s.roles);
+  const ready = useRolesStore((s) => s.ready);
+  const loadRoles = useRolesStore((s) => s.load);
+  const deleteRole = useRolesStore((s) => s.deleteRole);
+  const getRoleMemberCount = useRolesStore((s) => s.getRoleMemberCount);
+  const loadRolePermissions = useRolesStore((s) => s.loadRolePermissions);
+  const permissionsReady = usePermissionsStore((s) => s.ready);
+  const loadPermissions = usePermissionsStore((s) => s.load);
+  const widgets = useAccessCatalogStore((s) => s.widgets);
+  const loadCatalog = useAccessCatalogStore((s) => s.load);
+
+  const [search, setSearch] = useState("");
+  const [facts, setFacts] = useState<Record<string, RoleFacts>>({});
   const [deleteTarget, setDeleteTarget] = useState<Role | null>(null);
   const [deleting, setDeleting] = useState(false);
-  // A ref for the same reason as the employee screen: React batches, so two clicks in
-  // one task would both read the pre-render value of `deleting` and both fire.
   const deletingRef = useRef(false);
-  const [nameError, setNameError] = useState("");
 
-  const selectAll = useSelectAll(selectedPerms, setSelectedPerms);
-
-  /**
-   * Arrived from the setup wizard: open the editor it asked for, once the roles are here.
-   *
-   * Waits for the list rather than opening on an empty one — the edit case needs the role to
-   * exist before there is anything to edit, and the create case must not be pre-empted by a
-   * skeleton.
-   */
   useEffect(() => {
-    if (!flow || flowOpened.current || !rolesStore.ready) return;
-    if (flow.mode === "create") {
-      flowOpened.current = true;
-      startCreate();
-      return;
-    }
-    const target = flow.roleId ? rolesStore.roles.find((r) => r.id === flow.roleId) : undefined;
-    if (!target) return;
-    flowOpened.current = true;
-    startEdit(target);
-  }, [flow, rolesStore.ready, rolesStore.roles]);
+    void loadRoles();
+    void loadPermissions();
+    void loadCatalog();
+  }, [loadRoles, loadPermissions, loadCatalog]);
 
-  const activeShopId = useShopStore((s) => s.activeShopId);
-  const base = useShellBase();
-
-  // Reload when the SHOP changes, not only on mount: the roles belong to one shop, and a list
-  // left over from the previous one is not just stale, it is uneditable — the writes are
-  // authorized against whichever shop the account is working in now.
   useEffect(() => {
-    rolesStore.load();
-    permissionsStore.load();
-  }, [activeShopId]);
-
-  // How many employees use each role, and which business areas it opens
-  useEffect(() => {
-    if (rolesStore.roles.length === 0) return;
-    rolesStore.roles.forEach(async (role) => {
-      const count = await rolesStore.getRoleMemberCount(role.id);
-      setMemberCounts((prev) => ({ ...prev, [role.id]: count }));
-      const perms = await rolesStore.getRolePermissions(role.id);
-      setRolePermCounts((prev) => ({ ...prev, [role.id]: perms.length }));
+    if (!ready || !permissionsReady || widgets.length === 0 || roles.length === 0) return;
+    let live = true;
+    void Promise.all(
+      roles.map(async (role) => {
+        const [access, employees] = await Promise.all([
+          loadRolePermissions(role.id),
+          getRoleMemberCount(role.id),
+        ]);
+        return [
+          role.id,
+          {
+            permissions: access.codes.length,
+            widgets: eligibleWidgetKeys(widgets, new Set(access.codes)).length,
+            employees,
+          },
+        ] as const;
+      }),
+    ).then((rows) => {
+      if (live) setFacts(Object.fromEntries(rows));
     });
-  }, [rolesStore.roles.length, permissionsStore.permissions.length]);
+    return () => {
+      live = false;
+    };
+  }, [ready, permissionsReady, widgets, roles, loadRolePermissions, getRoleMemberCount]);
 
-  function startCreate() {
-    setEditingRole(null);
-    setRoleName("");
-    setRoleDesc("");
-    setSelectedPerms(new Set());
-    setNameError("");
-    setPermsState("ready");
-    setEditorOpen(true);
-  }
-
-  function startEdit(role: Role) {
-    // A built-in role cannot be renamed or deleted, but the owner may still adjust what it
-    // opens — and the fields that cannot change say so rather than accepting typing.
-    setEditingRole(role);
-    setRoleName(role.name);
-    setRoleDesc(role.description ?? "");
-    setNameError("");
-    setSelectedPerms(new Set());
-    setPermsState("loading");
-    setEditorOpen(true);
-    void loadPerms(role.id);
-  }
-
-  async function loadPerms(id: string) {
-    const { codes, error } = await rolesStore.loadRolePermissions(id);
-    if (error) {
-      // Said out loud rather than shown as a role that grants nothing: the sheet opened on
-      // forty empty boxes before, which is a claim about the role, not a loading state.
-      setPermsState("error");
-      return;
-    }
-    setSelectedPerms(new Set(codes));
-    setPermsState("ready");
-  }
-
-  function closeEditor() {
-    if (savingRef.current) return;
-    setEditorOpen(false);
-    setEditingRole(null);
-    returnToFlow();
-  }
-
-  /**
-   * Hand the owner back to the wizard they came from, on the step they left.
-   *
-   * `replace`, so the Back button does not walk them into the role sheet they just finished
-   * with — the sequence they asked for is step 2, and that is where Back should lead.
-   */
-  function returnToFlow() {
-    if (!flow) return;
-    navigate(flow.returnPath, { replace: true });
-  }
-
-  async function handleSave() {
-    setNameError("");
-    if (!roleName.trim()) { setNameError(t("roles.errName")); return; }
-    if (savingRef.current) return;
-    savingRef.current = true;
-    setSaving(true);
-    try {
-      const perms = Array.from(selectedPerms);
-      if (editingRole) {
-        await rolesStore.updateRole(editingRole.id, {
-          name: roleName.trim(),
-          description: roleDesc.trim() || undefined,
-          permissions: perms,
-        });
-        addToast(t("roles.updated"), "success");
-      } else {
-        await rolesStore.createRole({
-          name: roleName.trim(),
-          description: roleDesc.trim() || undefined,
-          permissions: perms,
-        });
-        addToast(t("roles.created"), "success");
-      }
-      setEditorOpen(false);
-      setEditingRole(null);
-      returnToFlow();
-    } catch (e) {
-      addToast(e instanceof Error ? e.message : t("roles.errSave"), "error");
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
-    }
-  }
-
-  /**
-   * Remove a role.
-   *
-   * Deleting a role takes the access it provided away from the employees working under it,
-   * which is what the owner means by deleting it. It used to be refused while anyone was
-   * assigned, which left the access in place and sent the owner to a second screen to
-   * reassign everybody first. The role's access is now revoked by the deletion itself, and
-   * the confirmation says so — naming how many employees will lose it — before anything is
-   * confirmed. The employees, their memberships and their history are not touched.
-   */
-  function handleDelete(role: Role) {
-    setDeleteTarget(role);
-  }
-
-  /**
-   * What deleting this role does, in the owner's words.
-   *
-   * `onRow` is the one-line form the row can actually show — a row's meta line truncates,
-   * and a truncated sentence about who loses access is worse than a short one. The dialog
-   * gets the full sentence, because that is the screen where the destructive decision is
-   * made and the whole consequence belongs on it.
-   */
-  function deleteConsequence(role: Role, onRow = false): string {
-    const count = memberCounts[role.id] ?? 0;
-    if (count > 0) return t(onRow ? "roles.deleteRevokesShort" : "roles.deleteRevokes", { count });
-    return t(role.isSystem ? "roles.deleteHintBuiltIn" : "roles.deleteHint", { name: role.name });
-  }
+  const visibleRoles = useMemo(
+    () =>
+      roles
+        .filter((role) => !isOwnerRoleName(role.name))
+        .filter((role) => {
+          const term = search.trim().toLowerCase();
+          if (!term) return true;
+          return [role.name, role.description ?? "", role.departmentName ?? "", role.roleCategory ?? ""]
+            .join(" ")
+            .toLowerCase()
+            .includes(term);
+        })
+        .sort((left, right) => {
+          const rank = (role: Role) => {
+            const name = role.name.trim().toLowerCase();
+            if (name === "staff") return 0;
+            if (name === "manager") return 1;
+            return 2;
+          };
+          return rank(left) - rank(right) || left.name.localeCompare(right.name);
+        }),
+    [roles, search],
+  );
 
   async function confirmDelete() {
-    if (deletingRef.current || !deleteTarget) return;
+    if (!deleteTarget || deletingRef.current) return;
     deletingRef.current = true;
     setDeleting(true);
     try {
-      await rolesStore.deleteRole(deleteTarget.id);
+      await deleteRole(deleteTarget.id);
       addToast(t("roles.deleted"), "success");
-      if (editingRole?.id === deleteTarget.id) {
-        setEditorOpen(false);
-        setEditingRole(null);
-      }
       setDeleteTarget(null);
-    } catch (e) {
-      addToast(e instanceof Error ? e.message : t("common.error"), "error");
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : t("roles.errSave"), "error");
     } finally {
       deletingRef.current = false;
       setDeleting(false);
     }
   }
 
-  /** The two fields in this sheet are the only things on it you type into, so their edge is
-   *  the control token. Against the sheet's own tone `--divider` drew no edge at all, which is
-   *  what made the sheet read as unlabelled lines of text rather than a form. */
-  const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--border-control)",
-    color: "var(--text-primary)",
-  } as const;
+  const deleteMembers = deleteTarget ? facts[deleteTarget.id]?.employees ?? 0 : 0;
 
   return (
-    <div className="flex flex-col w-full min-h-full pb-20" style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}>
+    <div
+      className="flex flex-col w-full min-h-full"
+      style={{ background: "var(--background)", color: "var(--text-primary)" }}
+      data-testid="roles-access-page"
+    >
       <StatusBar />
-      <NavHeader title={t("settings.rolesAccess")} />
+      <NavHeader
+        title={t("roles.accessTitle")}
+        backTo={`${base}/settings/hub/people`}
+      />
 
-      <div className="flex-1 px-4 pt-4">
-        {/* The heading says what the screen is for, the count says how many there are, and the
-            button is the one action on it. The count used to be a bare `Roles: 4` off to the
-            left with nothing explaining it. */}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="min-w-0">
-            <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
-              {rolesStore.ready ? t("roles.count", { count: rolesStore.roles.length }) : ""}
-            </p>
-            <p className="text-11 mt-0.5 leading-snug" style={{ color: "var(--text-secondary)" }}>
-              {t("roles.intro")}
-            </p>
-          </div>
-          <button
-            onClick={startCreate}
-            data-testid="role-new"
-            className="flex items-center gap-1.5 h-9 px-3.5 rounded-full text-13 font-bold shrink-0 ds-pressable"
-            style={{ background: "var(--brand)", color: "#0a0a0a" }}
-          >
-            <Plus size={15} /> {t("roles.new")}
-          </button>
+      <div className="px-4 pt-4">
+        <h1 className="text-17 font-bold">{t("roles.accessHeading")}</h1>
+        <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
+          {t("roles.accessSubtitle")}
+        </p>
+
+        <div className="mt-5">
+          <SearchBar
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onClear={() => setSearch("")}
+            placeholder={t("roles.searchPlaceholder")}
+            data-testid="roles-search"
+          />
         </div>
 
-        {!rolesStore.ready && <SkeletonList rows={3} />}
-        {rolesStore.ready && (
-          <ListCard>
-            {rolesStore.roles.map((role) => {
-              const count = memberCounts[role.id] ?? 0;
-              const permCount = rolePermCounts[role.id];
-              return (
-                <ListRow
-                  key={role.id}
-                  onClick={() => startEdit(role)}
-                  testId={`role-${role.id}`}
-                  trailing={<ChevronRight size={16} style={{ color: "var(--text-secondary)" }} />}
-                >
-                  {/* Name on the first line, at 14 and bold — the row's own reading order.
-                      What used to be here: the name at 14 next to a description rendered
-                      LARGER than the name, then a module list truncated mid-word
-                      ("… · Payments · Inven…") and an "Employees: 0" label squeezed against
-                      the chevron. Four sizes fighting on one row is what made the card look
-                      unprofessional, so the facts are now stacked by importance: name, then
-                      two counts, then what the role is for. */}
-                  <div className="flex items-center gap-2 min-w-0">
-                    <p className="text-14 font-bold truncate" style={{ color: "var(--text-primary)" }}>
-                      {role.name}
-                    </p>
-                    {role.isSystem && (
-                      <span
-                        className="text-11 px-2 py-0.5 rounded-full shrink-0 font-medium"
-                        style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-                      >
-                        {t("roles.builtIn")}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                    {t("roles.employees", { count })}
-                    {permCount !== undefined && ` · ${t("roles.canDo", { count: permCount })}`}
-                  </p>
-                  {role.description && (
-                    <p className="text-12 mt-1 leading-snug" style={{ color: "var(--text-secondary)" }}>
-                      {role.description}
-                    </p>
-                  )}
-                </ListRow>
-              );
-            })}
-          </ListCard>
-        )}
+        <Button
+          fullWidth
+          size="lg"
+          variant="cta"
+          className="mt-2.5"
+          onClick={() => navigate(`${base}/settings/roles/new`)}
+          testId="role-create"
+        >
+          <Plus size={15} className="me-1.5" /> {t("roles.createNew")}
+        </Button>
       </div>
 
-      {/* ── The editor ─────────────────────────────────────────────────────────── */}
-      <Sheet
-        open={editorOpen}
-        title={editingRole ? t("roles.edit") : t("roles.new")}
-        onClose={closeEditor}
-        /* No close cross: this sheet is opened by tapping a role and dismissed by the same
-           gesture (the scrim, or Back). Two ways out, one of them a small target in the
-           corner, is clutter on a screen whose own buttons are at the bottom. */
-        closeButton={false}
-        maxHeight="90vh"
-      >
-        <div className="px-4 flex flex-col gap-4">
-          <div>
-            <p className="text-11 font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
-              {t("roles.name")}
-            </p>
-            <input
-              value={roleName}
-              onChange={(e) => setRoleName(e.target.value)}
-              placeholder={t("roles.nameHint")}
-              data-testid="role-name"
-              autoFocus={!editingRole}
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-              style={fieldStyle}
-            />
-          </div>
+      <div className="flex items-baseline justify-between gap-3 px-4 pt-5 pb-2.5">
+        <p className="text-13 font-bold">
+          {t("roles.enrolled")} <span style={{ color: "var(--text-secondary)" }}>({visibleRoles.length})</span>
+        </p>
+      </div>
 
-          <div>
-            <p className="text-11 font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
-              {t("roles.description")}
-            </p>
-            <input
-              value={roleDesc}
-              onChange={(e) => setRoleDesc(e.target.value)}
-              placeholder={t("roles.descriptionHint")}
-              data-testid="role-description"
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-              style={fieldStyle}
-            />
-          </div>
-
-          {/* The heading row carries the one control that grants or clears everything, the
-              way the reference does — a pill on the heading's own line, above the groups
-              rather than inside one of them. It was an underlined link, which read as a
-              footnote to the list instead of a control on it. */}
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-11 font-medium" style={{ color: "var(--text-secondary)" }}>
-              {t("roles.access")}
-            </p>
-            <button
-              type="button"
-              onClick={selectAll.toggleAll}
-              data-testid="role-select-all"
-              className="h-7 px-3 rounded-full text-11 font-semibold shrink-0"
-              style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--border-control)",
-                color: "var(--text-primary)",
-              }}
-            >
-              {selectAll.allSelected ? t("roles.clearAll") : t("roles.selectAll")}
-            </button>
-          </div>
-        </div>
-
-        {permsState === "error" ? (
-          <div className="px-4 py-4">
-            <p className="text-xs" style={{ color: "var(--error)" }} data-testid="role-perms-error">
-              {t("access.roleUnavailable")}
-            </p>
-            {editingRole && (
-              <button
-                onClick={() => {
-                  setPermsState("loading");
-                  void loadPerms(editingRole.id);
-                }}
-                className="text-11 font-bold mt-2"
-                style={{ color: "var(--brand)" }}
-              >
-                {t("common.retry")}
-              </button>
-            )}
-          </div>
-        ) : permsState === "ready" ? (
-          <PermissionChecklist value={selectedPerms} onChange={setSelectedPerms} />
+      <div className="px-4 pb-8">
+        {!ready && <SkeletonList rows={4} />}
+        {ready && (visibleRoles.length === 0 ? (
+          <EmptyState
+            icon={Settings2}
+            title={search.trim() ? t("roles.noMatch") : t("roles.empty")}
+            subtitle={t("roles.emptyHint")}
+          />
         ) : (
-          <div className="px-4 py-4" role="status" aria-busy="true">
-            <span className="sr-only">{t("access.loadingRole")}</span>
-            <SkeletonList rows={3} bare />
+          <div className="flex flex-col gap-2.5">
+            {visibleRoles.map((role) => {
+              const Icon = CATEGORY_ICONS[role.roleCategory ?? "other"] ?? Settings2;
+              const roleFacts = facts[role.id];
+              const employees = roleFacts?.employees ?? 0;
+              const permissions = roleFacts?.permissions ?? role.permissionCount ?? 0;
+              const widgetCount = roleFacts?.widgets ?? 0;
+              const department = language === "ur" && role.departmentNameUr
+                ? role.departmentNameUr
+                : role.departmentName;
+              return (
+                <div
+                  key={role.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`${base}/settings/roles/${role.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      navigate(`${base}/settings/roles/${role.id}`);
+                    }
+                  }}
+                  data-testid={`role-row-${role.id}`}
+                  className="rounded-[var(--radius-card)] overflow-hidden text-start active:opacity-90"
+                  style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+                >
+                  <div className="p-4 flex items-start gap-3">
+                    <span
+                      className="size-9 rounded-[var(--radius-tile)] grid place-items-center shrink-0 mt-0.5"
+                      style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                    >
+                      <Icon size={17} />
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <strong className="text-14 font-bold">{role.name}</strong>
+                        <span
+                          className="text-9 font-bold px-1.5 py-0.5 rounded-full"
+                          style={role.isSystem
+                            ? { background: "var(--tone-sunken)", color: "var(--text-secondary)" }
+                            : { background: "var(--brand-light)", color: "var(--brand-dark)" }}
+                        >
+                          {role.isSystem ? t("roles.builtIn") : t("roles.custom")}
+                        </span>
+                      </div>
+
+                      {role.description && (
+                        <p className="text-11 mt-1 leading-snug" style={{ color: "var(--text-secondary)" }}>
+                          {role.description}
+                        </p>
+                      )}
+
+                      <p className="text-10 mt-1.5 leading-snug" style={{ color: "var(--text-secondary)" }}>
+                        {[department, t("roles.permissionShort", { count: String(permissions) }), t("roles.widgetShort", { count: String(widgetCount) })]
+                          .filter(Boolean)
+                          .join("  ·  ")}
+                      </p>
+                    </div>
+
+                    <span className="flex items-center gap-1 shrink-0 mt-1.5">
+                      <span className="text-11 font-semibold" style={{ color: "var(--text-primary)" }}>
+                        {t("roles.modify")}
+                      </span>
+                      <ChevronRight size={15} style={{ color: "var(--text-secondary)" }} />
+                    </span>
+                  </div>
+
+                  <div
+                    className="px-4 h-10 flex items-center justify-between gap-3"
+                    style={{ borderTop: "1px solid var(--divider)" }}
+                  >
+                    <span className="flex items-center gap-1.5 text-10" style={{ color: "var(--text-secondary)" }}>
+                      <Users size={12} /> {t("roles.employeeShort", { count: String(employees) })}
+                    </span>
+
+                    <button
+                      type="button"
+                      title={t("roles.deleteAction")}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeleteTarget(role);
+                      }}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      data-testid={`role-delete-${role.id}`}
+                      className="flex items-center gap-1.5 text-10 font-semibold"
+                      style={{ color: "var(--error)" }}
+                    >
+                      <Trash2 size={12} /> {t("roles.delete")}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
-
-        {/* Removing a role, as a row of its own at the foot of the sheet.
-
-            It was an icon in the sheet's header, which is a place you only find if you
-            already know it is there — and for the four built-in roles it was not drawn at
-            all, so the screen looked like it had no way to remove anything. Here it is
-            visible on every role, and when it cannot be removed the row says why in a
-            sentence rather than doing nothing. */}
-        {editingRole && (
-          <div className="px-4 pt-4" data-testid="role-delete">
-            <ListCard>
-              <ListRow
-                danger
-                icon={Trash2}
-                onClick={() => handleDelete(editingRole)}
-                testId="role-delete-row"
-                title={t("roles.deleteAction")}
-                meta={deleteConsequence(editingRole, true)}
-              />
-            </ListCard>
-          </div>
-        )}
-
-        <div className="px-4 pt-4 flex flex-col gap-2">
-          {nameError && (
-            <p className="text-xs" style={{ color: "var(--error)" }} data-testid="role-error">{nameError}</p>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            data-testid="role-save"
-            className="w-full h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
-            style={{ background: "var(--brand)", color: "#0a0a0a" }}
-          >
-            {saving ? t("common.saving") : editingRole ? t("roles.update") : t("roles.create")}
-          </button>
-        </div>
-      </Sheet>
+        ))}
+      </div>
 
       <ConfirmDialog
-        open={deleteTarget !== null}
+        open={Boolean(deleteTarget)}
         title={t("roles.deleteConfirm")}
-        message={deleteTarget ? deleteConsequence(deleteTarget) : ""}
+        message={
+          deleteTarget
+            ? deleteMembers === 0
+              ? t("roles.deleteHint", { name: deleteTarget.name })
+              : deleteMembers === 1
+                ? t("roles.deleteRevokesOne")
+                : t("roles.deleteRevokes", { count: String(deleteMembers) })
+            : ""
+        }
         confirmLabel={t("roles.deleteAction")}
-        cancelLabel={t("common.cancel")}
         destructive
         loading={deleting}
-        onConfirm={confirmDelete}
-        onCancel={() => !deleting && setDeleteTarget(null)}
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );

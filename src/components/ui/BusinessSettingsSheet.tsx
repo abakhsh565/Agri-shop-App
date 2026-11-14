@@ -101,9 +101,8 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
   }
 
   const fieldStyle = {
-    background: "var(--surface-2)",
+    background: "var(--field-bg)",
     color: "var(--text-primary)",
-    border: "1px solid var(--divider)",
   };
 
   const labelCls = "ds-section-label mb-2 block";
@@ -173,7 +172,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                 onKeyDown={(e) => { if (e.key === "Enter") addCustomCrop(); }}
                 placeholder={t("bizSettings.addCropPlaceholder")}
                 className="flex-1 h-12 px-4 text-13 outline-none"
-                style={{ ...fieldStyle, borderRadius: "24px" }}
+                style={{ ...fieldStyle }}
               />
               <button
                 onClick={addCustomCrop}
@@ -211,8 +210,8 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                           }
                         }}
                         aria-label={t("bizSettings.renameCrop")}
-                        className="flex-1 h-9 px-2.5 text-14 font-semibold outline-none me-2"
-                        style={{ ...fieldStyle, borderRadius: "10px" }}
+                        className="flex-1 h-12 px-2.5 text-14 font-semibold outline-none me-2"
+                        style={{ ...fieldStyle }}
                       />
                       <button
                         onClick={() => setSettings(prev => ({

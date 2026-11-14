@@ -61,6 +61,7 @@ import {
   identifyConnection,
   requireEnvironmentOrExit,
 } from './lib/environments.mjs';
+import { constraintSection } from './lib/backup-constraint-order.mjs';
 
 // ── Exact value fidelity ─────────────────────────────────────────────────────────────────────
 // node-postgres parses timestamptz/timestamp/date into a JS Date, which holds MILLISECONDS while
@@ -469,13 +470,14 @@ async function main() {
     from pg_constraint c join pg_namespace n on n.oid = c.connamespace
     where n.nspname = 'public' and c.contype in ('f','u','c')
     order by 1, 2`);
-  for (const c of constraints.rows) {
-    const tbl = c.tbl.replace(/^public\./, '');
-    push(
-      `do $$ begin alter table public.${ident(tbl)} add constraint ${ident(c.conname)} ${c.def};` +
-        ` exception when duplicate_object then null; end $$;`,
-    );
-  }
+  // ORDER MATTERS, and getting it wrong is silent. Sorted by table name, an FK from
+  // `co_owner_authority_catalog` / `dashboard_widgets` to `permissions(code)` was emitted BEFORE the
+  // UNIQUE constraint that pair needs, Postgres rejected it with `invalid_foreign_key`, and the
+  // `duplicate_object` handler swallowed it — production backups 78/79 restored with two missing
+  // foreign keys and only the verifier saw it. `constraintSection` puts uniques/checks first, and
+  // raises a named WARNING for any failure it cannot classify.
+  const constraintPlan = constraintSection(constraints.rows);
+  for (const line of constraintPlan.lines) push(line);
 
   push('');
   push('-- ─── Indexes ─────────────────────────────────────────────');

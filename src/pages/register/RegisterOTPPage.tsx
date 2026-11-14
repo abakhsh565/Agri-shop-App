@@ -8,9 +8,7 @@ import Button from "@/components/ui/Button";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopRequestsStore } from "@/stores/shopRequestsStore";
 import { useT } from "@/lib/i18n";
-
-const OTP_VALIDITY = 2 * 60;
-const RESEND_DELAY = 30;
+import { OTP_RESEND_DELAY_SECONDS, OTP_VALIDITY_SECONDS } from "@/lib/otpPolicy";
 
 export default function RegisterOTPPage() {
   const t = useT();
@@ -25,10 +23,10 @@ export default function RegisterOTPPage() {
   // Set when the code proves a number that already has an account: signup is refused
   // (signing them in here would skip the PIN step), and the way in is offered instead.
   const [takenAs, setTakenAs] = useState<"owner" | "employee" | null>(null);
-  const [countdown, setCountdown] = useState(OTP_VALIDITY);
+  const [countdown, setCountdown] = useState(OTP_VALIDITY_SECONDS);
   // Starts at the cooldown, not at zero: a code was just sent, so Resend arrives disabled and
   // becomes usable 30 seconds later.
-  const [resendCountdown, setResendCountdown] = useState(RESEND_DELAY);
+  const [resendCountdown, setResendCountdown] = useState(OTP_RESEND_DELAY_SECONDS);
   const verifying = useRef(false);
 
   useEffect(() => {
@@ -104,14 +102,19 @@ export default function RegisterOTPPage() {
   }
 
   async function handleResend() {
-
     if (resendCountdown > 0) return;
-    await sendOTP(pendingPhone);
-    setResendCountdown(RESEND_DELAY);
-    setCountdown(OTP_VALIDITY);
+    setError("");
+    // A send that failed must not look like one that worked: the cooldown would tick away and the
+    // clock would restart for a code nobody sent, which is a wait for an SMS that is not coming.
+    const result = await sendOTP(pendingPhone);
+    if (!result.success) {
+      setError(t("auth.errSendCode"));
+      return;
+    }
+    setResendCountdown(OTP_RESEND_DELAY_SECONDS);
+    setCountdown(OTP_VALIDITY_SECONDS);
     setWrongTries(0);
     setOtp("");
-    setError("");
   }
 
   const expired = countdown === 0;

@@ -10,6 +10,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useEducationStore } from "@/stores/educationStore";
 import { useT } from "@/lib/i18n";
+import { homePathForUser } from "@/lib/experience";
 
 export default function PINSetPage() {
   const t = useT();
@@ -121,7 +122,7 @@ export default function PINSetPage() {
     }
   }
 
-  const dest = (user?.role === "admin") ? "/admin/dashboard" : "/employee/dashboard";
+  const dest = homePathForUser(user);
 
   const pin = step === "set" ? firstPin : confirmPin;
   const setter = step === "set" ? setFirstPin : setConfirmPin;

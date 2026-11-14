@@ -35,16 +35,21 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           {...props}
           onChange={handleChange}
           {...(isPhone ? { inputMode: "numeric" as const, autoComplete: props.autoComplete ?? "tel" } : null)}
+          // The app's one field shape: fully rounded, field-washed, edged at rest, green when it
+          // has focus. The edge is what says "you can type here" before anything is touched, and
+          // it comes from `--field-border` so it matches every other field on every other screen.
           className={`
-            h-[46px] w-full rounded-[var(--radius-card)] border px-4 text-13 font-normal
-            placeholder:text-[#aaa] outline-none transition-colors
-            ${error ? "border-[#ef4444] focus:ring-2 focus:ring-[#ef4444]/20" : "border-[var(--border-control)] focus:border-[var(--text-secondary)] focus:ring-2 focus:ring-[var(--ring)]"}
-            disabled:opacity-40 disabled:cursor-not-allowed
+            h-12 w-full rounded-[var(--radius-field)] px-4 text-13 font-normal
+            placeholder:text-[var(--text-tertiary)] outline-none transition-colors
+            ${error ? "border border-[var(--error)] focus:ring-2 focus:ring-[var(--error-border)]" : "border border-[var(--field-border)] focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand-light)]"}
+            disabled:opacity-45 disabled:cursor-not-allowed
             ${className}
           `}
-          style={{ background: "var(--surface)", color: "var(--text-primary)" }}
+          // The fill comes from the local field pair, so the same component sits correctly on a
+          // page, a card or a sheet without the caller choosing a colour for it.
+          style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
         />
-        {error && <span className="text-xs text-[#ef4444]">{error}</span>}
+        {error && <span className="text-xs text-[var(--error)]">{error}</span>}
         {hint && !error && <span className="text-xs text-caption">{hint}</span>}
       </div>
     );

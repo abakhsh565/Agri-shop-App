@@ -13,14 +13,17 @@
  * Admin scope only (sign-in → onboarding → admin screens); the employee side is a
  * separate batch, deliberately not touched here.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import {
   QA_IDS,
   execSql,
   setupFixtures,
   cleanupFixtures,
   claimOwned,
-  injectAdminAuth,
+  // Every route this lane drives is under `/admin/*`, which is the OWNER shell: QA Admin's real
+  // membership is `role = admin` (employee experience), so the truthful employee identity is
+  // refused there — correctly. Owner power, owner lane.
+  injectOwnerAuth,
 } from './helpers';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
@@ -97,7 +100,7 @@ test.describe('Admin microcopy — English and Urdu', () => {
   test('validation and success messages are plain, translated, and fit the screen', async ({ page }) => {
     await page.goto(BASE_URL);
     await settle(page);
-    await injectAdminAuth(page);
+    await injectOwnerAuth(page);
 
     // ── English / LTR ───────────────────────────────────────────────────────
     await setLanguage(page, 'en');
@@ -219,7 +222,7 @@ test.describe('Admin microcopy — English and Urdu', () => {
     test.setTimeout(300_000);
     await page.goto(BASE_URL);
     await settle(page);
-    await injectAdminAuth(page);
+    await injectOwnerAuth(page);
 
     const routes = [
       '/admin/purchases',
@@ -270,7 +273,7 @@ test.describe('Admin microcopy — English and Urdu', () => {
     test.setTimeout(300_000);
     await page.goto(BASE_URL);
     await settle(page);
-    await injectAdminAuth(page);
+    await injectOwnerAuth(page);
 
     for (const path of ['/admin/dashboard', '/admin/settings', '/admin/companies', '/admin/products', '/admin/employees']) {
       await page.goto(`${BASE_URL}${path}`);

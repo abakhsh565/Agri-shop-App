@@ -26,7 +26,8 @@
  * Everything it writes is inside the app-registered isolated tenant. Each test removes its own
  * branch and reads back that it is gone. QA database only.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { execSql, loginViaUi, settle, cleanupFixtures, WRITE_TENANT } from './helpers';
 

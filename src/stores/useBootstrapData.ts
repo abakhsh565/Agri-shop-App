@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useProductsStore } from "@/stores/productsStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
+import { useCatalogueStore } from "@/stores/catalogueStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
@@ -11,11 +12,17 @@ import { useShopStore } from "@/stores/shopStore";
 // Loads every live dataset once when an authenticated shell mounts and wires
 // Realtime so any device sees new sales/stock/customers immediately. Pages then
 // just read from the stores — they don't each manage their own fetch.
-// `companies` is admin-only at the DB layer, so we only load it for admins to
-// avoid a guaranteed empty fetch for employees.
+// `companies` is a permission-gated read (`companies.view`), not an admin-only one. Loading it
+// only for admins meant an employee who was granted Add Product opened that form with an empty
+// supplier list — and the form cannot be saved without a supplier, so the grant was unusable.
 export function useBootstrapData() {
   const role = useAuthStore((s) => s.user?.role);
+  const permissions = useAuthStore((s) => s.user?.permissions);
   const isAdmin = role === "admin";
+  const canUseCompanies =
+    isAdmin ||
+    (permissions ?? []).includes("companies.view") ||
+    (permissions ?? []).includes("products.create");
   // Which shop the datasets belong to. Every read below is scoped by it, and so is the
   // realtime subscription — a switch changes the rows AND the feed, so both are rebuilt.
   // Without this the shell would keep the previous shop's rows loaded after a switch, which
@@ -43,7 +50,13 @@ export function useBootstrapData() {
     useEmployeesStore.getState().load();
     unsubs.push(useEmployeesStore.getState().subscribe());
 
-    if (isAdmin) {
+    // The shop's own shelves and units (0259). They are read by the Add Product form and by
+    // every product page, so they load with the shell rather than on whichever screen happened
+    // to ask first — a picker that fills a moment after the form opened looks empty.
+    useCatalogueStore.getState().load();
+    unsubs.push(useCatalogueStore.getState().subscribe());
+
+    if (canUseCompanies) {
       useCompaniesStore.getState().load();
       unsubs.push(useCompaniesStore.getState().subscribe());
     }
@@ -51,5 +64,5 @@ export function useBootstrapData() {
     return () => unsubs.forEach((fn) => fn());
     // Re-run if the role changes (e.g. after login) so admin-only data loads, and if the
     // active shop changes so nothing from the shop we left survives into this one.
-  }, [isAdmin, shopId, branchId, switching]);
+  }, [canUseCompanies, shopId, branchId, switching]);
 }

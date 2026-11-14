@@ -19,7 +19,7 @@
  *
  * QA database only; the throwaway role and its assignment are removed again.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import {
   QA_IDS,
   execSql,
@@ -30,6 +30,7 @@ import {
   trackOwned,
   injectOwnerAuth,
 } from './helpers';
+import { runCleanupStatements } from '../setup/ownedCleanup';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const ROLE_ID = 'bbbb0000-0000-4000-8000-000000000001';
@@ -98,14 +99,19 @@ test.describe('Role deletion — assigned role revokes its access', () => {
     // throwaway role would match nothing and leave the shared QA Employee fixture
     // without any role — which silently breaks every later lane that reads their
     // permissions (it did: appSettingsIsolation's employee reader).
-    await execSql(`
-      UPDATE memberships SET role_id = ${previousRoleId ? `'${previousRoleId}'` : 'NULL'}, updated_at = now()
-      WHERE user_id = '${QA_IDS.employee}' AND tenant_id = '${QA_IDS.shop}'
-    `).catch(() => {});
-    await execSql(`
-      UPDATE memberships SET role_id = ${previousRoleId2 ? `'${previousRoleId2}'` : 'NULL'}, updated_at = now()
-      WHERE user_id = '${EMPLOYEE_2}' AND tenant_id = '${QA_IDS.shop}'
-    `).catch(() => {});
+    // …and REPORTED. `.catch(() => {})` on these two meant the restore could be refused (a policy,
+    // a missing row) while the lane reported clean, leaving the shared QA Employee fixture without a
+    // role — the exact breakage the comment above describes, invisible the second time it happens.
+    await runCleanupStatements(
+      execSql,
+      [
+        `UPDATE memberships SET role_id = ${previousRoleId ? `'${previousRoleId}'` : 'NULL'}, updated_at = now()
+         WHERE user_id = '${QA_IDS.employee}' AND tenant_id = '${QA_IDS.shop}'`,
+        `UPDATE memberships SET role_id = ${previousRoleId2 ? `'${previousRoleId2}'` : 'NULL'}, updated_at = now()
+         WHERE user_id = '${EMPLOYEE_2}' AND tenant_id = '${QA_IDS.shop}'`,
+      ],
+      'roleInUseDeletion restore of the employees’ own roles',
+    );
 
     // CLEANUP IS OWNERSHIP-BASED NOW. The five deletes that used to run here (role_permissions,
     // roles, memberships, audit_events, users — all by the throwaway ids this lane fixed itself)
@@ -132,29 +138,23 @@ test.describe('Role deletion — assigned role revokes its access', () => {
     await page.waitForLoadState('networkidle');
     await expect(page.getByText(ROLE_NAME).first()).toBeVisible({ timeout: 15000 });
 
-    await page.getByTestId(`role-${ROLE_ID}`).click();
-    const deleteRow = page.getByTestId('role-delete-row');
-    await expect(deleteRow, 'the role editor has no delete row').toBeVisible({ timeout: 10000 });
+    // The destructive action is inside the role's own row and is usable for an in-use role: the
+    // owner is TOLD what will happen rather than stopped from doing it.
+    const deleteButton = page.getByTestId(`role-delete-${ROLE_ID}`);
+    await expect(deleteButton, 'the role offers no delete action at all').toBeVisible({ timeout: 10000 });
+    await expect(deleteButton, 'the delete action must be offered for an in-use role').toBeEnabled();
+    await deleteButton.click();
 
-    // The consequence is on the row itself, and the control is usable: the owner is told
-    // what will happen rather than stopped from doing it.
-    await expect(
-      deleteRow,
-      'the delete row does not say that the employees lose this access'
-    ).toContainText(/2 employees will lose this access/i);
-    await expect(deleteRow, 'the delete row must be offered for an in-use role').toBeEnabled();
-    await expect(deleteRow, 'the row offers a generic confirmation instead of the consequence')
-      .not.toContainText(/are you sure/i);
-
-    await deleteRow.click();
-
-    // The dialog repeats the consequence in the destructive step, naming the count.
+    // The dialog carries the consequence in full (roles.deleteRevokes): the count, that the
+    // access is removed, and that the account and history survive. A generic "are you sure"
+    // would say none of it, so the negative control is kept.
     const dialogText = await page.getByText(/employees use this role/i).last().innerText();
     expect(dialogText, 'the confirmation does not name how many employees lose access').toMatch(/2 employees use this role/i);
     expect(dialogText, 'the confirmation does not say the access is removed').toMatch(/removes the access/i);
     expect(dialogText, 'the confirmation does not say the account and history survive').toMatch(/keep their account and their history/i);
+    expect(dialogText, 'the confirmation is generic instead of naming the consequence').not.toMatch(/are you sure/i);
 
-    await page.getByRole('button', { name: /^delete role$/i }).last().click();
+    await page.getByTestId('confirm-submit').click();
 
     // The database is the judge: role gone, references cleared, employees intact.
     await expect.poll(async () => roleExists(), { timeout: 15000 }).toBe(false);

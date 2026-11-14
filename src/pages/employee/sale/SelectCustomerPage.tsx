@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import Photo from "@/components/ui/Photo";
 import SearchBar from "@/components/ui/SearchBar";
 import { useCartStore } from "@/stores/cartStore";
 import { useCustomersStore } from "@/stores/customersStore";
@@ -85,11 +86,12 @@ export default function SelectCustomerPage() {
           >
             {/* Customer image or initial placeholder */}
             <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 bg-muted text-foreground overflow-hidden">
-              {c.imageUrl ? (
-                <img src={c.imageUrl} alt={c.name} className="w-full h-full object-cover" />
-              ) : (
-                c.name.charAt(0).toUpperCase()
-              )}
+              <Photo
+                src={c.imageUrl}
+                alt={c.name}
+                className="w-full h-full object-cover"
+                fallback={c.name.charAt(0).toUpperCase()}
+              />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-foreground truncate">{c.name}</p>

@@ -1,452 +1,497 @@
-import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  MapPin,
+  User,
+} from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
-import ListCard from "@/components/ui/ListCard";
-import ListRow from "@/components/ui/ListRow";
-import ImageUpload from "@/components/ui/ImageUpload";
-import { useEmployeesStore } from "@/stores/employeesStore";
-import { useUIStore } from "@/stores/uiStore";
-import { useAuthStore } from "@/stores/authStore";
-import { useRolesStore } from "@/stores/rolesStore";
-import { digitsOnlyPhone, phoneFieldProps } from "@/lib/phoneInput";
-import { usePermissionsStore } from "@/stores/permissionsStore";
-import { useT } from "@/lib/i18n";
-import { usePermissionLabels } from "@/lib/permissionLabels";
-import { applyOverrides, diffOverrides, overrideCount } from "@/lib/accessModel";
-import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
-import InviteLinkCard from "@/components/admin/InviteLinkCard";
-import { useThemeStore } from "@/stores/themeStore";
-import { useShopStore } from "@/stores/shopStore";
-import Sheet from "@/components/ui/Sheet";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Button from "@/components/ui/Button";
-import { normalizePhone } from "@/lib/auth";
-import { clearNav } from "@/lib/navContext";
+import Sheet from "@/components/ui/Sheet";
+import { SkeletonList } from "@/components/ui/Skeleton";
+import SalaryFields from "@/components/admin/SalaryFields";
+import EmployeeAccessEditor from "@/components/admin/EmployeeAccessEditor";
+import { DashboardEligibility } from "@/components/admin/DashboardEligibility";
+import InviteLinkCard from "@/components/admin/InviteLinkCard";
+import { useEmployeesStore } from "@/stores/employeesStore";
+import { useRolesStore } from "@/stores/rolesStore";
+import { usePermissionsStore } from "@/stores/permissionsStore";
+import { useAccessCatalogStore } from "@/stores/accessCatalogStore";
+import { useAuthStore } from "@/stores/authStore";
+import { useShopStore } from "@/stores/shopStore";
+import { useUIStore } from "@/stores/uiStore";
+import { useThemeStore } from "@/stores/themeStore";
+import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
+import { usePermissionLabels } from "@/lib/permissionLabels";
 import { supabase } from "@/lib/supabase";
-import { Check, CheckCircle2, ChevronRight, User, Shield, MapPin } from "lucide-react";
+import { digitsOnlyPhone, localPhone, phoneFieldProps } from "@/lib/phoneInput";
+import { normalizePhone } from "@/lib/auth";
+import { branchKind } from "@/lib/branchKind";
+import { clearNav, navigateBack } from "@/lib/navContext";
+import {
+  applyRestrictions,
+  restrictionCount,
+  restrictionOverrides,
+} from "@/lib/accessModel";
+import { categoryLabelKey, isOwnerRoleName } from "@/lib/roleTemplates";
+import { eligibleWidgets } from "@/lib/dashboardAccess";
+import {
+  emptySalaryDraft,
+  salaryHasErrors,
+  saveEmployeeSalary,
+  validateSalaryDraft,
+  type SalaryDraft,
+} from "@/lib/salary";
+import { pkToday } from "@/lib/pkDate";
+import type { Role } from "@/types";
 
-/**
- * Add Employee — three decisions, one on each step:
- *   1. who they are   (name, phone, optional photo)
- *   2. what they do   (role; the role carries the access)
- *   3. where they work, and confirmation
- *
- * Two things are deliberately NOT asked here:
- *   * individual permissions — they come from the role and are edited later, on
- *     the employee's page, where "Customize access" lives. Listing them twice
- *     (once as the role's access, once to confirm) made the owner read the same
- *     screen twice for no new information.
- *   * a membership role — it is an authorization input, so the database derives
- *     it from the caller's tenant. The screen cannot influence it.
- *
- * Adding somebody ISSUES AN INVITATION (see migration 0129): the membership is
- * pending until they sign in with their own phone number. The last step says
- * what happens next, and the flow ends on a confirmation that hands the owner
- * the invitation itself — the link and the share actions — because the employee
- * cannot sign in without it.
- */
-type Step = "who" | "role" | "where";
+type Step = "who" | "role" | "where" | "review";
+
+const STEP_ORDER: Step[] = ["who", "role", "where", "review"];
+const DRAFT_KEY = "agrishop:add-employee-draft";
+
+interface AddEmployeeDraft {
+  name: string;
+  phone: string;
+  salaryEnabled: boolean;
+  salary: SalaryDraft;
+  branchScope: string[] | null;
+  roleId: string | null;
+}
 
 export default function AddEmployeePage() {
-  const navigate = useNavigate();
-  const { addToast } = useUIStore();
-  const { user } = useAuthStore();
-  const { language } = useThemeStore();
-  const isUrdu = language === "ur";
   const t = useT();
-  const { areaLabel, actionLabel } = usePermissionLabels();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const base = useShellBase();
+  const teamBase = base === "/admin" ? `${base}/employees` : `${base}/team`;
+  const [searchParams] = useSearchParams();
+  const { addToast } = useUIStore();
+  const language = useThemeStore((s) => s.language);
+  const { user } = useAuthStore();
+  const { areaLabel } = usePermissionLabels();
   const employees = useEmployeesStore((s) => s.employees);
   const createEmployee = useEmployeesStore((s) => s.createEmployee);
-  const assignBranch = useEmployeesStore((s) => s.assignBranch);
-  const [employeeMode, setEmployeeMode] = useState<"new" | "existing">("new");
-  const [existingId, setExistingId] = useState<string | null>(null);
-  const [assignment, setAssignment] = useState<"add" | "move" | null>(null);
-  const rolesStore = useRolesStore();
-  const permissionsStore = usePermissionsStore();
+  const roles = useRolesStore((s) => s.roles);
+  const rolesReady = useRolesStore((s) => s.ready);
+  const loadRoles = useRolesStore((s) => s.load);
+  const loadRolePermissions = useRolesStore((s) => s.loadRolePermissions);
+  const loadPermissions = usePermissionsStore((s) => s.load);
+  const permissions = usePermissionsStore((s) => s.permissions);
+  const loadCatalog = useAccessCatalogStore((s) => s.load);
+  const widgets = useAccessCatalogStore((s) => s.widgets);
 
   const [step, setStep] = useState<Step>("who");
-  // Set when the invitation has actually been created: the flow then shows the
-  // invitation instead of navigating away from it.
-  const [sent, setSent] = useState<{ id: string | null; name: string; phone: string } | null>(null);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [name, setName] = useState(() => searchParams.get("name") ?? "");
+  const [phone, setPhone] = useState(() => localPhone(searchParams.get("phone") ?? ""));
   const [roleId, setRoleId] = useState<string | null>(null);
-  // The selected role's reusable defaults.
-  const [selectedRolePermissions, setSelectedRolePermissions] = useState<string[]>([]);
-  // What this employee will actually have: the role's defaults with any exception
-  // the owner adds below. Starts equal to the defaults, so "no customization" is
-  // a state rather than something the owner has to re-enter.
+  const [roleDefaults, setRoleDefaults] = useState<string[]>([]);
   const [accessValue, setAccessValue] = useState<Set<string>>(new Set());
-  // Whether the chosen role's access has actually arrived. Needed as a state of its own:
-  // an unfetched role and a role that grants nothing both render as forty empty boxes, and
-  // the owner has no way to tell those apart. Nothing ticked is a decision; nothing loaded is
-  // not, so they cannot share one rendering.
   const [roleAccess, setRoleAccess] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  // `null` means every branch. Never an empty list: an empty scope is a member with nowhere to
-  // work, and the database now refuses it (0171) rather than letting their records land branchless.
-  // Which role's access sheet is open, if any. Separate from `roleId` (which role is CHOSEN): the
-  // sheet can be open on the chosen role, and closing it must not change the choice.
-  const [modifyRoleId, setModifyRoleId] = useState<string | null>(null);
+  const [roleFacts, setRoleFacts] = useState<Record<string, { permissions: number; widgets: number }>>({});
   const [branchScope, setBranchScope] = useState<string[] | null>([]);
-  const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean }[]>([]);
-  // The branch the owner is working in *right now*.
-  const activeBranchId = useShopStore((s) => s.activeBranchId);
+  const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean; address: string | null }[]>([]);
+  const [salaryEnabled, setSalaryEnabled] = useState(false);
+  const [salary, setSalary] = useState<SalaryDraft>(() => emptySalaryDraft());
+  const [salarySheetOpen, setSalarySheetOpen] = useState(false);
+  const [salaryDraft, setSalaryDraft] = useState<SalaryDraft>(() => emptySalaryDraft());
+  const [salarySheetTouched, setSalarySheetTouched] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [sent, setSent] = useState<{ id: string | null; name: string; phone: string } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const creatingRef = useRef(false);
+  const restoredRef = useRef(false);
+  const branchDefaultApplied = useRef(false);
+  const isRtl = language === "ur";
+  const ForwardChevron = isRtl ? ChevronLeft : ChevronRight;
+
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
 
   useEffect(() => {
-    rolesStore.load();
-    permissionsStore.load();
-    supabase.from("branches").select("id, name, is_default").eq("is_active", true).then(({ data }) => {
-      setBranches((data as any[]) ?? []);
-    });
+    void loadRoles();
+    void loadPermissions();
+    void loadCatalog();
+    // Branches are read directly because this screen needs inactive filtering and the tenant
+    // boundary is already carried by the session.
+    void supabase
+      .from("branches")
+      .select("id, name, is_default, address")
+      .eq("is_active", true)
+      .then(({ data: rows }) => setBranches((rows as typeof branches | null) ?? []));
+  }, [loadRoles, loadPermissions, loadCatalog]);
+
+  // Restore a draft only when the role builder sent the owner back here. The key is
+  // removed on read, so a later new-employee visit does not inherit stale fields.
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) {
+      return;
+    }
+    try {
+      const draft = JSON.parse(raw) as AddEmployeeDraft;
+      if (draft.name) setName(draft.name);
+      if (draft.phone) setPhone(draft.phone);
+      if (draft.salary) setSalary({ ...emptySalaryDraft(), ...draft.salary });
+      setSalaryEnabled(Boolean(draft.salaryEnabled));
+      if (draft.branchScope) setBranchScope(draft.branchScope);
+      if (draft.roleId) setRoleId(draft.roleId);
+    } catch {
+      // A corrupt draft is not a reason to block a new employee.
+    }
+    sessionStorage.removeItem(DRAFT_KEY);
   }, []);
 
-  /**
-   * The default branch scope, applied as soon as BOTH halves of it exist.
-   *
-   * WHAT THE DEFAULT SHOULD BE, and why it is not "every branch". A shop with one branch has
-   * nothing to decide. A shop with several does, and the safe answer is the branch the owner is
-   * standing in: an employee silently given every branch sees every branch's customers and
-   * takings, which is the exact mixing that is supposed to be impossible. Choosing the current
-   * branch by default makes the owner's own working context the answer unless they deliberately
-   * say otherwise — and widening it stays one tap away, because "All branches" is a choice they
-   * can still make.
-   *
-   * WHY IT IS NOT PART OF THE LOAD ABOVE. It used to be, which made the default depend on the
-   * branch context already being known when the LIST arrived. It is not: this screen is reached by
-   * URL straight after sign-in, when `activeBranchId` is still null, so the default was never
-   * applied and the scope stayed EMPTY — while the summary printed "All branches" for an empty
-   * array, and `Send invitation` then refused with "Choose at least one branch" on a screen that
-   * showed a branch. Measured 2026-10-14, in the browser: the refused invite is exactly how this
-   * screen wasted the owner's time. It now waits for the context and applies the same rule.
-   */
-  const branchDefaultApplied = useRef(false);
+  const createdRoleId = (location.state as { createdRoleId?: string } | null)?.createdRoleId ?? null;
   useEffect(() => {
-    if (branchDefaultApplied.current || !branches.length || !activeBranchId) return;
-    if (!branches.some((b) => b.id === activeBranchId)) return;
+    if (!createdRoleId || !rolesReady) return;
+    if (roles.some((role) => role.id === createdRoleId)) {
+      void selectRole(createdRoleId);
+    }
+    // `selectRole` is stable in behaviour and reads the current role list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createdRoleId, rolesReady, roles]);
+
+  // A role the owner opened with Modify comes back through the draft. Reload its saved
+  // access so the review reflects what was actually changed instead of an empty role.
+  useEffect(() => {
+    if (!rolesReady || !roleId || roleAccess !== "idle") return;
+    if (!roles.some((role) => role.id === roleId)) return;
+    void selectRole(roleId);
+    // `selectRole` is stable in behaviour and reads the current role list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rolesReady, roleId, roleAccess, roles]);
+
+  useEffect(() => {
+    if (branchDefaultApplied.current || branches.length === 0 || !activeBranchId) return;
+    if (!branches.some((branch) => branch.id === activeBranchId)) return;
     branchDefaultApplied.current = true;
-    // Only while nothing has been chosen: a deliberate choice is never overwritten by a default.
-    setBranchScope((chosen) => (chosen && chosen.length ? chosen : [activeBranchId]));
+    setBranchScope((current) => (current && current.length ? current : [activeBranchId]));
   }, [branches, activeBranchId]);
 
-  const steps: { key: Step; label: string; icon: typeof User }[] = [
-    { key: "who", label: t("addEmployee.stepWho"), icon: User },
-    { key: "role", label: t("addEmployee.stepRole"), icon: Shield },
-    { key: "where", label: t("addEmployee.stepWhere"), icon: MapPin },
-  ];
+  // Short facts on each role card: the catalogue is read once per role, not inferred from a name.
+  useEffect(() => {
+    if (!rolesReady || widgets.length === 0 || roles.length === 0) return;
+    let live = true;
+    void Promise.all(
+      roles.map(async (role) => {
+        const { codes } = await loadRolePermissions(role.id);
+        return [role.id, { permissions: codes.length, widgets: eligibleWidgets(widgets, new Set(codes)).length }] as const;
+      }),
+    ).then((rows) => {
+      if (live) setRoleFacts(Object.fromEntries(rows));
+    });
+    return () => {
+      live = false;
+    };
+  }, [rolesReady, roles, widgets, loadRolePermissions]);
 
-  const currentStepIdx = steps.findIndex((s) => s.key === step);
-  const firstName = name.trim().split(" ")[0] || "";
+  const roleObj = roles.find((role) => role.id === roleId) ?? null;
+  const stepIndex = STEP_ORDER.indexOf(step);
+  const firstName = name.trim().split(" ")[0] || t("addEmployee.stepWho");
+  const effectiveAccess = applyRestrictions(roleDefaults, restrictionOverrides(accessValue, roleDefaults));
+  const denied = restrictionCount(restrictionOverrides(accessValue, roleDefaults));
+  const eligible = eligibleWidgets(widgets, effectiveAccess);
+  const salaryFrequency = t(`salary.unit.${salary.payUnit}`);
+  const salaryCardSummary = salaryEnabled && salary.amount.trim()
+    ? t("salary.summary", { amount: salary.amount, frequency: salaryFrequency })
+    : t("salary.optionalHint");
+  const selectedBranches = (branchScope ?? [])
+    .map((id) => branches.find((branch) => branch.id === id))
+    .filter((branch): branch is { id: string; name: string; is_default: boolean; address: string | null } => Boolean(branch));
+  const branchSummary = selectedBranches.length
+    ? selectedBranches.map((branch) => branch.name).join(", ")
+    : t("addEmployee.noBranchChosen");
+
+  const accessByModule = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const code of effectiveAccess) {
+      const permission = permissions.find((entry) => entry.code === code);
+      if (!permission) continue;
+      map.set(permission.module, [...(map.get(permission.module) ?? []), permission.action]);
+    }
+    return [...map.entries()].sort(([left], [right]) => left.localeCompare(right));
+  }, [effectiveAccess, permissions]);
+
+  const sortedRoles = useMemo(
+    () =>
+      roles
+        .filter((role) => !isOwnerRoleName(role.name))
+        .sort((left, right) => {
+          const rank = (role: Role) => {
+            const name = role.name.trim().toLowerCase();
+            if (name === "staff") return 0;
+            if (name === "manager") return 1;
+            return 2;
+          };
+          return rank(left) - rank(right) || left.name.localeCompare(right.name);
+        }),
+    [roles],
+  );
+
+  async function selectRole(id: string) {
+    setRoleId(id);
+    setError("");
+    setRoleAccess("loading");
+    setRoleDefaults([]);
+    setAccessValue(new Set());
+    const { codes, error: readError } = await loadRolePermissions(id);
+    if (readError) {
+      setRoleAccess("error");
+      setError(t("access.roleUnavailable"));
+      return;
+    }
+    const next = new Set(codes);
+    setRoleDefaults(codes);
+    setAccessValue(next);
+    setRoleAccess("ready");
+  }
 
   function validateWho(): boolean {
     setError("");
-    if (!name.trim()) { setError(t("addEmployee.errName")); return false; }
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) { setError(t("addEmployee.errPhone")); return false; }
+    if (!name.trim()) {
+      setError(t("addEmployee.errName"));
+      return false;
+    }
+    if (phone.replace(/\D/g, "").length < 10) {
+      setError(t("addEmployee.errPhone"));
+      return false;
+    }
     const normalized = normalizePhone(phone);
-    if (employees.some((e) => normalizePhone(e.phone) === normalized)) {
+    if (employees.some((employee) => normalizePhone(employee.phone) === normalized)) {
       setError(t("addEmployee.errPhoneUsed"));
       return false;
+    }
+    if (salaryEnabled) {
+      const drafted = validateSalaryDraft(salary);
+      if (salaryHasErrors(drafted)) {
+        setError(t("salary.errFix"));
+        return false;
+      }
     }
     return true;
   }
 
-  function nextStep() {
+  function next() {
     setError("");
-    if (step === "who") { if (!validateWho()) return; setStep("role"); return; }
+    if (step === "who") {
+      if (!validateWho()) return;
+      setStep("role");
+      return;
+    }
     if (step === "role") {
-      if (!roleId) { setError(t("addEmployee.errRole")); return; }
+      if (!roleId) {
+        setError(t("addEmployee.errRole"));
+        return;
+      }
+      if (roleAccess !== "ready") {
+        setError(t("addEmployee.accessLoading"));
+        return;
+      }
       setStep("where");
+      return;
+    }
+    if (step === "where") {
+      if (!branchScope || branchScope.length === 0) {
+        setError(t("addEmployee.errNoBranch"));
+        return;
+      }
+      setStep("review");
     }
   }
 
-  /** Clear the form so the owner can add the next person without leaving. */
+  function back() {
+    setError("");
+    if (step === "role") return setStep("who");
+    if (step === "where") return setStep("role");
+    if (step === "review") return setStep("where");
+    navigateBack(location, navigate, teamBase);
+  }
+
+  function saveDraft() {
+    const draft: AddEmployeeDraft = {
+      name,
+      phone,
+      salaryEnabled,
+      salary,
+      branchScope,
+      roleId,
+    };
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+
+  function openSalarySheet() {
+    setSalaryDraft({ ...salary });
+    setSalarySheetTouched(false);
+    setSalarySheetOpen(true);
+  }
+
+  function saveSalaryDetails() {
+    const drafted = validateSalaryDraft(salaryDraft);
+    setSalarySheetTouched(true);
+    if (salaryHasErrors(drafted)) return;
+    setSalary({ ...salaryDraft });
+    setSalaryEnabled(true);
+    setSalarySheetOpen(false);
+  }
+
+  function removeSalary() {
+    setSalaryEnabled(false);
+    setSalary(emptySalaryDraft());
+    setSalaryDraft(emptySalaryDraft());
+  }
+
+  function createCustomRole() {
+    if (!validateWho()) return;
+    saveDraft();
+    navigate(`${base}/settings/roles/new`, {
+      state: {
+        setupFlow: {
+          returnPath: `${base}/employees/new`,
+          returnState: { fromAddEmployee: true },
+        },
+      },
+    });
+  }
+
+  function modifyRole(role: Role) {
+    saveDraft();
+    navigate(`${base}/settings/roles/${role.id}`, {
+      state: {
+        setupFlow: {
+          returnPath: `${base}/employees/new`,
+          returnState: { fromAddEmployee: true },
+        },
+      },
+    });
+  }
+
   function resetForm() {
     setSent(null);
     setStep("who");
     setName("");
     setPhone("");
-    setPhotoUrl(null);
     setRoleId(null);
-    setSelectedRolePermissions([]);
+    setRoleDefaults([]);
     setAccessValue(new Set());
     setRoleAccess("idle");
+    setBranchScope(activeBranchId ? [activeBranchId] : []);
+    setSalaryEnabled(false);
+    setSalary(emptySalaryDraft());
+    setSalaryDraft(emptySalaryDraft());
+    setSalarySheetTouched(false);
+    setSalarySheetOpen(false);
     setError("");
+    sessionStorage.removeItem(DRAFT_KEY);
   }
 
-  function prevStep() {
-    setError("");
-    if (step === "role") setStep("who");
-    else if (step === "where") setStep("role");
-  }
-
-  async function handleCreate() {
-    // A ref, not `loading`: React batches, so two taps in one task both read the
-    // pre-render `false` and the owner ends up with TWO employees from one decision.
-    // Held until the screen changes; released only when the attempt failed, which
-    // keeps the button disabled while the invitation screen renders (as before).
-    // Nobody assigned to no branch: an empty selection is not "all branches" (that is null) but
-    // a member with nowhere to work — their records would be written without a branch and then be
-    // invisible to every branch-limited reader, including them. Caught here as a sentence the
-    // owner can act on, and again by the database (0171) for anything that is not this screen.
+  async function invite() {
+    if (creatingRef.current) return;
+    if (!validateWho()) return;
+    if (!roleId || roleAccess !== "ready") {
+      setError(t("addEmployee.errRole"));
+      return;
+    }
     if (!Array.isArray(branchScope) || branchScope.length === 0) {
       setError(t("addEmployee.errNoBranch"));
       return;
     }
-    if (creatingRef.current) return;
+    if (salaryEnabled && salaryHasErrors(validateSalaryDraft(salary))) {
+      setError(t("salary.errFix"));
+      return;
+    }
     creatingRef.current = true;
-    setError("");
     setLoading(true);
+    setError("");
     try {
       const created = await createEmployee({
         name: name.trim(),
         phone: normalizePhone(phone),
-        role: "employee", // Legacy field retained for compatibility
-        roleId: roleId ?? undefined,
-        // The employee's exceptions, written with the employee in one transaction:
-        // creating them and then configuring them would leave a half-configured
-        // person behind if the second call failed.
-        overrides,
-        photoUrl: photoUrl ?? undefined,
-        branchScope: branchScope,
+        role: "employee",
+        roleId,
+        overrides: restrictionOverrides(accessValue, roleDefaults),
+        branchScope,
         createdBy: user?.id,
       });
+
+      if (salaryEnabled && salary.amount.trim()) {
+        try {
+          await saveEmployeeSalary({
+            employeeId: created.id,
+            branchId: branchScope[0],
+            amount: Number(salary.amount),
+            payEvery: Math.max(1, Number(salary.payEvery) || 1),
+            payUnit: salary.payUnit,
+            payDay: salary.payUnit === "month" ? Number(salary.payDay) || 1 : null,
+            startsOn: salary.startsOn || pkToday(),
+            endsOn: salary.endMode === "date" ? salary.endsOn : null,
+            totalPayments: salary.endMode === "payments" ? Number(salary.totalPayments) : null,
+            method: salary.method,
+            addToExpenses: salary.addToExpenses,
+          });
+        } catch (salaryFailure) {
+          addToast(
+            t("salary.savedEmployeeOnly", {
+              message: salaryFailure instanceof Error ? salaryFailure.message : t("salary.errSave"),
+            }),
+            "info",
+          );
+        }
+      }
+
       addToast(t("addEmployee.created", { name: name.trim() }), "success");
       clearNav();
-      // Show the invitation rather than leaving the screen: the link is the one
-      // thing the owner must hand over, and it is only here that they have just
-      // decided to add this person.
-      setSent({ id: created?.id ?? null, name: name.trim(), phone: normalizePhone(phone) });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("addEmployee.errFailed"));
-      setLoading(false);
+      setSent({ id: created.id, name: name.trim(), phone: normalizePhone(phone) });
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : t("addEmployee.errFailed"));
       creatingRef.current = false;
-    }
-  }
-
-  const fieldStyle = {
-    background: "var(--surface-2)",
-    border: "1px solid var(--divider)",
-    color: "var(--text-primary)",
-  } as const;
-
-  const roleObj = rolesStore.roles.find((r) => r.id === roleId);
-  const roleDefaultSet = new Set(selectedRolePermissions);
-  const overrides = diffOverrides(accessValue, roleDefaultSet);
-  const changeCount = overrideCount(overrides);
-  // An EMPTY selection is not "All branches". It used to print as such — the fallback below fired
-  // for an empty array as well as for `null` — so the summary promised the widest scope while the
-  // submit refused it as "no branch at all". Only `null` means every branch.
-  const branchNames = branchScope === null
-    ? t("addEmployee.allBranches")
-    : branches.filter((b) => branchScope.includes(b.id)).map((b) => b.name).join(", ") ||
-      t("addEmployee.noBranchChosen");
-
-  /**
-   * The employee's access (role defaults with any exception applied), grouped into
-   * the business areas the owner recognises. Reads the edit set, not the role's raw
-   * defaults, so the summary can never disagree with what will be stored.
-   */
-  function accessByArea(): { label: string; actions: string[] }[] {
-    const byModule = new Map<string, string[]>();
-    for (const code of accessValue) {
-      const perm = permissionsStore.permissions.find((p) => p.code === code);
-      const mod = perm?.module ?? code.split(".")[0];
-      const action = perm?.action ?? code.split(".")[1] ?? "";
-      byModule.set(mod, [...(byModule.get(mod) ?? []), actionLabel(action)]);
-    }
-    return [...byModule.entries()].map(([mod, actions]) => ({ label: areaLabel(mod), actions }));
-  }
-
-  const accessSummary = accessByArea().map((a) => a.label).join(", ");
-
-  /**
-   * Choose a role and load what it grants. One function so the retry on a failed read is the
-   * same call that failed — not a second, subtly different path.
-   */
-  async function selectRole(id: string) {
-    setError("");
-    setRoleId(id);
-    setRoleAccess("loading");
-    setSelectedRolePermissions([]);
-    setAccessValue(new Set());
-    const { codes, error: readError } = await rolesStore.loadRolePermissions(id);
-    if (readError) {
-      // Leave the fields untouched and say the read failed. Continuing with an empty set here
-      // used to look like a role that grants nothing.
-      setRoleAccess("error");
-      return;
-    }
-    setSelectedRolePermissions(codes);
-    // Choosing a role replaces the defaults; it does not touch the employee, who does not
-    // exist yet.
-    setAccessValue(applyOverrides(codes, {}));
-    setRoleAccess("ready");
-  }
-
-  /**
-   * The access sheet for one role.
-   *
-   * Opened by `Modify`, and it SELECTS the role first when it was not the chosen one: an owner
-   * who opens "Modify" on a role they have not picked is editing this employee's access under that
-   * role, and the flow should then say which role it is talking about.
-   */
-  async function openModify(id: string) {
-    if (roleId !== id) await selectRole(id);
-    setModifyRoleId(id);
-  }
-
-  /**
-   * One role card: choosing it, and — separately — changing what it carries.
-   *
-   * WHY THE TWO ARE SEPARATE ACTIONS. Tapping a role used to expand forty checkboxes inside the
-   * card, so the act of CHOOSING a role was inseparable from the act of EDITING its access: every
-   * owner who simply wanted "Store Manager" was shown a wall of boxes they had not asked for, and
-   * the only thing the tap was supposed to mean got lost in it.
-   *
-   * Now the card chooses, and the small `Modify` in its corner opens the access list. That is also
-   * what makes the choice legible: what you have picked is a name, and what it grants is one tap
-   * away rather than in your face.
-   */
-  function roleCard(r: (typeof rolesStore.roles)[number]) {
-    const selected = roleId === r.id;
-    return (
-      <div
-        key={r.id}
-        className="flex items-center gap-3 p-4 rounded-[var(--radius-card)] transition-colors"
-        style={{
-          background: "var(--surface)",
-          border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
-        }}
-      >
-        <button
-          onClick={() => void selectRole(r.id)}
-          className="flex items-start gap-3 text-start flex-1 min-w-0"
-        >
-          <div
-            className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5"
-            style={{ borderColor: selected ? "var(--brand)" : "var(--text-secondary)" }}
-          >
-            {selected && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{r.name}</p>
-            {r.description && (
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>{r.description}</p>
-            )}
-            {/* What the owner changed, said on the card that carries it — so a customized role is
-                recognisable without opening it again. */}
-            {selected && roleAccess === "ready" && changeCount > 0 && (
-              <p className="text-11 mt-1" style={{ color: "var(--brand-dark)" }}>
-                {t(changeCount === 1 ? "addEmployee.customizedOne" : "addEmployee.customized", {
-                  count: changeCount,
-                  role: r.name,
-                })}
-              </p>
-            )}
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => void openModify(r.id)}
-          data-testid={`role-modify-${r.id}`}
-          className="shrink-0 h-8 px-3 rounded-full text-12 font-bold ds-pressable"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
-        >
-          {t("addEmployee.modifyRole")}
-        </button>
-      </div>
-    );
-  }
-
-  async function handleAssign() {
-    if (creatingRef.current || !existingId || !activeBranchId || !assignment) return;
-    creatingRef.current = true;
-    setLoading(true);
-    setError("");
-    try {
-      await assignBranch(existingId, activeBranchId, assignment);
-      addToast(t("employeeBranch.saved"), "success");
-      navigate(`/admin/employees/${existingId}`, { replace: true });
-    } catch {
-      setError(t("employeeBranch.failed"));
-    } finally {
       setLoading(false);
-      creatingRef.current = false;
-      setAssignment(null);
     }
   }
 
-  if (employeeMode === "existing") {
-    return (
-      <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}>
-        <StatusBar />
-        <NavHeader title={t("addEmployee.title")} />
-        <div className="p-4 flex flex-col gap-4">
-          <Button variant="outline" onClick={() => setEmployeeMode("new")} testId="employee-mode-new">{t("employeeBranch.new")}</Button>
-          <ListCard section={t("employeeBranch.existing")}>
-            {employees.filter((e) => !e.isOriginalOwner && e.role === "employee" && e.isActive).map((e) => (
-              <ListRow key={e.id} title={e.name} meta={e.phone} selected={existingId === e.id}
-                testId={`existing-employee-${e.id}`} onClick={() => setExistingId(e.id)} />
-            ))}
-          </ListCard>
-          <Button disabled={!existingId || !activeBranchId || loading} onClick={() => setAssignment("add")} testId="employee-branch-add">{t("employeeBranch.add")}</Button>
-          <Button variant="outline" disabled={!existingId || !activeBranchId || loading} onClick={() => setAssignment("move")} testId="employee-branch-move">{t("employeeBranch.move")}</Button>
-          {error && <p className="text-12" style={{ color: "var(--error)" }}>{error}</p>}
-        </div>
-        <ConfirmDialog open={assignment !== null} title={t(assignment === "move" ? "employeeBranch.move" : "employeeBranch.add")}
-          message={t(assignment === "move" ? "employeeBranch.moveBody" : "employeeBranch.addBody")}
-          confirmLabel={t("common.confirm")} destructive={assignment === "move"} loading={loading}
-          onConfirm={() => void handleAssign()} onCancel={() => setAssignment(null)} />
-      </div>
-    );
-  }
-
-  // Confirmation: the invitation exists now, so what follows is handing it over.
   if (sent) {
     return (
-      <div
-        className="flex flex-col w-full min-h-full"
-        style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
-      >
+      <div className="flex flex-col w-full min-h-[100dvh]" style={{ background: "var(--background)", color: "var(--text-primary)" }}>
         <StatusBar />
         <NavHeader title={t("addEmployee.title")} />
-
-        <div className="flex-1 flex flex-col gap-4 p-4 animate-fade-in-up">
+        <div className="flex-1 flex flex-col gap-4 p-4">
           <div className="flex flex-col items-center text-center gap-2 pt-4 pb-2">
-            <CheckCircle2 size={40} style={{ color: "var(--brand)" }} />
-            <p className="text-lg font-bold" style={{ color: "var(--text-primary)" }} data-testid="invite-sent-title">
+            <CheckCircle2 size={40} style={{ color: "var(--brand-dark)" }} />
+            <p className="text-lg font-bold" data-testid="invite-sent-title">
               {t("addEmployee.created", { name: sent.name })}
             </p>
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              {t("addEmployee.sentNext", { name: firstName })}
+              {t("addEmployee.sentNext", { name: sent.name.split(" ")[0] || sent.name })}
             </p>
           </div>
-
           <InviteLinkCard name={sent.name} phone={sent.phone} />
         </div>
-
         <div className="p-4 pb-6 flex gap-3">
           <button
+            type="button"
             onClick={resetForm}
             className="h-12 px-6 rounded-full font-bold text-sm"
             style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
           >
             {t("addEmployee.addAnother")}
           </button>
-          <button
-            onClick={() => navigate(sent.id ? `/admin/employees/${sent.id}` : "/admin/employees", { replace: true })}
-            className="flex-1 h-12 rounded-full font-bold text-sm"
-            style={{ background: "var(--brand)", color: "#0a0a0a" }}
-            data-testid="invite-open-employee"
+          <Button
+            className="flex-1"
+            variant="cta"
+            onClick={() => navigate(sent.id ? `${teamBase}/${sent.id}` : teamBase, { replace: true })}
+            testId="invite-open-employee"
           >
-            {t("addEmployee.openEmployee", { name: firstName })}
-          </button>
+            {t("addEmployee.openEmployee", { name: sent.name.split(" ")[0] || sent.name })}
+          </Button>
         </div>
       </div>
     );
@@ -454,288 +499,480 @@ export default function AddEmployeePage() {
 
   return (
     <div
-      className="flex flex-col w-full min-h-full"
-      style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
+      className="flex flex-col w-full min-h-[100dvh]"
+      style={{ background: "var(--background)", color: "var(--text-primary)" }}
+      data-testid="add-employee-page"
+      data-step={step}
     >
       <StatusBar />
-      <NavHeader title={t("addEmployee.title")} />
+      <NavHeader
+        title={t("addEmployee.title")}
+        onBack={back}
+        backTo={teamBase}
+        right={
+          <span className="text-11 font-semibold tabular-nums" style={{ color: "var(--text-secondary)" }} data-testid="add-employee-step-count">
+            {t("roles.stepOfShort", { step: String(stepIndex + 1), total: "4" })}
+          </span>
+        }
+      />
 
-      <div className="px-4 pt-3">
-        <Button variant="outline" onClick={() => setEmployeeMode("existing")} testId="employee-mode-existing">{t("employeeBranch.existing")}</Button>
+      <div className="h-[3px] w-full" style={{ background: "var(--divider)" }} aria-hidden>
+        <div
+          className="h-full"
+          style={{
+            width: `${((stepIndex + 1) / STEP_ORDER.length) * 100}%`,
+            background: "var(--brand)",
+            transition: "width 200ms ease",
+          }}
+        />
       </div>
 
-      {/* Step indicator — named, so the owner can see the whole journey up front */}
-      <div className="flex items-start justify-center gap-1 px-4 pt-3">
-        {steps.map((s, i) => (
-          <div key={s.key} className="flex items-start gap-1">
-            <div className="flex flex-col items-center gap-1" style={{ width: 64 }}>
-              <div
-                className="w-7 h-7 rounded-full flex items-center justify-center text-10 font-bold"
-                style={{
-                  background: i <= currentStepIdx ? "var(--brand)" : "var(--surface-2)",
-                  color: i <= currentStepIdx ? "#0a0a0a" : "var(--text-secondary)",
-                  border: `1px solid ${i <= currentStepIdx ? "var(--brand)" : "var(--divider)"}`,
-                }}
-              >
-                {i < currentStepIdx ? <Check size={12} /> : i + 1}
-              </div>
-              <span
-                className="text-9 text-center leading-tight truncate w-full"
-                style={{ color: i === currentStepIdx ? "var(--text-primary)" : "var(--text-secondary)" }}
-              >
-                {s.label}
-              </span>
-            </div>
-            {i < steps.length - 1 && (
-              <div className="w-5 h-0.5 mt-3.5" style={{ background: i < currentStepIdx ? "var(--brand)" : "var(--divider)" }} />
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="flex-1 flex flex-col p-4 gap-4">
-        {/* Step 1: who they are — the required fields come first. */}
+      <div className="flex-1 px-4 pt-6 pb-6 flex flex-col gap-5">
         {step === "who" && (
           <>
             <div>
-              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-                {t("addEmployee.name")} *
+              <h1 className="text-17 font-bold">{t("addEmployee.infoTitle")}</h1>
+              <p className="text-13 mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                {t("addEmployee.infoHint")}
               </p>
+            </div>
+            <div>
+              <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.name")} *</p>
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(event) => setName(event.target.value)}
                 placeholder={t("addEmployee.nameHint")}
-                className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-                style={fieldStyle}
+                data-testid="employee-name"
                 autoFocus
+                className="w-full h-12 rounded-[var(--radius-input)] px-4 text-14 outline-none"
+                style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
               />
             </div>
             <div>
-              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-                {t("addEmployee.phone")} *
-              </p>
+              <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.phone")} *</p>
               <input
                 {...phoneFieldProps()}
                 value={phone}
-                onChange={(e) => setPhone(digitsOnlyPhone(e.target.value))}
+                onChange={(event) => setPhone(digitsOnlyPhone(event.target.value))}
                 placeholder="03001234567"
-                className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-                style={fieldStyle}
+                data-testid="employee-phone"
+                className="w-full h-12 rounded-[var(--radius-input)] px-4 text-14 outline-none"
+                style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
               />
-              <p className="text-11 mt-1" style={{ color: "var(--text-secondary)" }}>
-                {t("addEmployee.phoneHint")}
-              </p>
+              <p className="text-10 mt-1" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.phoneHint")}</p>
             </div>
-            <div className="pt-1">
-              <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-                {t("addEmployee.photoOptional")}
-              </p>
-              <div className="flex justify-center">
-                <ImageUpload bucket="employee-photos" value={photoUrl} onChange={setPhotoUrl} shape="circle" label={t("addEmployee.addPhoto")} />
-              </div>
-            </div>
+
+            <button
+              type="button"
+              onClick={openSalarySheet}
+              data-testid="add-employee-salary-card"
+              className="w-full rounded-[var(--radius-card)] p-3.5 flex items-center gap-3 text-start"
+              style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+            >
+              <span
+                className="size-11 rounded-[var(--radius-tile)] grid place-items-center shrink-0"
+                style={{ background: "var(--tone-sunken)", color: "var(--brand-dark)" }}
+              >
+                <FileText size={17} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="text-13 font-bold block">{t("salary.title")}</span>
+                <span className="text-10 mt-0.5 block leading-snug" style={{ color: "var(--text-secondary)" }}>
+                  {salaryCardSummary}
+                </span>
+              </span>
+              <span className="shrink-0 flex items-center gap-1 text-11 font-semibold" style={{ color: "var(--brand-dark)" }}>
+                {salaryEnabled && salary.amount ? t("addEmployee.editSalary") : t("addEmployee.addSalary")}
+                <ForwardChevron size={14} />
+              </span>
+            </button>
           </>
         )}
 
-        {/* Step 2: what they do — one decision, and the access it carries. */}
         {step === "role" && (
           <>
-            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-              {t("addEmployee.roleQuestion", { name: firstName })}
-            </p>
-            <div className="flex flex-col gap-3">
-              {rolesStore.roles.map(roleCard)}
-            </div>
-            {!roleId && (
-              <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-                {t("addEmployee.roleRequired")}
+            <div>
+              <h1 className="text-17 font-bold">{t("addEmployee.roleHeading")}</h1>
+              <p className="text-13 mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                {t("addEmployee.roleHint")}
               </p>
+            </div>
+            {!rolesReady ? (
+              <SkeletonList rows={4} />
+            ) : (
+              <div
+                className="rounded-[var(--radius-card)] overflow-hidden"
+                style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+                data-testid="add-employee-roles"
+              >
+                {sortedRoles.map((role, index) => {
+                  const selected = roleId === role.id;
+                  const facts = roleFacts[role.id];
+                  const factLine = facts
+                    ? [
+                        t("roles.permissionShort", { count: String(facts.permissions) }),
+                        t("roles.widgetShort", { count: String(facts.widgets) }),
+                      ].join(" · ")
+                    : "";
+                  return (
+                    <div
+                      key={role.id}
+                      className="flex items-start gap-2 p-4"
+                      style={{
+                        borderTop: index > 0 ? "1px solid var(--divider)" : undefined,
+                        background: selected ? "var(--surface-2)" : "transparent",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => void selectRole(role.id)}
+                        aria-pressed={selected}
+                        data-testid={`add-role-${role.id}`}
+                        className="flex items-start gap-3 text-start flex-1 min-w-0"
+                      >
+                        <span
+                          className="size-5 rounded-full grid place-items-center shrink-0 mt-0.5"
+                          style={{ border: `1.5px solid ${selected ? "var(--text-primary)" : "var(--text-tertiary)"}` }}
+                        >
+                          {selected && <span className="size-2 rounded-full" style={{ background: "var(--text-primary)" }} />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                            <strong className="text-15 font-bold">{role.name}</strong>
+                            {factLine && (
+                              <span className="text-10 font-semibold" style={{ color: "var(--brand-dark)" }}>
+                                {factLine}
+                              </span>
+                            )}
+                          </span>
+                          {role.description && (
+                            <span className="text-11 mt-1 block leading-snug" style={{ color: "var(--text-secondary)" }}>
+                              {role.description}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => modifyRole(role)}
+                        className="shrink-0 flex items-center gap-0.5 text-10 font-semibold mt-0.5"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        {t("addEmployee.modifyRole")}
+                        <ForwardChevron size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={createCustomRole}
+              data-testid="add-employee-create-role"
+              className="min-h-11 rounded-[var(--radius-tile)] px-3 flex items-center gap-2 text-start"
+              style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
+            >
+              <span className="size-8 rounded-full grid place-items-center shrink-0" style={{ background: "var(--surface)", color: "var(--brand-dark)" }}>
+                <User size={15} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="text-12 font-bold block">{t("addEmployee.createCustomRole")}</span>
+                <span className="text-10 block mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.createCustomRoleHint")}</span>
+              </span>
+              <ForwardChevron size={15} style={{ color: "var(--text-secondary)" }} />
+            </button>
+            {roleId && roleAccess === "loading" && (
+              <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.accessLoading")}</p>
+            )}
+            {roleAccess === "error" && (
+              <button type="button" onClick={() => roleId && void selectRole(roleId)} className="text-11 font-bold text-start" style={{ color: "var(--brand-dark)" }}>
+                {t("common.retry")}
+              </button>
             )}
           </>
         )}
 
-        {/* Step 3: where they work, then confirm. */}
         {step === "where" && (
           <>
-            {branches.length > 1 && (
-              <>
-                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                  {t("addEmployee.branchQuestion", { name: firstName })}
-                </p>
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => setBranchScope(branches.map((b) => b.id))}
-                    className="flex items-center gap-3 p-4 rounded-[var(--radius-card)] text-start"
-                    style={{
-                      background: "var(--surface)",
-                      border: `1.5px solid ${branchScope === null ? "var(--brand)" : "var(--divider)"}`,
-                    }}
-                  >
-                    <div
-                      className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
-                      style={{ borderColor: branchScope === null ? "var(--brand)" : "var(--text-secondary)" }}
-                    >
-                      {branchScope === null && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
-                    </div>
-                    <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("addEmployee.allBranches")}</p>
-                  </button>
-                  {branches.map((b) => (
-                    <button
-                      key={b.id}
-                      onClick={() => {
-                        setBranchScope((prev) => {
-                          if (!prev) return [b.id];
-                          if (prev.includes(b.id)) return prev.filter((id) => id !== b.id);
-                          return [...prev, b.id];
-                        });
-                      }}
-                      className="flex items-center gap-3 p-4 rounded-[var(--radius-card)] text-start"
-                      style={{
-                        background: "var(--surface)",
-                        border: `1.5px solid ${branchScope?.includes(b.id) ? "var(--brand)" : "var(--divider)"}`,
-                      }}
-                    >
-                      <div
-                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
-                        style={{ borderColor: branchScope?.includes(b.id) ? "var(--brand)" : "var(--text-secondary)" }}
-                      >
-                        {branchScope?.includes(b.id) && <div className="w-2.5 h-2.5 rounded-full" style={{ background: "var(--brand)" }} />}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{b.name}</p>
-                        {b.is_default && <p className="text-10" style={{ color: "var(--brand)" }}>{t("addEmployee.mainBranch")}</p>}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-            {branches.length === 1 && (
-              <div className="rounded-[var(--radius-tile)] p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                  {t("addEmployee.worksAt", { branch: branches[0].name })}
-                </p>
-              </div>
-            )}
-            {branches.length === 0 && (
-              <div className="rounded-[var(--radius-tile)] p-3" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noBranches")}</p>
-              </div>
-            )}
-
-            <p className="text-sm font-bold pt-1" style={{ color: "var(--text-primary)" }}>{t("addEmployee.reviewTitle")}</p>
-            <ListCard>
-              {[
-                { label: t("addEmployee.labelName"), value: name },
-                { label: t("addEmployee.labelPhone"), value: phone },
-                { label: t("addEmployee.labelRole"), value: roleObj?.name ?? "—" },
-                { label: t("addEmployee.labelBranch"), value: branchNames },
-                { label: t("addEmployee.labelAccess"), value: accessSummary || t("addEmployee.noRoleAccess") },
-              ].map(({ label, value }) => (
-                <ListRow
-                  key={label}
-                  trailing={<span className="text-sm font-semibold text-end max-w-[60%] break-words" style={{ color: "var(--text-primary)" }}>{value}</span>}
-                >
-                  <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{label}</span>
-                </ListRow>
-              ))}
-            </ListCard>
-            {changeCount > 0 && (
-              <p className="text-11 font-semibold" style={{ color: "var(--brand)" }}>
-                {t("addEmployee.customized", { count: changeCount, role: roleObj?.name ?? "" })}
+            <div>
+              <h1 className="text-17 font-bold">{t("addEmployee.branchAssignment")}</h1>
+              <p className="text-13 mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                {t("addEmployee.branchHint")}
               </p>
+            </div>
+            {branches.length === 0 ? (
+              <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.noBranches")}</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {branches.map((branch) => {
+                  const selected = branchScope?.includes(branch.id) ?? false;
+                  return (
+                    <button
+                      key={branch.id}
+                      type="button"
+                      onClick={() =>
+                        setBranchScope((current) => {
+                          const list = current ?? [];
+                          return list.includes(branch.id)
+                            ? list.filter((id) => id !== branch.id)
+                            : [...list, branch.id];
+                        })
+                      }
+                      aria-pressed={selected}
+                      data-testid={`add-branch-${branch.id}`}
+                      className="w-full rounded-[var(--radius-card)] p-4 flex items-center gap-3 text-start"
+                      style={{
+                        background: selected ? "var(--surface)" : "var(--tone-card)",
+                        border: `1.5px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
+                      }}
+                    >
+                      <span
+                        className="size-5 rounded-full grid place-items-center shrink-0"
+                        style={selected
+                          ? { background: "var(--brand)", color: "#0a0a0a" }
+                          : { border: "1.5px solid var(--text-secondary)" }}
+                      >
+                        {selected && <Check size={12} />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="text-14 font-bold block">{branch.name}</span>
+                        <span className="text-11 block mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                          {branch.address || branchKind(t, branch.is_default)}
+                        </span>
+                      </span>
+                      <MapPin size={15} style={{ color: "var(--text-secondary)" }} />
+                    </button>
+                  );
+                })}
+              </div>
             )}
-            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-              {t("addEmployee.inviteHint", { name: firstName })}
-            </p>
           </>
         )}
 
-        {error && <p className="text-xs" style={{ color: "var(--error)" }}>{error}</p>}
+        {step === "review" && (
+          <>
+            <div>
+              <h1 className="text-17 font-bold">{t("addEmployee.reviewHeading")}</h1>
+              <p className="text-13 mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                {t("addEmployee.reviewHint")}
+              </p>
+            </div>
+            <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }} data-testid="add-employee-review">
+              <div className="flex items-start gap-3">
+                <span className="size-11 rounded-full grid place-items-center shrink-0 text-14 font-bold" style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>
+                  {initialsOf(name)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-16 font-bold">{name || t("addEmployee.newPerson")}</p>
+                  <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>{phone}</p>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    <span className="text-9 font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--warning-bg)", color: "var(--warning)" }}>
+                      {t("addEmployee.invitationPending")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {salaryEnabled && salary.amount && (
+              <div
+                className="rounded-[var(--radius-card)] p-4 flex items-center gap-3"
+                style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
+                data-testid="add-employee-salary-review"
+              >
+                <span
+                  className="size-10 rounded-[var(--radius-tile)] grid place-items-center shrink-0"
+                  style={{ background: "var(--tone-sunken)", color: "var(--brand-dark)" }}
+                >
+                  <FileText size={16} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-13 font-bold">{t("salary.title")}</p>
+                  <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>{salaryCardSummary}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStep("who")}
+                  className="shrink-0 text-10 font-semibold"
+                  style={{ color: "var(--brand-dark)" }}
+                >
+                  {t("addEmployee.editSalary")}
+                </button>
+              </div>
+            )}
+
+            <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-13 font-bold">{t("addEmployee.assignment")}</p>
+                <button
+                  type="button"
+                  onClick={() => setStep("role")}
+                  className="text-10 font-semibold"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  {t("roles.editStep")}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-3">
+                <div className="min-w-0">
+                  <p className="text-9 uppercase tracking-[0.14em]" style={{ color: "var(--text-secondary)" }}>
+                    {t("addEmployee.labelRole")}
+                  </p>
+                  <p className="text-13 font-semibold mt-1 break-words">{roleObj?.name ?? "—"}</p>
+                  {roleObj?.departmentName && (
+                    <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>{roleObj.departmentName}</p>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-9 uppercase tracking-[0.14em]" style={{ color: "var(--text-secondary)" }}>
+                    {t("addEmployee.labelBranch")}
+                  </p>
+                  <p className="text-13 font-semibold mt-1 break-words">{branchSummary}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-13 font-bold">{t("addEmployee.inheritedAccess")}</p>
+                  <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    {t("addEmployee.inheritedFrom", { role: roleObj?.name ?? "—" })}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCustomizeOpen(true)}
+                  disabled={roleAccess !== "ready"}
+                  data-testid="add-employee-customize-access"
+                  className="h-8 px-2.5 rounded-full text-10 font-bold shrink-0 disabled:opacity-45"
+                  style={{ background: "var(--tone-sunken)", color: "var(--brand-dark)" }}
+                >
+                  {t("addEmployee.customizeAccess")}
+                </button>
+              </div>
+              {roleAccess === "loading" ? (
+                <SkeletonList rows={2} bare />
+              ) : roleAccess === "error" ? (
+                <p className="text-11 mt-2" style={{ color: "var(--error)" }}>{t("access.roleUnavailable")}</p>
+              ) : (
+                <>
+                  {denied > 0 && (
+                    <p className="text-10 mt-2" style={{ color: "var(--brand-dark)" }}>
+                      {t("addEmployee.restrictedCount", { count: String(denied) })}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    <span className="text-9 font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>
+                      {t("roles.permissionShort", { count: String(effectiveAccess.size) })}
+                    </span>
+                    {accessByModule.slice(0, 6).map(([module]) => (
+                      <span key={module} className="text-9 px-2 py-0.5 rounded-full" style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}>
+                        {areaLabel(module)}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <DashboardEligibility permissions={effectiveAccess} compact testId="add-employee-widgets" />
+
+            <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("addEmployee.inviteHint", { name: firstName })}</p>
+          </>
+        )}
+
+        {error && <p className="text-11" style={{ color: "var(--error)" }} data-testid="add-employee-error">{error}</p>}
       </div>
 
-      {/*
-        The access sheet — the multi-select the owner asked to reach through `Modify`.
+      <div className="px-4 py-4 pb-6 flex items-center justify-end gap-4" style={{ borderTop: "1px solid var(--divider)" }}>
+        {step === "review" ? (
+          <Button
+            className="min-w-[160px]"
+            size="lg"
+            variant="cta"
+            onClick={() => void invite()}
+            loading={loading}
+            disabled={roleAccess !== "ready" || !roleId || !branchScope?.length}
+            testId="add-employee-invite"
+          >
+            {loading ? t("addEmployee.inviting") : t("addEmployee.invite")}
+          </Button>
+        ) : (
+          <Button className="min-w-[132px]" size="lg" variant="cta" onClick={next} testId="add-employee-next">
+            {t("addEmployee.next")} <ForwardChevron size={16} className="ms-1" />
+          </Button>
+        )}
+      </div>
 
-        It opens on the role named in its title, and above the checklist sits the line that says
-        what the list is for (`access.subheading`), because “which of these forty boxes should be
-        ticked” is the question this screen exists to answer. Nothing here is written until the
-        employee is invited, so Cancel is a real cancel.
-      */}
       <Sheet
-        open={modifyRoleId !== null}
-        title={rolesStore.roles.find((r) => r.id === modifyRoleId)?.name ?? t("addEmployee.stepRole")}
-        onClose={() => setModifyRoleId(null)}
+        open={salarySheetOpen}
+        title={t("salary.sheetTitle")}
+        onClose={() => setSalarySheetOpen(false)}
       >
         <div className="px-4 pb-4">
-          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-            {t("addEmployee.effectiveAccess", { name: firstName || t("addEmployee.stepWho") })}
-          </p>
-          <EmployeeAccessEditor
-            roleDefaults={roleDefaultSet}
-            value={accessValue}
-            onChange={setAccessValue}
-            state={roleAccess === "ready" ? "ready" : roleAccess === "error" ? "error" : "loading"}
+          <SalaryFields
+            value={salaryDraft}
+            onChange={setSalaryDraft}
+            errors={salarySheetTouched ? validateSalaryDraft(salaryDraft) : {}}
           />
-          {roleAccess === "error" && (
+          <div className="flex gap-2 mt-4">
             <button
-              onClick={() => modifyRoleId && void selectRole(modifyRoleId)}
-              className="text-11 font-bold mt-2"
-              style={{ color: "var(--brand)" }}
+              type="button"
+              onClick={() => setSalarySheetOpen(false)}
+              className="flex-1 h-11 rounded-full text-12 font-semibold"
+              style={{ background: "var(--tone-sunken)", color: "var(--text-primary)" }}
             >
-              {t("common.retry")}
+              {t("common.cancel")}
             </button>
-          )}
-          {roleAccess === "ready" && (
-            <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
-              <span className="text-10" style={{ color: "var(--text-secondary)" }}>
-                {changeCount > 0
-                  ? t(changeCount === 1 ? "addEmployee.customizedOne" : "addEmployee.customized", {
-                      count: changeCount,
-                      role: rolesStore.roles.find((r) => r.id === modifyRoleId)?.name ?? "",
-                    })
-                  : t("addEmployee.roleAccessDefault")}
-              </span>
-            </div>
-          )}
-          <Button fullWidth className="mt-3" onClick={() => setModifyRoleId(null)} testId="role-modify-done">
-            {t("common.close")}
-          </Button>
+            <Button
+              className="flex-1"
+              variant="cta"
+              onClick={saveSalaryDetails}
+              testId="add-employee-salary-save"
+            >
+              {t("salary.save")}
+            </Button>
+          </div>
+          <p className="text-10 mt-2" style={{ color: "var(--text-tertiary)" }}>
+            {t("salary.addedToExpensesHint")}
+          </p>
         </div>
       </Sheet>
 
-      {/* Bottom buttons */}
-      <div className="p-4 pb-6 flex gap-3">
-        {step !== "who" && (
-          <button
-            onClick={prevStep}
-            className="h-12 px-6 rounded-full font-bold text-sm"
-            style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
-          >
-            {t("addEmployee.back")}
-          </button>
-        )}
-        {step === "where" ? (
-          <button
-            onClick={handleCreate}
-            disabled={loading}
-            className="flex-1 h-12 rounded-full font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-50"
-            style={{ background: "var(--brand)", color: "#0a0a0a" }}
-          >
-            {loading ? t("addEmployee.inviting") : t("addEmployee.invite")}
-          </button>
-        ) : (
-          <button
-            onClick={nextStep}
-            disabled={step === "role" && !roleId}
-            className="flex-1 h-12 rounded-full font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-            style={{ background: "var(--brand)", color: "#0a0a0a" }}
-          >
-            {t("addEmployee.next")}
-            <ChevronRight size={16} className={isUrdu ? "rotate-180" : ""} />
-          </button>
-        )}
-      </div>
+      <Sheet
+        open={customizeOpen}
+        title={t("addEmployee.customizeFor", { name: firstName })}
+        onClose={() => setCustomizeOpen(false)}
+      >
+        <div className="px-4 pb-4">
+          <EmployeeAccessEditor
+            roleDefaults={new Set(roleDefaults)}
+            value={accessValue}
+            onChange={setAccessValue}
+            state={roleAccess === "ready" ? "ready" : roleAccess === "error" ? "error" : "loading"}
+            restrictOnly
+          />
+          <div className="mt-3 pt-3 flex items-center justify-between gap-3" style={{ borderTop: "1px solid var(--divider)" }}>
+            <span className="text-10" style={{ color: "var(--text-secondary)" }}>
+              {denied > 0 ? t("addEmployee.restrictedCount", { count: String(denied) }) : t("addEmployee.roleDefaultAccess")}
+            </span>
+            <Button onClick={() => setCustomizeOpen(false)} testId="add-employee-customize-done">
+              {t("common.close")}
+            </Button>
+          </div>
+        </div>
+      </Sheet>
     </div>
   );
+}
+
+function initialsOf(name: string): string {
+  return name.split(" ").filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function firstWithName(name: string, fallback: string): string {
+  const first = name.trim().split(" ")[0];
+  return first || fallback;
 }

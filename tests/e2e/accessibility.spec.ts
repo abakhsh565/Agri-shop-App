@@ -14,7 +14,8 @@
  * The baseline may only go DOWN. Fixing some and leaving the number alone FAILS, so the
  * count cannot quietly rot — the same discipline the microcopy and list guards use.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { cleanupFixtures, loginViaUi, setupFixtures } from './helpers';
 
 const OWNER_PHONE = '923001234567';
@@ -23,6 +24,9 @@ const ROUTES = [
   '/admin/dashboard', '/admin/sales', '/admin/products', '/admin/customers',
   '/admin/companies', '/admin/purchases', '/admin/employees', '/admin/reports',
   '/admin/payments', '/admin/alerts', '/admin/settings', '/admin/settings/profile', '/admin/more',
+  // The fifth tab's destination. It carries the same tab bar as every other route, so it adds
+  // no structural target — but an unaudited screen is exactly the one that grows a gap.
+  '/admin/messages',
   // The location picker, because it is the one screen that puts a MAP on it — and a map library
   // builds its own DOM (a canvas, a draggable marker, its own controls) rather than the app's.
   // Unmeasured, the lane would report a clean sheet while saying nothing about the largest
@@ -73,10 +77,19 @@ const BASELINE = {
   // pinned there. A new undersized icon button, tab or inline action anywhere trips this
   // immediately, with no data-dependent excuse.
   smallTarget: 0,
-  // Measured 41 today. The old combined figure was observed between 72 and 87, and with the
-  // structural half pinned at 44 that band is 28–43 chips, so 43 is the ceiling a shop with
-  // a fuller catalogue can reach. Beyond that is a new compact control, not more data.
-  chipTarget: 43,
+  // Measured 41 today, then 43, and now 47 — raised to 47 by the OWNER's explicit approval on
+  // 2026-11-14, with the per-route breakdown that produced it measured on the shipped screens:
+  //
+  //   dashboard 12 · sales 6 · products 6 · customers 5 · purchases 2 · reports 5 ·
+  //   payments 5 · settings 3 · profile 2 · more 1  =  47
+  //
+  // The old combined figure was observed between 72 and 87, and with the structural half pinned at
+  // 0 that band is 28–43 chips, so 43 was the ceiling a shop with a fuller catalogue could reach.
+  // The four extra chips are the filter strips the newer screens ship (reports, payments,
+  // purchases, customers), all inside horizontally scrollable rows — the shape this metric exists
+  // to measure honestly. It stays a CEILING: a new compact control outside a scroll strip is still
+  // counted by `smallTarget`, which is pinned at 0, and growth past 47 still fails this lane.
+  chipTarget: 47,
 };
 
 interface Audit {

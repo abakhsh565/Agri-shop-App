@@ -12,10 +12,12 @@ import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
+import { useShellBase } from "@/lib/useShellBase";
 
 export default function AdminReturnSelectItemsPage() {
   const { saleId } = useParams();
   const navigate = useNavigate();
+  const base = useShellBase();
   const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -92,7 +94,7 @@ export default function AdminReturnSelectItemsPage() {
         unitPrice: item.unitPrice,
         refundAmount: returnQtys[item.id] * item.unitPrice,
       }));
-    navigate(`/admin/sales/${saleId}/return/confirm`, {
+    navigate(`${base}/sales/${saleId}/return/confirm`, {
       state: { returnItems, returnTotal, sale },
     });
   }

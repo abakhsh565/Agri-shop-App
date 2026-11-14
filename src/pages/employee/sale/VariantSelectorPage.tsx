@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import Photo from "@/components/ui/Photo";
 import Button from "@/components/ui/Button";
 import QuantityCounter from "@/components/ui/QuantityCounter";
 import { useCartStore } from "@/stores/cartStore";
@@ -73,9 +74,12 @@ export default function VariantSelectorPage() {
 
       {/* Product header card */}
       <div className="mx-4 mt-3 rounded-[var(--radius-tile)] p-4 flex items-center gap-3 justify-between" style={{ background: "var(--surface-2)" }}>
-        {product.imageUrl && (
-          <img src={product.imageUrl} alt={product.name} className="w-12 h-12 rounded-[var(--radius-tile)] object-cover shrink-0" />
-        )}
+        <Photo
+          src={product.imageUrl}
+          alt={product.name}
+          className="w-12 h-12 rounded-[var(--radius-tile)] object-cover shrink-0"
+          fallback={null}
+        />
         <div className="flex-1 min-w-0">
           <p className="text-lg font-bold truncate" style={{ color: "var(--text-primary)" }}>{product.name}</p>
           <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{product.company}</p>

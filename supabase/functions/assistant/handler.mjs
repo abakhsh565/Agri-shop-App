@@ -19,6 +19,7 @@
  */
 import { makeClient, TOOLS_BY_NAME, toolsFor } from "./tools.mjs";
 import { ask } from "./providers.mjs";
+import { urduSpeech } from "./speech.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +34,8 @@ function json(body, status = 200) {
 }
 
 /** The same shell prefixes the app's own routes use, so a card's screen name lands where the app lands. */
-function shellFor(role, permissions) {
+function shellFor(role, permissions, experience) {
+  if (experience === "owner" || experience === "co_owner") return "admin";
   const ownerSide = role === "owner" || role === "admin" || permissions.includes("employees.manage");
   return ownerSide ? "admin" : "employee";
 }
@@ -106,8 +108,48 @@ export async function handle(req, env) {
     }
   }
 
-  const shell = shellFor(role, permissions);
-  const ctx = { client, permissions, shell, role, userId };
+  // The membership's branch scope is the authority the app's own screens use. A Co-Owner is not
+  // an admin in the membership table: their delegated experience and branch list live here, and
+  // the database's branch policies already use the same scope. Read it before building tools.
+  let access = null;
+  let activeBranchId = null;
+  let allowedBranchIds = null;
+  // One failed context read must not throw away the other two. If the branch read fails, the
+  // tools still fail closed; if only the allowed-list read fails, the active branch is enough.
+  const [accessResult, branchResult, allowedResult] = await Promise.allSettled([
+    client.rpc("get_my_access_context"),
+    client.rpc("current_branch_id"),
+    client.rpc("allowed_branch_scope"),
+  ]);
+  if (accessResult.status === "fulfilled" && accessResult.value && typeof accessResult.value === "object") {
+    access = accessResult.value;
+  }
+  if (branchResult.status === "fulfilled" && typeof branchResult.value === "string" && branchResult.value) {
+    activeBranchId = branchResult.value;
+  }
+  if (allowedResult.status === "fulfilled" && Array.isArray(allowedResult.value)) {
+    allowedBranchIds = allowedResult.value.filter((id) => typeof id === "string" && id);
+  }
+
+  const experience =
+    access?.experience === "owner" || access?.experience === "co_owner" || access?.experience === "employee"
+      ? access.experience
+      : role === "owner"
+        ? "owner"
+        : "employee";
+  const seesAllBranches = experience === "owner";
+  const shell = shellFor(role, permissions, experience);
+  const ctx = {
+    client,
+    permissions,
+    shell,
+    role,
+    userId,
+    experience,
+    branchId: activeBranchId,
+    branchScope: seesAllBranches ? null : allowedBranchIds,
+    seeAllBranches: seesAllBranches,
+  };
 
   let body = {};
   try {
@@ -116,14 +158,37 @@ export async function handle(req, env) {
     return json({ error: "That request could not be read." }, 400);
   }
 
+  // The speaker needs a spoken Urdu rendering, not the browser's best installed voice. This is a
+  // read-only action: it translates the reply and returns audio, and never touches shop data.
+  if (body.action === "speak") {
+    if (!geminiKey) return json({ error: "Urdu speech is not switched on for this shop." }, 503);
+    try {
+      const speech = await urduSpeech({
+        text: body.text,
+        apiKey: geminiKey,
+        model: geminiModel,
+        fallbackModel: geminiFallbackModel || "gemini-flash-lite-latest",
+        baseUrl: modelBaseUrl,
+      });
+      return json(speech);
+    } catch (error) {
+      console.error("[assistant speech] failed:", error?.message);
+      return json(
+        { error: "I could not prepare the Urdu voice. Please try again." },
+        error?.status === 429 ? 503 : 502,
+      );
+    }
+  }
+
   // Which capabilities this account has — the screen shows this so the boundary is visible
   // rather than something the user has to discover by being refused.
   if (body.action === "tools") {
     const offered = new Set(toolsFor(permissions).map((t) => t.name));
     return json({
-      user: { name, role: role ?? (shell === "admin" ? "owner" : "employee") },
+      user: { name, role: experience === "co_owner" ? "co-owner" : experience, experience },
       shell,
       permissions,
+      scope: { experience, branchId: activeBranchId, allBranches: seesAllBranches },
       tools: toolsFor(permissions).map((t) => ({ name: t.name, title: t.title, permission: t.permission })),
       withheld: [...TOOLS_BY_NAME.values()]
         .filter((t) => !offered.has(t.name))

@@ -77,6 +77,13 @@ create route, required permission, and the `returnTo` continuation. Both empty-s
 - Business rules that carry money live in **RPCs**, not in the client: sale confirm is
   idempotent at the DB level, stock deducts once, COGS uses the cost recorded at the time of
   sale, overdue credit is computed from `credit − payments applied` against the due date.
+- **Access is three separate answers** (migration 0265). A role names a *department* it
+  belongs to, a set of *permissions* (what its holders may do), and a set of *dashboard
+  widgets* (what they may be shown). Visibility is not derived from the permission to act:
+  `hasPermission()` reads the grants, `canSeeDashboard()` reads the widgets, and the owner
+  sets both on the role screen. `roles.department_id` → `departments`; `role_dashboards` →
+  `dashboard_widgets`; `get_role_access()` reads a role's three answers at once and
+  `get_my_dashboards()` resolves the caller's through the role of their working branch.
 - `src/lib/db.ts` — the client data access layer. `friendly()` maps database failures to
   owner-readable words in the active language; raw Postgres text must never reach a user.
 - Tenant isolation and RBAC are enforced by RLS and RPC authorization, not by the UI. A UI

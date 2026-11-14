@@ -14,7 +14,8 @@
  *
  * QA database only; every row this spec creates is deleted again.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { cleanupFixtures, execSql } from './helpers';
 import { loginViaUi } from './helpers';
 
@@ -36,7 +37,8 @@ const CUSTOMER_A = '20000000-0000-0000-0000-000000000001';
 const SCREENS = [
   { name: 'Products list', path: '/admin/products' },
   { name: 'Employees list', path: '/admin/employees' },
-  { name: 'More menu', path: '/admin/more' },
+  // The fifth tab is the business hub now, and `/admin/more` is its canonical address.
+  { name: 'More', path: '/admin/more' },
   { name: 'Settings', path: '/admin/settings' },
 ];
 

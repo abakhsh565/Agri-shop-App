@@ -22,20 +22,21 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'crypto';
 import { execRpcAsUser, execSqlAsAdmin, roleIdByName } from '../setup/qa-client';
-import { QA_IDS, setupAllFixtures, cleanupTestData } from '../setup/fixtures';
+import { QA_IDS, setupAllFixtures, cleanupOwnedTransactions } from '../setup/fixtures';
+import { runCleanupStatements } from '../setup/ownedCleanup';
 
 const TENANT = QA_IDS.shop;
 const OWNER = QA_IDS.admin;
-// This suite's own customer, and its own supplier company, for the rows it creates
-// and then voids. The shared QA baseline (customerA, companyA) is cleaned up by
-// every other suite that calls cleanupTestData()/cleanupFixtures(), which deletes
-// ALL sales for those customers — including one this suite had just created, which
-// surfaced as "Sale not found" on both halves of the concurrent void.
+// This suite's own customer, and its own supplier company, for the rows it creates and then voids.
+// The shared QA baseline (customerA, companyA) used to be swept by other suites' cleanup, which
+// deleted ALL sales for those customers — including one this suite had just created, which surfaced
+// as "Sale not found" on both halves of the concurrent void. That sweep is gone
+// (tests/setup/ownedCleanup.ts); owning the ids is what keeps this file out of anyone else's reach.
 const CUSTOMER = 'c4000000-0000-0000-0000-0000000000c1';
 const COMPANY = 'c4000000-0000-0000-0000-0000000000c2';
-// ...and its own product + variant: cleanupTestData() deletes the inventory
-// movements of the shared productA/productB, which removed this suite's adjustment
-// movement mid-run (asserted count came back 0).
+// ...and its own product + variant: the old sweep deleted the inventory movements of the shared
+// productA/productB, which removed this suite's adjustment movement mid-run (asserted count came
+// back 0).
 const PRODUCT = 'c4000000-0000-0000-0000-0000000000d1';
 const VARIANT = 'c4000000-0000-0000-0000-0000000000d2';
 
@@ -150,35 +151,33 @@ function throwIfCleanupFailed(context: string): void {
 
 afterAll(async () => {
   await execSqlAsAdmin(`DELETE FROM supplier_payments WHERE company_id = '${COMPANY}'`);
-  await trySql('customer_payments', execSqlAsAdmin(`DELETE FROM customer_payments WHERE customer_id = '${CUSTOMER}'`));
 
-  // THIS SUITE'S OWN SALES, children before parents — and the reason the baseline read `sales: 5,
+  // THIS SUITE'S OWN ROWS, children before parents — and the reason the baseline read `sales: 5,
   // declared 2` on 2026-10-14.
   //
-  // `cleanupTestData()` only covers the SHARED fixtures (customerA/B/C), so nothing here removed the
-  // sale test 4 records for this suite's OWN customer, and the customer delete below was wrapped in
-  // a swallowed catch — it failed on `sales.customer_id` (NO ACTION) and said nothing. One
-  // voided sale, its line and its void were left behind per run: three of them in QA, each with
-  // `total_amount = 1000.00` and the reason 'QA duplicate-safety void'. Deleted by this suite's own
-  // customer id, which no other file uses (`grep` over tests/ finds this file and the residue
-  // criteria only), so it cannot reach a sibling lane's rows.
-  await execSqlAsAdmin(`DELETE FROM voids WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`);
-  await execSqlAsAdmin(`DELETE FROM sale_items WHERE sale_id IN (SELECT id FROM sales WHERE customer_id = '${CUSTOMER}')`);
-  await execSqlAsAdmin(`DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE customer_id = '${CUSTOMER}')`);
-  await trySql('returns', execSqlAsAdmin(`DELETE FROM returns WHERE customer_id = '${CUSTOMER}'`));
-  await trySql('payments', execSqlAsAdmin(`DELETE FROM payments WHERE customer_id = '${CUSTOMER}'`));
-  await trySql('credit_limit_requests', execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUSTOMER}'`));
-  await execSqlAsAdmin(`DELETE FROM sales WHERE customer_id = '${CUSTOMER}'`);
-  await execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUSTOMER}'`);
-  await trySql('companies', execSqlAsAdmin(`DELETE FROM companies WHERE id = '${COMPANY}'`));
-  await trySql('inventory_movements', execSqlAsAdmin(`DELETE FROM inventory_movements WHERE product_id = '${PRODUCT}'`));
-  await trySql('stock_adjustments', execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`));
-  await trySql('product_variants', execSqlAsAdmin(`DELETE FROM product_variants WHERE id = '${VARIANT}'`));
-  await trySql('products', execSqlAsAdmin(`DELETE FROM products WHERE id = '${PRODUCT}'`));
-  await execSqlAsAdmin(`DELETE FROM stock_adjustments WHERE idempotency_key LIKE 'qa-dupsafe-%'`);
-  // Removes this suite's sales, voids, returns and movements for the shared
-  // fixtures, without touching the baseline the other suites rely on.
-  await cleanupTestData();
+  // The old shared sweep only covered customerA/B/C, so nothing here removed the sale test 4 records
+  // for this suite's OWN customer, and the customer delete below was wrapped in `.catch(() =>
+  // undefined)` — it failed on `sales.customer_id` (NO ACTION) and said nothing. One voided sale, its
+  // line and its void were left behind per run: three of them in QA, each with `total_amount =
+  // 1000.00` and the reason 'QA duplicate-safety void'. Both halves are fixed now: this suite owns
+  // the ids it deletes (its customer and product, which no other file uses) and the cleanup below
+  // passes them explicitly instead of sweeping the baseline.
+  await cleanupOwnedTransactions({ customerIds: [CUSTOMER], productIds: [PRODUCT] });
+  // Adjustments before the products they reference, and every failure reported. Four of these used to
+  // end in `.catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); })`: an FK refusal there (the reason the order matters at all) was
+  // invisible — only the four tables the read-back below happens to cover would have caught it.
+  await runCleanupStatements(
+    execSqlAsAdmin,
+    [
+      `DELETE FROM stock_adjustments WHERE idempotency_key LIKE 'qa-dupsafe-%'`,
+      `DELETE FROM stock_adjustments WHERE product_id = '${PRODUCT}'`,
+      `DELETE FROM customers WHERE id = '${CUSTOMER}'`,
+      `DELETE FROM companies WHERE id = '${COMPANY}'`,
+      `DELETE FROM product_variants WHERE id = '${VARIANT}'`,
+      `DELETE FROM products WHERE id = '${PRODUCT}'`,
+    ],
+    'duplicateActionSafety removal of its own rows',
+  );
   await execSqlAsAdmin(`UPDATE companies SET outstanding_payable = 15000 WHERE id = '${COMPANY}'`);
   await setVariantStock(100);
 

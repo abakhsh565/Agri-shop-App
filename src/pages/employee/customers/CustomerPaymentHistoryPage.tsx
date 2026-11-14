@@ -51,7 +51,7 @@ export default function CustomerPaymentHistoryPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("customerProfile.paymentHistory")} />
+      <NavHeader title={t("customerProfile.paymentHistory")} historyBack />
 
       {/* Customer strip */}
       <div className="mx-4 mt-3 rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>

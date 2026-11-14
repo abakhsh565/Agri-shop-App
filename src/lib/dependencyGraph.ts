@@ -30,7 +30,7 @@ import { hasPermission } from "@/lib/tenantContext";
  */
 
 /** The two shells, exactly as `useShellBase()` returns them. */
-export type ShellBase = "/admin" | "/employee";
+export type ShellBase = "/admin" | "/employee" | "/co-owner";
 
 export type Dependency = "supplier" | "product" | "customer";
 
@@ -39,11 +39,11 @@ interface Spec {
    * Where the entity is created for this shell, and the permission that route's own
    * guard requires — read from the router rather than inferred. Returns null when the
    * route does not exist in this shell at all:
-   *   /admin/inventory/new  → under PermissionGuard requires="products.view"
+   *   /admin/inventory/new    → under PermissionGuard requires="products.view"
+   *   /employee/inventory/new → under PermissionGuard requires="products.create"
    *   /admin/companies/new  → under PermissionGuard requires="companies.view"
    *   /admin/customers/new  → under PermissionGuard requires="customers.view"
    *   /employee/customers/new → unguarded
-   *   /employee/inventory/new → does not exist
    */
   create: (base: ShellBase) => { to: string; requires: string } | null;
   // Typed against the dictionary, not `string`: these are literal key tables, so a
@@ -66,8 +66,9 @@ const GRAPH: Record<Dependency, Spec> = {
     cannotKey: "dep.supplier.cannot",
   },
   product: {
-    create: (base) =>
-      base === "/admin" ? { to: `${base}/inventory/new`, requires: "products.view" } : null,
+    // Both shells now answer: the employee route carries `products.create`, which is also the
+    // grant the create RPC checks — so the offered action is one that will actually open.
+    create: (base) => ({ to: `${base}/inventory/new`, requires: "products.create" }),
     titleKey: "dep.product.title",
     whyKey: "dep.product.why",
     actionKey: "dep.product.action",

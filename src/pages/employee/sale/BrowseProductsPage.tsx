@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import Photo from "@/components/ui/Photo";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -212,13 +213,14 @@ export default function BrowseProductsPage() {
                 tile={
                   <div
                     className="w-10 h-10 rounded-[var(--radius-tile)] flex items-center justify-center text-sm font-bold shrink-0 overflow-hidden"
-                    style={{ background: p.imageUrl ? "transparent" : initColor(p.name) + "22" }}
+                    style={{ background: initColor(p.name) + "22" }}
                   >
-                    {p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span style={{ color: initColor(p.name) }}>{p.name.charAt(0)}</span>
-                    )}
+                    <Photo
+                      src={p.imageUrl}
+                      alt={p.name}
+                      className="w-full h-full object-cover"
+                      fallback={<span style={{ color: initColor(p.name) }}>{p.name.charAt(0)}</span>}
+                    />
                   </div>
                 }
                 trailing={<ChevronRight size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}

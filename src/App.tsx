@@ -9,6 +9,7 @@ import { Capacitor } from "@capacitor/core";
 import { parseInviteLink, inviteSearchParams } from "@/lib/deepLink";
 import { logEnvironmentInfo } from "@/lib/envGuard";
 import { useAuthStore } from "@/stores/authStore";
+import { useCartStore } from "@/stores/cartStore";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -28,6 +29,48 @@ export default function App() {
   // if they were current.
   useEffect(() => {
     void useAuthStore.getState().verifySession();
+    // The stored user also carries the permissions it was signed in with. An owner who
+    // changed an employee's access since then is a fact the server has and this device does
+    // not, so ask again on launch — otherwise the employee's screen keeps offering work the
+    // server has stopped accepting (and hides what was just granted) until a full relaunch.
+    void useAuthStore.getState().refreshPermissions();
+  }, []);
+
+  // Coming back to the app is the other moment the answer can have changed: a shop phone
+  // stays open on the counter all day, so launch alone would never notice a permission the
+  // owner granted (or took away) mid-shift.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void useAuthStore.getState().refreshPermissions();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  /**
+   * An unfinished sale belongs to the account that started it, not to the phone.
+   *
+   * The cart used to be one persisted object, so an owner's half-filled cart was still there
+   * when an employee signed in and picked the same customer. The key separates accounts; the
+   * subscription also runs on sign-out, which drops that account's saved cart from the device.
+   */
+  useEffect(() => {
+    const apply = (user: ReturnType<typeof useAuthStore.getState>["user"]) => {
+      useCartStore
+        .getState()
+        .setScope(user ? `${user.tenantId ?? "none"}:${user.id}` : null);
+    };
+    apply(useAuthStore.getState().user);
+    return useAuthStore.subscribe((state, previous) => {
+      if (
+        state.user?.id !== previous.user?.id ||
+        state.user?.tenantId !== previous.user?.tenantId
+      ) {
+        apply(state.user);
+      }
+    });
   }, []);
 
   /**

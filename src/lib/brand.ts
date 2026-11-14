@@ -6,5 +6,5 @@
  * matches what the shell already advertises (`index.html` apple-mobile-web-app-title,
  * the receipt footer), so nothing new is being invented here.
  */
-export const APP_NAME = "AgriShop";
+export const APP_NAME = "HisabPay";
 export const APP_VERSION = "1.0.0";

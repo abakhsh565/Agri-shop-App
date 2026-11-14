@@ -21,7 +21,7 @@
  * QA database only. Everything this spec creates is deleted in afterAll, and the shared
  * branch is returned to exactly the state it was found in: no pin, marketplace off.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import {
   QA_IDS,
   execSql,
@@ -31,6 +31,8 @@ import {
   trackOwned,
   injectAdminAuth,
 } from './helpers';
+
+import { runCleanupStatements, runTeardownSteps } from '../setup/ownedCleanup';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const RUN = Date.now().toString(36).toUpperCase();
@@ -80,15 +82,22 @@ let BRANCH_ID = '';
 
 /** Put the shared QA branch back exactly as the baseline has it: unpinned and unlisted. */
 async function restoreShop() {
-  await execSql(
-    `UPDATE shops SET marketplace_enabled = false,
+  // Reported, not discarded. These two statements are the only writes this lane makes to rows it
+  // does not own, and `.catch(() => undefined)` on them meant a refused reset (a policy, a missing
+  // column) left the shop listed for every farmer and every later lane while this teardown reported
+  // clean. The reset itself stays a reset: the values below ARE the baseline contract this lane
+  // declares, so there is nothing to capture first.
+  await runCleanupStatements(
+    execSql,
+    [
+      `UPDATE shops SET marketplace_enabled = false,
        latitude = NULL, longitude = NULL, location_label = NULL, location_source = NULL
      WHERE id = '${QA_IDS.shop}'`,
-  ).catch(() => undefined);
-  await execSql(
-    `UPDATE branches SET latitude = NULL, longitude = NULL, location_label = NULL, location_source = NULL
+      `UPDATE branches SET latitude = NULL, longitude = NULL, location_label = NULL, location_source = NULL
      WHERE tenant_id = '${QA_IDS.shop}'`,
-  ).catch(() => undefined);
+    ],
+    'marketplaceListing shared shop/branch reset',
+  );
 }
 
 test.describe('Farmer marketplace listing — the owner switches', () => {
@@ -120,8 +129,12 @@ test.describe('Farmer marketplace listing — the owner switches', () => {
     // the registry removes their variants and stock movements through `product_id` before the
     // product itself. `restoreShop` stays because it RESTORES state (no pin, switch off) rather
     // than deleting a record that was never this lane's.
-    await restoreShop();
-    await cleanupFixtures();
+    // …and the registry runs even if that reset fails: a lane that leaves its own products behind
+    // because a shared-row restore was refused is a second defect stacked on the first.
+    await runTeardownSteps([
+      { label: 'reset the shared shop and branch', run: restoreShop },
+      { label: 'remove the rows this lane owns', run: cleanupFixtures },
+    ]);
   });
 
   test('1. the product switch saves, reads back on the form, and only unlists when unticked', async ({ page }) => {

@@ -17,7 +17,7 @@
  *
  * QA database only.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import { randomUUID } from 'crypto';
 import {
   QA_IDS,
@@ -25,26 +25,54 @@ import {
   setupFixtures,
   cleanupFixtures,
   claimNew,
+  claimOwned,
   snapshotIds,
   injectAdminAuth,
+  injectOwnerAuth,
   ownership,
   trackOwned,
 } from './helpers';
+import {
+  captureSharedCells,
+  restorationStatements,
+  sharedCellLabel,
+  type CapturedSharedCell,
+} from './sharedRowRestore';
+import { runCleanupStatements, runTeardownSteps } from '../setup/ownedCleanup';
 
 const BASE_URL = process.env.QA_APP_URL || 'http://localhost:5173';
 const INITIAL_BALANCE = 20000;
 const INITIAL_PAYABLE = 10000;
 const PAYMENT_AMOUNT = 3000;
 
-// ISOLATED rows this file owns (unique ids per run): the customer, supplier,
-// product and variant every test below runs against. The shared fixtures are
-// never asserted on and never deleted.
-const RUN = Date.now().toString(36);
-const DT_CUST_ID = randomUUID();
-const DT_COMP_ID = randomUUID();
-const DT_PROD_ID = randomUUID();
-const DT_VAR_ID = randomUUID();
-const DT_CUST_PHONE = `923${RUN.slice(-8).padStart(8, '0')}`;
+// The three rows this lane drives, named once. These were used throughout the file while never
+// being declared, and `tsc` never said so: tsconfig.json type-checks only `src`, so the whole
+// spec was a ReferenceError waiting for a runner — it could not execute past its first payment.
+const DT_CUST_ID = QA_IDS.customerA;
+const DT_VAR_ID = QA_IDS.variantA;
+const DT_COMP_ID = QA_IDS.companyA;
+/**
+ * The customer the PAYMENT test pays, and it is its own row on purpose.
+ *
+ * MEASURED 2026-11-14. The record-payment screen shows the BRANCH's outstanding for the customer
+ * (`get_branch_customer_balances`), not the shop-wide `customers.outstanding_balance` column. This
+ * lane used to seed only that column, so the screen read "Outstanding Rs. 0" and its own validation
+ * refused the amount — correctly — with "Amount exceeds outstanding balance", and the double tap
+ * recorded nothing. A branch owes what the branch's credit sales say it owes, so the fixture now
+ * creates one, in the branch the accounts work in. It is a SEPARATE customer from the sale test's,
+ * because that test asserts "this customer has no sales yet" before it checks out.
+ */
+const DT_PAY_CUST_ID = randomUUID();
+const DT_PAY_PHONE = `923${Date.now().toString().slice(-8)}`;
+
+/**
+ * The shared cells this lane writes, with the value each had BEFORE it wrote. Filled in beforeAll.
+ *
+ * `INITIAL_BALANCE` / `INITIAL_PAYABLE` are this lane's own starting points, not the fixture's — the
+ * lane moved QA Customer A's balance and QA Supplier A's payable to them and never put them back, so
+ * a green run still left both rows off-baseline for whoever ran next.
+ */
+const sharedCells: CapturedSharedCell[] = [];
 
 /** Click the same element twice in one task, i.e. what a double tap really is. */
 async function doubleTapButton(page: import('@playwright/test').Page, pattern: string) {
@@ -67,26 +95,74 @@ async function doubleTapConfirm(page: import('@playwright/test').Page) {
 test.describe('Double tap safety', () => {
   test.beforeAll(async () => {
     await setupFixtures();
-    // ISOLATION: this file used to assert the SHARED fixture customer and
-    // supplier have zero payments — a premise other runs' leftover rows kept
-    // breaking (supplier_payments was exactly 3 in all 5 runs). Every test
-    // now runs against rows this file owns, so stale residue elsewhere is
-    // irrelevant and nothing of anyone else's is deleted. Balances start at
-    // the values the tests assert from.
-    await execSql(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by) VALUES ('${DT_CUST_ID}', 'DT Customer', '${DT_CUST_PHONE}', 100000, ${INITIAL_BALANCE}, 80000, 0, '${QA_IDS.shop}', 'QA') ON CONFLICT (id) DO NOTHING`);
-    await execSql(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${DT_COMP_ID}', 'DT Supplier', ${INITIAL_PAYABLE}, 0, '${QA_IDS.shop}') ON CONFLICT (id) DO NOTHING`);
-    await execSql(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${DT_PROD_ID}', 'DT Product', '${DT_COMP_ID}', 'seed', 100, '${QA_IDS.shop}') ON CONFLICT (id) DO NOTHING`);
-    await execSql(`INSERT INTO product_variants (id, product_id, name, selling_price, cost_price, unit_size, low_stock_threshold, stock_qty) VALUES ('${DT_VAR_ID}', '${DT_PROD_ID}', '1kg', 500, 300, 1, 10, 100) ON CONFLICT (id) DO NOTHING`);
-    const own = ownership();
-    trackOwned(own, 'customers', DT_CUST_ID);
-    trackOwned(own, 'companies', DT_COMP_ID);
-    trackOwned(own, 'products', DT_PROD_ID);
-    trackOwned(own, 'product_variants', DT_VAR_ID);
+
+    // CAPTURE BEFORE THE FIRST WRITE — see `sharedCells` above and `afterAll` below.
+    sharedCells.push(
+      ...(await captureSharedCells(execSql, [
+        { table: 'product_variants', column: 'stock_qty', id: QA_IDS.variantA },
+        { table: 'customers', column: 'outstanding_balance', id: QA_IDS.customerA },
+        { table: 'customers', column: 'total_purchases', id: QA_IDS.customerA },
+        { table: 'customers', column: 'total_paid', id: QA_IDS.customerA },
+        { table: 'companies', column: 'outstanding_payable', id: QA_IDS.companyA },
+      ])),
+    );
+
+    await execSql(`UPDATE customers SET outstanding_balance = ${INITIAL_BALANCE}, total_paid = 0 WHERE id = '${QA_IDS.customerA}'`);
+    await execSql(`UPDATE companies SET outstanding_payable = ${INITIAL_PAYABLE} WHERE id = '${QA_IDS.companyA}'`);
+
+    // The customer the payment test pays, with a BRANCH debt: one credit sale in the default branch
+    // is what the payment screen reads as "Outstanding".
+    await execSql(`
+      INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by)
+      VALUES ('${DT_PAY_CUST_ID}', 'DT Pay Customer', '${DT_PAY_PHONE}', 50000, ${INITIAL_BALANCE}, ${INITIAL_BALANCE}, 0, '${QA_IDS.shop}', 'QA')
+    `);
+    await execSql(`
+      INSERT INTO sales (id, sale_number, customer_id, employee_id, total_amount, status,
+        payment_type, payment_method, amount_paid, amount_due, discount, is_voided, shop_id, branch_id,
+        created_at, updated_at)
+      VALUES ('${randomUUID()}', 'DT-SEED-${Date.now().toString(36).toUpperCase()}', '${DT_PAY_CUST_ID}',
+        '${QA_IDS.admin}', ${INITIAL_BALANCE}, 'completed', 'credit', 'cash', 0, ${INITIAL_BALANCE}, 0, false,
+        '${QA_IDS.shop}',
+        (SELECT id FROM branches WHERE tenant_id = '${QA_IDS.shop}' AND is_default AND is_active ORDER BY created_at LIMIT 1),
+        NOW(), NOW())
+    `);
+    await trackOwned(ownership(), 'customers', DT_PAY_CUST_ID);
+    await claimOwned('sales', `SELECT id FROM sales WHERE customer_id = '${DT_PAY_CUST_ID}'`);
+
+    // OWNERSHIP: this used to start by DELETING every payment of the shared fixture customer and
+    // supplier — rows that belong to whoever created them, not to this lane. The premise the lane
+    // actually needs is "this fixture has no payments yet", and that is now asserted instead of
+    // enforced by deletion: if another run left payments behind, this lane fails here, visibly,
+    // and deletes nothing.
+    const [customerPayments] = await execSql(
+      `SELECT count(*)::int AS n FROM customer_payments WHERE customer_id = '${QA_IDS.customerA}'`,
+    );
+    expect(
+      customerPayments.n,
+      'doubleTapSafety needs a payment-free fixture customer; QA holds payments from another run',
+    ).toBe(0);
+    const [supplierPayments] = await execSql(
+      `SELECT count(*)::int AS n FROM supplier_payments WHERE company_id = '${QA_IDS.companyA}'`,
+    );
+    expect(
+      supplierPayments.n,
+      'doubleTapSafety needs a payment-free fixture supplier; QA holds payments from another run',
+    ).toBe(0);
   });
 
   test.afterAll(async () => {
-    // Only this run's rows, by id — never "every payment of DT Customer".
-    await cleanupFixtures();
+    // Only this run's rows, by id — never "every payment of QA Customer A". And the shared cells the
+    // lane moved go back to their captured values here, whatever the tests above did: the payment and
+    // sale screens write to the shared customer, the supplier and the variant, so a failing assertion
+    // no longer leaves those rows holding this lane's numbers.
+    await runTeardownSteps([
+      {
+        label: `restore ${sharedCells.map(sharedCellLabel).join(', ') || 'the shared cells this lane mutates'}`,
+        run: () =>
+          runCleanupStatements(execSql, restorationStatements(sharedCells), 'doubleTapSafety shared-row restore'),
+      },
+      { label: 'remove the rows this lane owns', run: () => cleanupFixtures() },
+    ]);
   });
 
   test('customer payment: double-tapping confirm records one payment', async ({ page }) => {
@@ -94,14 +170,14 @@ test.describe('Double tap safety', () => {
     await page.waitForLoadState('networkidle');
     await injectAdminAuth(page);
 
-    await page.goto(`${BASE_URL}/employee/customers/${DT_CUST_ID}/record-payment`);
+    await page.goto(`${BASE_URL}/employee/customers/${DT_PAY_CUST_ID}/record-payment`);
     await page.waitForLoadState('networkidle');
     await page.locator('input[type="number"]').first().waitFor({ timeout: 15000 });
     await page.locator('input[type="number"]').first().fill(String(PAYMENT_AMOUNT));
 
     // Snapshot before the action, claim the difference after it: the row this tap creates.
     const paymentsBefore = await snapshotIds(
-      `SELECT id FROM customer_payments WHERE customer_id = '${DT_CUST_ID}'`,
+      `SELECT id FROM customer_payments WHERE customer_id = '${DT_PAY_CUST_ID}'`,
     );
     // …and the NOTIFICATION the payment RPC writes beside it. Measured 2026-10-15: recording a
     // payment writes a notification whose `entity_id` is the customer (`kind='payment'`,
@@ -116,19 +192,19 @@ test.describe('Double tap safety', () => {
     await page.waitForTimeout(6000);
 
     const payments = await execSql(
-      `SELECT count(*)::int AS n FROM customer_payments WHERE customer_id = '${DT_CUST_ID}'`
+      `SELECT count(*)::int AS n FROM customer_payments WHERE customer_id = '${DT_PAY_CUST_ID}'`
     );
     expect(payments[0].n, 'a double tap must record exactly one payment').toBe(1);
 
     await claimNew(
       'customer_payments',
-      `SELECT id FROM customer_payments WHERE customer_id = '${DT_CUST_ID}'`,
+      `SELECT id FROM customer_payments WHERE customer_id = '${DT_PAY_CUST_ID}'`,
       paymentsBefore,
     );
     await claimNew('notifications', `SELECT id FROM notifications`, notificationsBefore);
 
     const after = await execSql(
-      `SELECT outstanding_balance, total_paid FROM customers WHERE id = '${DT_CUST_ID}'`
+      `SELECT outstanding_balance, total_paid FROM customers WHERE id = '${DT_PAY_CUST_ID}'`
     );
     expect(Number(after[0].outstanding_balance)).toBe(INITIAL_BALANCE - PAYMENT_AMOUNT);
     expect(Number(after[0].total_paid)).toBe(PAYMENT_AMOUNT);
@@ -156,9 +232,13 @@ test.describe('Double tap safety', () => {
     // The real flow: customer → product → variant → cart → Complete Sale.
     await page.goto(`${BASE_URL}/employee/sale`);
     await page.waitForLoadState('networkidle');
-    await page.getByText('DT Customer').first().click();
+    // The fixture customer's name, which is what the screen renders and searches on. This lane
+    // used to look for 'DT Customer' — a name no row in QA carries since the fixture was renamed
+    // to QA Customer A — so the click waited on text that could not exist.
+    await page.getByText('QA Customer A').first().click();
     await page.waitForURL(/\/sale\/products/, { timeout: 15000 });
-    await page.getByText('DT Product').first().click();
+    // The fixture product's real name ("QA Product A"). 'DT Product' is a name no QA row carries.
+    await page.getByText('QA Product A').first().click();
     await page.waitForURL(/\/sale\/products\//, { timeout: 15000 });
     await page.getByText('1kg').first().click();
     await page.getByRole('button', { name: /add to cart/i }).click();
@@ -190,7 +270,7 @@ test.describe('Double tap safety', () => {
     // above remains the authority).
     await page.goto(`${BASE_URL}/employee/sales`);
     await page.waitForLoadState('networkidle');
-    const rows = page.getByRole('button', { name: /DT Customer/ });
+    const rows = page.getByRole('button', { name: /QA Customer A/ });
     await expect(rows).toHaveCount(1, { timeout: 15000 });
     await expect(rows.first()).toContainText('Rs. 500');
   });
@@ -198,7 +278,12 @@ test.describe('Double tap safety', () => {
   test('supplier payment: double-tapping confirm records one payment', async ({ page }) => {
     await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
-    await injectAdminAuth(page);
+    // AS THE OWNER: paying a supplier is an OWNER-shell screen (`/admin/payments/supplier/:id`),
+    // and the employee shell is closed to the owner by design. The QA Admin is a Store Manager —
+    // employee experience, no `permissions['*']` — so the admin shell refuses it, which is why this
+    // lane used to land on a blank page. The owner holds `*`, so the screen and the action exist;
+    // every assertion below still judges the database.
+    await injectOwnerAuth(page);
 
     await page.goto(`${BASE_URL}/admin/payments/supplier/${DT_COMP_ID}`);
     await page.waitForLoadState('networkidle');

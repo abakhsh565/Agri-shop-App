@@ -31,8 +31,10 @@ import path from 'node:path';
  *   label existing and being removed, and rewriting it would falsify it. Migrations
  *   numbered ABOVE 0167 are scanned, so a re-introduction is caught.
  *
- *   `dev-guide-extracted/` and `EMPLOYEE_ONBOARDING_GAP_ANALYSIS.md` are dated snapshots
- *   of the system as it was specified and discovered. They are read, not executed.
+ *   `EMPLOYEE_ONBOARDING_GAP_ANALYSIS.md` is a dated snapshot of the system as it was
+ *   discovered. It is read, not executed. (The `dev-guide-extracted/` fork of the app that
+ *   used to sit beside it was deleted in the P0 cleanup — it was a stale second copy of
+ *   `src/`, not a source this guard needed to exempt.)
  *
  *   `android/**` and `dist-bundle/` are build output, regenerated from `src/`.
  */

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import { seedShopDraft } from './helpers';
 
 // UI contract evidence only. Every remote request is intercepted; this test does not impersonate
@@ -85,11 +85,15 @@ for (const language of ['en', 'ur'] as const) {
         membershipStatus: 'active', firstLoginAt: '2026-10-04T00:00:00Z',
       } }, version: 0 }));
       localStorage.setItem('agrishop-theme', JSON.stringify({ state: { language, theme: 'light' }, version: 0 }));
+      // Workspace routes sit behind `ProtectedRoute requirePin`; this lane mocks the transport and
+      // never signs in, so it seeds the device marker the way `coOwner.local.spec.ts` does. Without
+      // it every route lands on "Set a 4-digit PIN" (measured 2026-11-14).
+      localStorage.setItem(`agri_pin_set_${owner}`, "1");
     }, { language, tenant, owner });
     await page.setViewportSize({ width: 390, height: 844 });
 
     // ── 1. creating a branch and handing it over in the same act ───────────────
-    await page.goto('/admin/settings/profile');
+    await page.goto('/admin/settings/hub/branches');
     await page.getByTestId('branches-create').click();
     await expect(page.getByTestId('setup-step-1')).toBeVisible();
     await page.getByTestId('shop-name-input').fill('New Branch');
@@ -109,7 +113,7 @@ for (const language of ['en', 'ur'] as const) {
 
     // ── 2. keeping a branch hands over nothing ────────────────────────────────
     lifecycleCalls.length = 0;
-    await page.goto('/admin/settings/profile');
+    await page.goto('/admin/settings/hub/branches');
     await page.getByTestId('branches-create').click();
     await page.getByTestId('shop-name-input').fill('Second Branch');
     await seedShopDraft(

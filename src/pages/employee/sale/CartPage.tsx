@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import Button from "@/components/ui/Button";
+import DateField from "@/components/ui/DateField";
 import QuantityCounter from "@/components/ui/QuantityCounter";
 import { useCartStore } from "@/stores/cartStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, getCreditHealth, getCreditHealthColor } from "@/lib/formatters";
-import { Plus, AlertTriangle } from "lucide-react";
+import { Plus, AlertTriangle, Clock } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
@@ -18,6 +19,7 @@ import { checkAndNotifyLowStock } from "@/lib/notifications";
 import { useCustomersStore } from "@/stores/customersStore";
 import { hasPermission } from "@/lib/tenantContext";
 import CreditLimitSheet from "@/components/customers/CreditLimitSheet";
+import type { LocalCreditRequest } from "@/lib/localGroupRegistry";
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -27,13 +29,19 @@ export default function CartPage() {
   const { addToast } = useUIStore();
   const createSale = useSalesStore((s) => s.createSale);
   const setCreditLimit = useCustomersStore((s) => s.setCreditLimit);
+  const requestCreditLimitIncrease = useCustomersStore((s) => s.requestCreditLimitIncrease);
   const { user } = useAuthStore();
 
   const [paymentType, setPaymentType] = useState<"full" | "partial">("full");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "bank_transfer">("cash");
   const [amountReceived, setAmountReceived] = useState("");
   const [savingLimit, setSavingLimit] = useState(false);
-  const [limitOpen, setLimitOpen] = useState(false);
+  // One sheet, two jobs: `set` writes the limit, `request` asks the owner for one (0251).
+  const [limitMode, setLimitMode] = useState<null | "set" | "request">(null);
+  // A request already waiting for this customer. The customer card says so, and the sale screen
+  // says the same thing: a second request for one decision is not two decisions, it is noise
+  // the owner has to clear twice.
+  const [pendingLimitRequest, setPendingLimitRequest] = useState<LocalCreditRequest | null>(null);
   const [amountTouched, setAmountTouched] = useState(false);
   const [dueDate, setDueDate] = useState(customer?.dueDate ?? "");
   const [completing, setCompleting] = useState(false);
@@ -42,6 +50,25 @@ export default function CartPage() {
   // a retry after a lost response returns the sale that already exists instead of
   // charging the customer twice. Retired on success, kept on failure.
   const submissionKeyRef = useRef<string | null>(null);
+
+  const customerId = customer?.id ?? null;
+  const loadPendingLimitRequest = async () => {
+    if (!customerId) { setPendingLimitRequest(null); return; }
+    try {
+      // On demand, like the customer card: the sale screen must not pull the alerts module
+      // into its chunk for a check that is usually a no-op.
+      const { getCreditRequestsDB } = await import("@/lib/localGroupRegistry");
+      const rows = await getCreditRequestsDB();
+      setPendingLimitRequest(rows.find((r) => r.customerId === customerId && r.status === "pending") ?? null);
+    } catch {
+      // Unreadable: leave the button as it was rather than claiming the request went nowhere.
+    }
+  };
+
+  useEffect(() => {
+    void loadPendingLimitRequest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the customer in the cart
+  }, [customerId]);
 
   // Show cart even without customer — user can scan products first, select customer later
 
@@ -73,9 +100,9 @@ export default function CartPage() {
   // nothing entered yet, no payment has happened, so asking "how was it paid" is a question with
   // no answer — it appears the moment an amount is typed. Full payment always receives money.
   const showPaymentMethod = amountPaid > 0;
-  const canEditCustomers = hasPermission("customers.edit");
+  const canSetCreditLimit = hasPermission("customers.credit_limit");
 
-  async function handleSetCreditLimit(value: number) {
+  async function handleSaveCreditLimit(value: number, reason: string) {
     if (!customer || savingLimit) return;
     if (!Number.isFinite(value) || value <= 0) {
       addToast(t("sale.creditLimitFailed"), "warning");
@@ -83,14 +110,32 @@ export default function CartPage() {
     }
     setSavingLimit(true);
     try {
-      const applied = await setCreditLimit(customer.id, value);
-      // The cart holds its own copy of the customer for the sale, so it is updated too —
-      // otherwise the credit-health line and the block on Complete still read the old limit.
-      setCustomer({ ...customer, creditLimit: applied });
-      setLimitOpen(false);
-      addToast(t("sale.creditLimitSet", { amount: formatCurrency(applied) }), "success");
+      if (canSetCreditLimit) {
+        const applied = await setCreditLimit(customer.id, value);
+        // The cart holds its own copy of the customer for the sale, so it is updated too —
+        // otherwise the credit-health line and the block on Complete still read the old limit.
+        setCustomer({ ...customer, creditLimit: applied });
+        addToast(t("sale.creditLimitSet", { amount: formatCurrency(applied) }), "success");
+      } else {
+        // Without the lending permission the number is a proposal, not a write — the owner
+        // approves (and may change) it before it becomes the customer's limit.
+        await requestCreditLimitIncrease({
+          customerId: customer.id,
+          customerName: customer.name,
+          currentLimit: customer.creditLimit,
+          requestedLimit: value,
+          requestedBy: user?.name || user?.id || "",
+          reason,
+        });
+        addToast(t("creditLimit.requestSent"), "success");
+        await loadPendingLimitRequest();
+      }
+      setLimitMode(null);
     } catch (e) {
-      addToast(e instanceof Error ? e.message : t("sale.creditLimitFailed"), "error");
+      addToast(
+        e instanceof Error ? e.message : canSetCreditLimit ? t("sale.creditLimitFailed") : t("creditLimit.requestFailed"),
+        "error",
+      );
     } finally {
       setSavingLimit(false);
     }
@@ -224,14 +269,27 @@ export default function CartPage() {
                   <p className="text-sm font-bold text-foreground">
                     {customer.creditLimit > 0 ? formatCurrency(customer.creditLimit) : "\u2014"}
                   </p>
-                  {canEditCustomers && (
+                  {/* While a request is waiting, the employee is told so instead of being
+                      offered a second one; the owner keeps their own direct action. */}
+                  {!canSetCreditLimit && pendingLimitRequest ? (
+                    <span
+                      className="text-11 flex items-center gap-1"
+                      style={{ color: "var(--text-secondary)" }}
+                      data-testid="credit-limit-pending"
+                    >
+                      <Clock size={12} className="shrink-0" />
+                      {t("creditLimit.requestPending")}
+                    </span>
+                  ) : (
                     <button
                       type="button"
-                      onClick={() => setLimitOpen(true)}
+                      onClick={() => setLimitMode(canSetCreditLimit ? "set" : "request")}
                       className="text-12 font-semibold px-2.5 py-1 rounded-full"
                       style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
                     >
-                      {customer.creditLimit > 0 ? t("customers.changeLimit") : t("customers.setLimit")}
+                      {canSetCreditLimit
+                        ? (customer.creditLimit > 0 ? t("customers.changeLimit") : t("customers.setLimit"))
+                        : t("creditLimit.requestShort")}
                     </button>
                   )}
                 </div>
@@ -363,17 +421,16 @@ export default function CartPage() {
             value={amountReceived}
             onChange={(e) => setAmountReceived(e.target.value)}
             placeholder={t("sale.enterAmount")}
-            className="w-full h-12 rounded-[var(--radius-input)] border border-border px-4 text-sm text-foreground placeholder:text-caption outline-none"
+            className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm text-foreground placeholder:text-caption outline-none"
             onFocus={() => setAmountTouched(true)}
           />
           <p className="ds-section-label text-foreground mb-2 mt-4">{t("sale.paymentDueDate")}</p>
           <p className="text-12 text-caption mb-2">{hasCreditPortion ? t("sale.dueDateRequired") : t("sale.dueDateOptional")}</p>
-          <input
-            type="date"
+          <DateField
             value={dueDate}
-            min={new Date().toISOString().split('T')[0]}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="w-full outline-none"
+            min={new Date().toISOString().split("T")[0]}
+            onChange={setDueDate}
+            testId="sale-due-date"
           />
 
         </div>
@@ -452,14 +509,15 @@ export default function CartPage() {
 
       {/* Setting a limit is one small decision, so it gets its own sheet instead of a field
           wedged into the payment column — and the sheet is reachable whether or not this sale
-          needs credit. */}
+          needs credit. Without the lending permission the same sheet files a request instead. */}
       <CreditLimitSheet
-        open={limitOpen}
+        open={limitMode !== null}
         currentLimit={customer?.creditLimit ?? 0}
         outstanding={customer?.outstandingBalance ?? 0}
         saving={savingLimit}
-        onClose={() => setLimitOpen(false)}
-        onSave={handleSetCreditLimit}
+        mode={limitMode ?? "set"}
+        onClose={() => setLimitMode(null)}
+        onSave={handleSaveCreditLimit}
       />
     </div>
   );

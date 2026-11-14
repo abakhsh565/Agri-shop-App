@@ -1,0 +1,2366 @@
+{
+  "mode": "apply",
+  "dryRun": false,
+  "target": "staging (project bpybjrjenwccowvtrevu)",
+  "identity": {
+    "configuredUser": "postgres.bpybjrjenwccowvtrevu",
+    "serverUser": "postgres",
+    "clusterId": "7678069749886157684",
+    "clusterIdError": null
+  },
+  "dir": "C:\\Users\\mg\\Downloads\\Agrishop Inventory management system - New\\supabase\\migrations",
+  "directoryProblems": [],
+  "files": [
+    {
+      "version": "0009",
+      "filename": "0009_complete_schema.sql",
+      "bytes": 13986,
+      "sha256": "30d6984d5f36f5c3cc052c023d868bf141c9c7995abc14c0a8f86ef3c1d5a7e3"
+    },
+    {
+      "version": "0010",
+      "filename": "0010_comprehensive_rls.sql",
+      "bytes": 7598,
+      "sha256": "e2f27e3c8735e9a983be45d13cfc26bfdcba14ec07276ae3d3077151a7a0f06a"
+    },
+    {
+      "version": "0011",
+      "filename": "0011_new_rpc_functions.sql",
+      "bytes": 7914,
+      "sha256": "6860274bf004a3dc807164cf004f201b4e765686962fbe9bdad1c10d7be5e070"
+    },
+    {
+      "version": "0012",
+      "filename": "0012_update_existing_rpcs.sql",
+      "bytes": 8830,
+      "sha256": "50b5e4cef8c73392191cc32cf23c75f92c9f1ade16cf801e067d23ac37be855f"
+    },
+    {
+      "version": "0013",
+      "filename": "0013_storage_buckets.sql",
+      "bytes": 1517,
+      "sha256": "22c96eb9d2b3521bb605f785ea129577692a470830665d23f1fa5c2719197aff"
+    },
+    {
+      "version": "0014",
+      "filename": "0014_add_barcode__return_enhancements.sql",
+      "bytes": 9353,
+      "sha256": "dd33d16b620f9fcc46a7b988fdafd35335e8fe44facda0954a0b46c9162a8e1f"
+    },
+    {
+      "version": "0015",
+      "filename": "0015_flexible_units.sql",
+      "bytes": 20650,
+      "sha256": "ec12ec5453865ef665771e6390090d8b72e8b39364331c5e9d0e3488651181f0"
+    },
+    {
+      "version": "0016",
+      "filename": "0016_customer_archive_sales_snapshot.sql",
+      "bytes": 8999,
+      "sha256": "c919e90d156fe70b3e344f69dba89d80308b281f468fba2ba9c10d4afdf53cf1"
+    },
+    {
+      "version": "0017",
+      "filename": "0017_phone_uniqueness.sql",
+      "bytes": 1433,
+      "sha256": "0338187709bee6aca04ffe3b3cb5aeb72ce6b165ee2d5d6d0684a59c4d89d05b"
+    },
+    {
+      "version": "0018",
+      "filename": "0018_seed_demo_users.sql",
+      "bytes": 958,
+      "sha256": "bdc41c9df0afb68bc6a03be04fed7c7707c5bd5e4acaad2fb8124385de45ebba"
+    },
+    {
+      "version": "0019",
+      "filename": "0019_shop_onboarding.sql",
+      "bytes": 4873,
+      "sha256": "4d9a939e34623795b04c16ec64804a153b677212a3e591be748d0674c808aeb0"
+    },
+    {
+      "version": "0020",
+      "filename": "0020_fix_users_rls_for_login.sql",
+      "bytes": 615,
+      "sha256": "77005840967a95323a632787af091169177f34bfd1c98f5e18fd01cb27c9e639"
+    },
+    {
+      "version": "0021",
+      "filename": "0021_shop_request_status_enum.sql",
+      "bytes": 699,
+      "sha256": "5b7cf3f800ac994a020de8dfb87cd2d3c14681f62b5ac75ffd960a31cacd7e1b"
+    },
+    {
+      "version": "0022",
+      "filename": "0022_fix_all_rls_for_demo.sql",
+      "bytes": 7774,
+      "sha256": "b7c2041fd2d8d7bb6996cf461bf5abeace0623a793fe308bc4ab67d69eff02e5"
+    },
+    {
+      "version": "0023",
+      "filename": "0023_create_missing_rpc_functions.sql",
+      "bytes": 4334,
+      "sha256": "690aed9b52642a23f661e5841d818021ad035613581d771fa114d1a90a96dbce"
+    },
+    {
+      "version": "0024",
+      "filename": "0024_fix_rpc_parameter_names.sql",
+      "bytes": 4060,
+      "sha256": "9f541cadbab8df20775073a8276747a7ee78b100c3b2be848ab80f6f3507402d"
+    },
+    {
+      "version": "0025",
+      "filename": "0025_fix_all_rpc_parameter_names.sql",
+      "bytes": 15401,
+      "sha256": "f41d38ff4239b208e8c89031949dc5ad54d6a38ca8dc06372fe00a03ebcdf2a4"
+    },
+    {
+      "version": "0026",
+      "filename": "0026_fix_shop_and_product_rpc.sql",
+      "bytes": 2168,
+      "sha256": "5d193ea90702ce53976a293869779dfc40500f41d2148a3759ef3c293c444528"
+    },
+    {
+      "version": "0027",
+      "filename": "0027_final_correct_rpc_functions.sql",
+      "bytes": 16534,
+      "sha256": "747db1dda044c9a239727cba7d5120b66960a9d658d49df1829226cafffa78fd"
+    },
+    {
+      "version": "0028",
+      "filename": "0028_allow_employee_product_edit__fix_only_broken_functions.sql",
+      "bytes": 11670,
+      "sha256": "712dc94cc047d82f54a61f0ba3e1c3201d0a29290f29adb105cafa126eb6acc0"
+    },
+    {
+      "version": "0029",
+      "filename": "0029_enum_cast_fix__force_allow_employee_product_edit.sql",
+      "bytes": 11227,
+      "sha256": "1efc9635cdef57bc1d0c06048737c31790c214bc4f6b4ec4c540485a2b210556"
+    },
+    {
+      "version": "0030",
+      "filename": "0030_fix_customer_delete.sql",
+      "bytes": 1811,
+      "sha256": "fa8269296b547915eaed3c261632f62a18b1fb9ee296015ecb98037659166b93"
+    },
+    {
+      "version": "0031",
+      "filename": "0031_fix_product_delete_soft.sql",
+      "bytes": 1286,
+      "sha256": "dba1507b709456a758e7d4cdc386c3f15b0157d45a0b11d6d6b7d86569e4208b"
+    },
+    {
+      "version": "0032",
+      "filename": "0032_due_date_reminder_tables.sql",
+      "bytes": 2489,
+      "sha256": "b8874d6663abe92aa1fbc867e61f064aee609627ff916c1891bb15d842acd28a"
+    },
+    {
+      "version": "0033",
+      "filename": "0033_fix_process_return.sql",
+      "bytes": 6365,
+      "sha256": "9cb646ba5e03599e4bbd7bab42199a4378c8a91b68bf4fad71695ee2a6432714"
+    },
+    {
+      "version": "0034",
+      "filename": "0034_due_date_past_restriction.sql",
+      "bytes": 3712,
+      "sha256": "32fdac8119fff768bb4c6be97ffff5b40a729dded00b41aa7ba59626b0f440b3"
+    },
+    {
+      "version": "0035",
+      "filename": "0035_fix_process_return_correct.sql",
+      "bytes": 8579,
+      "sha256": "3df0272a4ce5f6b0eb3805a82369c176e89089048025a6ce38450df71c5a2381"
+    },
+    {
+      "version": "0036",
+      "filename": "0036_fix_void_sale_restore_stock_outstanding.sql",
+      "bytes": 2877,
+      "sha256": "031eb030692cc7b8ea30b0fde21da154133f7111692c22e1f470dbdff6e7694e"
+    },
+    {
+      "version": "0037",
+      "filename": "0037_permission_model_hardening.sql",
+      "bytes": 21914,
+      "sha256": "43dfa13eabee680281687214942fb62bef5428afe1d84a3af1c326b4984e89aa"
+    },
+    {
+      "version": "0038",
+      "filename": "0038_add_company_due_date.sql",
+      "bytes": 531,
+      "sha256": "fa620408725e8d2629911b0c814c0853fa5b4ef889941779ac8cda8f1c48a242"
+    },
+    {
+      "version": "0039",
+      "filename": "0039_reminder_occurrence_model.sql",
+      "bytes": 1826,
+      "sha256": "c74563b3b4de4934520e673389dc5216c1ac1e989ce6a31a7381d08aff9015c6"
+    },
+    {
+      "version": "0040",
+      "filename": "0040_reminder_log_occurrence_id.sql",
+      "bytes": 1810,
+      "sha256": "4fc42fc457096284f41455f138f3cc14527cae6f15d186c72c052f4fd56925c8"
+    },
+    {
+      "version": "0041",
+      "filename": "0041_credit_lifecycle_enforcement.sql",
+      "bytes": 7074,
+      "sha256": "a2cb49a916e58aaf5e2bc1c66ff8b6872f23697253baf29204f48c6bd1b292dd"
+    },
+    {
+      "version": "0042",
+      "filename": "0042_security_rls_hardening__security_rls_hardening_deploy__security_rls_fix.sql",
+      "bytes": 11534,
+      "sha256": "3adcb8974204627eb0c4e50dbe38807ab3bbfc80a49c77060ca32cf6cbb22177"
+    },
+    {
+      "version": "0043",
+      "filename": "0043_login_lookup_function.sql",
+      "bytes": 1190,
+      "sha256": "69bb605bfcbf41df69ce557104371180256f53ca03b1d4593d2f0cfefec21884"
+    },
+    {
+      "version": "0044",
+      "filename": "0044_fix_void_adjust_actor_auth.sql",
+      "bytes": 15360,
+      "sha256": "9abd8b912b110fef1f1776ce0524ab977858347ce72c32f2781e1be1f2af8753"
+    },
+    {
+      "version": "0045",
+      "filename": "0045_fix_anon_customer_access.sql",
+      "bytes": 2374,
+      "sha256": "aef9a9a3c293701e65caffba87a9bb6e00b388b75c38db5fd66922ed76e03ac9"
+    },
+    {
+      "version": "0046",
+      "filename": "0046_phone_uniqueness_constraint.sql",
+      "bytes": 793,
+      "sha256": "075b1f63bb91638781c0a25eb7f2b0d6a21edabd1e59369c2439e5e593f217a4"
+    },
+    {
+      "version": "0047",
+      "filename": "0047_add_unit_size_to_purchase_items__fix_purchase_rpcs.sql",
+      "bytes": 3679,
+      "sha256": "af40bb4d0d15874256d70e1d012d59b415be4020a173f70d6eba15c32def364a"
+    },
+    {
+      "version": "0048",
+      "filename": "0048_financial_integrity_phase1.sql",
+      "bytes": 24088,
+      "sha256": "6e5202b8c7e1ff9b8d14c73ca259d10f52750ea9f7e752a79c3e464145dc7ead"
+    },
+    {
+      "version": "0049",
+      "filename": "0049_fix_process_return_customer_id.sql",
+      "bytes": 8650,
+      "sha256": "cbc028acc43a66825216d05a662d10e450f06f768661a09804d780db69ed6f5f"
+    },
+    {
+      "version": "0050",
+      "filename": "0050_inventory_movements.sql",
+      "bytes": 23801,
+      "sha256": "a966e2c73c5f3de4570c6e320d2580247345ba118b36d2ac725c0d16fc915b82"
+    },
+    {
+      "version": "0051",
+      "filename": "0051_fix_void_sale_returned_qty.sql",
+      "bytes": 4623,
+      "sha256": "dd95ef50bbb1220ce30f48130e5c0330b1857d972b2f8271fa35d7bc6a2303b7"
+    },
+    {
+      "version": "0052",
+      "filename": "0052_block_return_on_voided_sale.sql",
+      "bytes": 8574,
+      "sha256": "c564ee6d5ecd61d0a713a409dd649ec4b3b453dff3c1a626b4b28efd896268c3"
+    },
+    {
+      "version": "0053",
+      "filename": "0053_rls_hardening.sql",
+      "bytes": 13702,
+      "sha256": "18ad2690ccb5d7c3c3367d590bbf2c6539bdb294288d1befd157877289283567"
+    },
+    {
+      "version": "0054",
+      "filename": "0054_revoke_anon_grants.sql",
+      "bytes": 2276,
+      "sha256": "b74f5351c122e11233d5bdd9eec1c4c394acb65ad4ca4515033e252fa4fc4dfc"
+    },
+    {
+      "version": "0055",
+      "filename": "0055_trusted_identity_rpc.sql",
+      "bytes": 9159,
+      "sha256": "747aae81d9b57be36f7a2c77e756f8659705e9f4d812f06f3db008873ab1b8eb"
+    },
+    {
+      "version": "0056",
+      "filename": "0056_financial_reconciliation__fix_actor_lookup.sql",
+      "bytes": 5165,
+      "sha256": "582d9b1f6ed3f3ccaec1363fd3a84dec19cebe68b0060e579e010e1574807085"
+    },
+    {
+      "version": "0057",
+      "filename": "0057_admin_profile_rpc__create_customer_rpc.sql",
+      "bytes": 4522,
+      "sha256": "92a02628e71e8e8ae8e6fc2d180c2796185f97775a8c8c186c03b7bf6f06e7d1"
+    },
+    {
+      "version": "0058",
+      "filename": "0058_fix_admin_profile_rls__grant_archive_restore_anon.sql",
+      "bytes": 2178,
+      "sha256": "456f55301dba421dcf5cde5801bf9ffb42c215271493b8d52ffeda6401ba8cf4"
+    },
+    {
+      "version": "0059",
+      "filename": "0059_grant_anon_users_permissions.sql",
+      "bytes": 625,
+      "sha256": "3aefb914b2865a624165c0499e402bccd9e8f3293af43c40a4aee6633a4e31d5"
+    },
+    {
+      "version": "0060",
+      "filename": "0060_credit_limit_requests__reminder_groups.sql",
+      "bytes": 4980,
+      "sha256": "675fee491a99cd8c7f1a244d1bf62125d1b7e45da05cf3c18548a362528925f4"
+    },
+    {
+      "version": "0061",
+      "filename": "0061_fix_reminder_occurrences_rls.sql",
+      "bytes": 3054,
+      "sha256": "c465727951d615aa080474f94d42d201a8f2a751f48a4ddd5fce80be5b9c8176"
+    },
+    {
+      "version": "0062",
+      "filename": "0062_deploy_credit_limit_requests.sql",
+      "bytes": 3901,
+      "sha256": "2a11a0a6563a10f3c824dbdc7486be314f37e265019f8c45d2fd527b950455a6"
+    },
+    {
+      "version": "0063",
+      "filename": "0063_create_credit_limit_request_rpc.sql",
+      "bytes": 1222,
+      "sha256": "4b43be67b9a6cdcfdf8587f0d72b855fe3ec47f6759331ae51a05b55325023d2"
+    },
+    {
+      "version": "0064",
+      "filename": "0064_cleanup_qa_credit_requests.sql",
+      "bytes": 962,
+      "sha256": "df38ab8b987b81e4b6ba1fbf96f7e424123887863b946a6a3c1ec6bfe444c0f9"
+    },
+    {
+      "version": "0065",
+      "filename": "0065_add_credit_request_reason.sql",
+      "bytes": 1194,
+      "sha256": "a7b65c211b377d74d4bc30f612efd1b6bda309e871419a41d80df6217421af2f"
+    },
+    {
+      "version": "0066",
+      "filename": "0066_fix_credit_request_rpc_auth.sql",
+      "bytes": 3300,
+      "sha256": "21d78c3af8bb734c731cd0ae792bee928f035532ae1926fe8cd8bdff990e6486"
+    },
+    {
+      "version": "0067",
+      "filename": "0067_fix_delete_credit_request_rpc.sql",
+      "bytes": 627,
+      "sha256": "ed7dbb959c7f67e631fdde7f3bd7a13f75b34d26bc3a595337006646ca74fe66"
+    },
+    {
+      "version": "0068",
+      "filename": "0068_add_admin_auth_to_credit_approve_reject.sql",
+      "bytes": 2807,
+      "sha256": "c95d136a0377c656379eee6a5dfdc99e6a5decb1b5a3e844b01895691490c884"
+    },
+    {
+      "version": "0069",
+      "filename": "0069_fix_authorization_gaps.sql",
+      "bytes": 5164,
+      "sha256": "a166bfd1f263a872f0dffe8e96ab124973a143160cfd90cb575510fb47b29dd3"
+    },
+    {
+      "version": "0070",
+      "filename": "0070_add_run_sql_for_ci.sql",
+      "bytes": 906,
+      "sha256": "6e644f746d4cbcf6edf65fc665641690b419b15ad54b5fd5cbefdafe19d713ca"
+    },
+    {
+      "version": "0071",
+      "filename": "0071_add_test_auth_helper.sql",
+      "bytes": 783,
+      "sha256": "834c023a6baf0d4428ec6ba242d0bd8aebe2d0adc17281ff00b327e539272094"
+    },
+    {
+      "version": "0072",
+      "filename": "0072_incident_foundation_tables.sql",
+      "bytes": 7916,
+      "sha256": "7e202abd86f2e88d9f8293e476bcdd6fc598448a7139383e17fb772a0020cd67"
+    },
+    {
+      "version": "0073",
+      "filename": "0073_incident_safety_functions.sql",
+      "bytes": 9440,
+      "sha256": "edd16ba4345191402c837d8ec1411a86ec633c33bb88b1c584ccd39c0dd00d0e"
+    },
+    {
+      "version": "0074",
+      "filename": "0074_incident_rpcs.sql",
+      "bytes": 7713,
+      "sha256": "2e4f3f3e34c65577c17ee1f2623ed6e62fba24f7f136853d7322caf1289f11e1"
+    },
+    {
+      "version": "0075",
+      "filename": "0075_resolution_engineering_memory.sql",
+      "bytes": 19893,
+      "sha256": "e7200a29d5250198daad732182ab232b5113e55d730c210dd2d82f553c56a6ec"
+    },
+    {
+      "version": "0076",
+      "filename": "0076_agent_telemetry.sql",
+      "bytes": 22066,
+      "sha256": "413aba9f293a6c86b5edc210b7e1c27faa49c7066c816075e4764e79a9de5669"
+    },
+    {
+      "version": "0077",
+      "filename": "0077_impact_intelligence.sql",
+      "bytes": 32392,
+      "sha256": "52868354125a9120b766fcf67387b58a1721016a16442aa8e29d5dfbc7d2836d"
+    },
+    {
+      "version": "0078",
+      "filename": "0078_frontend_impact_intelligence.sql",
+      "bytes": 9335,
+      "sha256": "bae96e88f21b9dc819b4b43b744e55b1aaa496a7b7edcc610774d3328e02e44c"
+    },
+    {
+      "version": "0079",
+      "filename": "0079_split_payments.sql",
+      "bytes": 6373,
+      "sha256": "d2dcd3047ac567f13a537eca20dfee8fb1668b938300daa2665d3fe5281da513"
+    },
+    {
+      "version": "0080",
+      "filename": "0080_payment_idempotency.sql",
+      "bytes": 9201,
+      "sha256": "65827d2183f264f404fc4785c44d03b9fd8a2897ce87f2b09b72deb1e12c03f4"
+    },
+    {
+      "version": "0081",
+      "filename": "0081_fix_actor_auth_rpc.sql",
+      "bytes": 5251,
+      "sha256": "b2efdceb2375259a44aee29f289a135a20a1fbb42217dcdc02759514faf7d468"
+    },
+    {
+      "version": "0082",
+      "filename": "0082_fix_adjust_stock_schema.sql",
+      "bytes": 6979,
+      "sha256": "62f22481600e9e87df044954e479d50dc021d4f14ef25a7e87fb6efe017b16fc"
+    },
+    {
+      "version": "0083",
+      "filename": "0083_fix_remaining_actor_auth_rpc.sql",
+      "bytes": 8604,
+      "sha256": "cf278e72db3b9bcfc5a72fa9fb31e18e1dbabc1d734b6b562625f8231a798142"
+    },
+    {
+      "version": "0084",
+      "filename": "0084_fix_adjust_stock_variant_sync.sql",
+      "bytes": 4100,
+      "sha256": "259d9472a96daeb0687cb19bbbd4017516f4e5feedf449a68361fec6347884de"
+    },
+    {
+      "version": "0085",
+      "filename": "0085_fix_void_sale_return_items_column.sql",
+      "bytes": 3677,
+      "sha256": "aba086d8bfd96b10cbf0655b81a6c36892d4f3d0a9c469127be32257b829e7a7"
+    },
+    {
+      "version": "0086",
+      "filename": "0086_fix_payment_idempotency_race_condition.sql",
+      "bytes": 8649,
+      "sha256": "0c02c75c83ec658aaac55b323fb0f98136fa2a1b028f61524d95f8583874d6dc"
+    },
+    {
+      "version": "0087",
+      "filename": "0087_fix_returns_table_schema.sql",
+      "bytes": 1502,
+      "sha256": "1e911276da9e56cc99744d53428750d796c50504867bb7bd89a47c33406a6217"
+    },
+    {
+      "version": "0088",
+      "filename": "0088_fix_void_sale_and_param_names.sql",
+      "bytes": 4632,
+      "sha256": "a8e9a7f5a8708f13925a670c2456bd08f8a875521d275f2c50d5b92c6e9c144b"
+    },
+    {
+      "version": "0089",
+      "filename": "0089_add_business_settings_rls.sql",
+      "bytes": 848,
+      "sha256": "c31e9d0782ce42e2bc151ed19e6d2481cd01b3714960fc0d2584cd687e359edb"
+    },
+    {
+      "version": "0090",
+      "filename": "0090_fix_delete_product_soft_delete.sql",
+      "bytes": 1088,
+      "sha256": "bd8d410354761838b1237ce0df52871478b3a5e4ec773e1d845170a6de2cec9b"
+    },
+    {
+      "version": "0091",
+      "filename": "0091_grant_role_permissions__grant_service_role_permissions.sql",
+      "bytes": 2059,
+      "sha256": "df8749a2d17a430d380ad8ee1bab2a3caea60bf9c28caa4f781873ad66fe86c8"
+    },
+    {
+      "version": "0092",
+      "filename": "0092_fix_shop_requests_missing_columns.sql",
+      "bytes": 2414,
+      "sha256": "afd844e464d1752ede17c096c7fa0807050dbe8184197f28ddfa6aad94c77525"
+    },
+    {
+      "version": "0093",
+      "filename": "0093_fix_create_customer_shop_id.sql",
+      "bytes": 2428,
+      "sha256": "014009560e5c72facccb6a92491148dbc74f463e76b9563919e4b97c936c2147"
+    },
+    {
+      "version": "0094",
+      "filename": "0094_tenant_membership_foundation.sql",
+      "bytes": 10450,
+      "sha256": "b001768a1471ff97c98e6f00d4bdd20ee690c14bbe5b7e8325b74c4b29a3f3ea"
+    },
+    {
+      "version": "0095",
+      "filename": "0095_unified_tenant_resolution.sql",
+      "bytes": 17540,
+      "sha256": "6feefbc7b18dd453f50faa6308f84bd1936938c503a35901ab79014104ce8b08"
+    },
+    {
+      "version": "0096",
+      "filename": "0096_lookup_user_membership.sql",
+      "bytes": 2681,
+      "sha256": "e9cf5695a8be9b692ddcea3c65d5aa25e8c07bcf31dcb8fc3fc282fff11e4341"
+    },
+    {
+      "version": "0097",
+      "filename": "0097_fix_all_table_grants.sql",
+      "bytes": 2816,
+      "sha256": "630f974137960ea9603ef2fcc368eaa8aa09a38f79c7d65e62476691abb6a3e2"
+    },
+    {
+      "version": "0098",
+      "filename": "0098_create_company_rpc.sql",
+      "bytes": 2202,
+      "sha256": "cb48de67296fe80ef7d56587fe1061f6cb6055456cbe05c706578e718338c9c7"
+    },
+    {
+      "version": "0099",
+      "filename": "0099_resolve_tenant_fallback.sql",
+      "bytes": 13678,
+      "sha256": "7a0809b1af318511c4159f6946f3b6f7cb11931eef7d5d6c83db3ec7b2acf1b2"
+    },
+    {
+      "version": "0100",
+      "filename": "0100_fix_product_company_nullable.sql",
+      "bytes": 222,
+      "sha256": "5871455ffe9782a96b5d10454d2a87769b3668aebbbb8d2a6e28f8889102445a"
+    },
+    {
+      "version": "0101",
+      "filename": "0101_fix_product_company_resolution.sql",
+      "bytes": 3863,
+      "sha256": "c1f71d6b3a03859e472caaab013addd31a1f24a08c36c696fdfa3f760743679b"
+    },
+    {
+      "version": "0102",
+      "filename": "0102_fix_create_sale_schema.sql",
+      "bytes": 3658,
+      "sha256": "9ee31e54238afdd75a0fb7f61fa83135ef51bd6f213e0980247a7ec66a93089e"
+    },
+    {
+      "version": "0103",
+      "filename": "0103_fix_purchase_return_schema.sql",
+      "bytes": 6881,
+      "sha256": "ea45296b10f612c58f056d4fd6a474b430ec1fcebc832365f50dc492ab6156cd"
+    },
+    {
+      "version": "0104",
+      "filename": "0104_create_employee_rpc.sql",
+      "bytes": 3866,
+      "sha256": "213d1be148323f6b9ee04c6dd0b29650bacdaa781b423bf7fa201f8281fd6ea4"
+    },
+    {
+      "version": "0105",
+      "filename": "0105_employee_lifecycle_auth_fix.sql",
+      "bytes": 10252,
+      "sha256": "f05a2502221244adbb6f3e6cfa1b946dd7799cfef155d97e13338a5f69582c7f"
+    },
+    {
+      "version": "0106",
+      "filename": "0106_rbac_permissions.sql",
+      "bytes": 20524,
+      "sha256": "453957fd4a0115963c3322c6bc12ceaf20fa784ff98b9c766a4cedbbe4607bba"
+    },
+    {
+      "version": "0107",
+      "filename": "0107_roles_rbac_model.sql",
+      "bytes": 22737,
+      "sha256": "132abd5b7be241bf055d01c1cb7451afebee01ad1d4ed6ce4c48affad19bff25"
+    },
+    {
+      "version": "0108",
+      "filename": "0108_authoritative_access_and_business_areas.sql",
+      "bytes": 17907,
+      "sha256": "6c3b7dad5ed2288f7fe7deb49bd58b0c4775e053296e666eb5c89d0714cc07bd"
+    },
+    {
+      "version": "0109",
+      "filename": "0109_enforce_business_permissions.sql",
+      "bytes": 10939,
+      "sha256": "5f27c9a88309893b267899a940ac56b8a70489aa862476ce89f889fc2f5f72aa"
+    },
+    {
+      "version": "0110",
+      "filename": "0110_backfill_legacy_memberships.sql",
+      "bytes": 1198,
+      "sha256": "687582f04c40d17025363c642fc123db025fcf83985991d5acef93b1fd8e2105"
+    },
+    {
+      "version": "0111",
+      "filename": "0111_admin_management_defaults.sql",
+      "bytes": 292,
+      "sha256": "f1d2a09f83a7e7aa4fcd637211467f362fef4e5e84b2353171f4615baf8f6599"
+    },
+    {
+      "version": "0112",
+      "filename": "0112_enforce_remaining_business_permissions.sql",
+      "bytes": 45339,
+      "sha256": "f24ebe943a231bdd1c48eb8dbc7072a36fd932035731595934eafe53f0e0f0d2"
+    },
+    {
+      "version": "0113",
+      "filename": "0113_user_membership_invariant.sql",
+      "bytes": 10190,
+      "sha256": "7f5865c7d50cd7d66cd663b9bd050b24b00359f7fdcd8818daa87711c08ed113"
+    },
+    {
+      "version": "0114",
+      "filename": "0114_fix_adjust_stock_variant_authority.sql",
+      "bytes": 7063,
+      "sha256": "b90350d13923cbc4cf14b0e452a1cc515ddbe5218fc90b02b19d018a974da303"
+    },
+    {
+      "version": "0115",
+      "filename": "0115_tenant_rls_and_anon_hardening.sql",
+      "bytes": 11869,
+      "sha256": "5fae302b8c6501aacb89c61f2cabe7012b337bd491b35147b6b061e32f9dd024"
+    },
+    {
+      "version": "0116",
+      "filename": "0116_reminder_occurrence_contract.sql",
+      "bytes": 4562,
+      "sha256": "46b195df4e065ace044bd764cdb14438e5b69a29ff652c6a868e7a7954c1898f"
+    },
+    {
+      "version": "0117",
+      "filename": "0117_membership_visibility_for_admin.sql",
+      "bytes": 1969,
+      "sha256": "f0868bc15080e52dceb5cddc532324f227a784480e9c6f14b213b4e9a0f73746"
+    },
+    {
+      "version": "0118",
+      "filename": "0118_branch_ownership_and_scope.sql",
+      "bytes": 8605,
+      "sha256": "7fff9ce05d65ddf77abdba843c1ec05a320a7c0689457c5ad7a478962c1f51a5"
+    },
+    {
+      "version": "0119",
+      "filename": "0119_trusted_context_and_branch_stamping.sql",
+      "bytes": 5923,
+      "sha256": "8b9c7dab003b73600bfb3f7535403e1234e4882dced4816f4076b76e3e18baed"
+    },
+    {
+      "version": "0120",
+      "filename": "0120_backfill_remaining_branch_ownership.sql",
+      "bytes": 1684,
+      "sha256": "fc7eca8fe0c4f523638caae795a0539c30aca8414527f5fcc8e6ad269dd6fde6"
+    },
+    {
+      "version": "0121",
+      "filename": "0121_platform_shop_approval_authorization.sql",
+      "bytes": 3441,
+      "sha256": "ac945f27a8d6400f70cc29fa1989c7c45b2615fd94c9edca64b8c6a0748f84aa"
+    },
+    {
+      "version": "0122",
+      "filename": "0122_reminder_config_contract.sql",
+      "bytes": 3327,
+      "sha256": "bd9fa186065ed40706724eb2e7100ddd60e66e575bfbf863c2e552aecaee2fdc"
+    },
+    {
+      "version": "0123",
+      "filename": "0123_reminder_logs_contract.sql",
+      "bytes": 1481,
+      "sha256": "73761af1b982176e8dbdf50441d19b31d00d1206b29e9e94e4e42a38eb3ad27c"
+    },
+    {
+      "version": "0124",
+      "filename": "0124_display_attribution_integrity.sql",
+      "bytes": 9028,
+      "sha256": "b8acc592e1a87715c5837c2c7d86e8e7ad122e7f2eb648b558725d9dd3c0dad7"
+    },
+    {
+      "version": "0125",
+      "filename": "0125_actor_attribution_on_writes.sql",
+      "bytes": 6658,
+      "sha256": "60a493269c046a7c71e0eeaaa1e19abda1c59193f726de424139d633fe24b8b1"
+    },
+    {
+      "version": "0126",
+      "filename": "0126_harden_jwt_claim_parsing.sql",
+      "bytes": 6473,
+      "sha256": "de67084a8f4750f6acf14136410887e025463638ce0fe102a8c8a6960740c8ea"
+    },
+    {
+      "version": "0127",
+      "filename": "0127_cogs_snapshot_integrity.sql",
+      "bytes": 5445,
+      "sha256": "caef5da68fdfb6714487454dce00989d695f35853f203b7403def6512ffa0310"
+    },
+    {
+      "version": "0128",
+      "filename": "0128_variant_stock_of_record.sql",
+      "bytes": 8891,
+      "sha256": "a106279c98179be9732f36d1652cc735658771255d5877216edd544532c686f0"
+    },
+    {
+      "version": "0129",
+      "filename": "0129_employee_invite_lifecycle.sql",
+      "bytes": 10843,
+      "sha256": "b12776c552042983a3149890079b25a092a5afd5e9b9b92583ab4ba00e6d9432"
+    },
+    {
+      "version": "0130",
+      "filename": "0130_restore_return_integrity_guards.sql",
+      "bytes": 11397,
+      "sha256": "7184cf7fb3ed62d4e18edcf29fb72b12bf609e08033d4956e984f15932d94aa7"
+    },
+    {
+      "version": "0131",
+      "filename": "0131_derive_employee_membership_role.sql",
+      "bytes": 11216,
+      "sha256": "2272fbef370e6cc8a18a461e9702785a3bacddd64627c97eebadf51e727fc9ec"
+    },
+    {
+      "version": "0132",
+      "filename": "0132_employee_overrides_on_create.sql",
+      "bytes": 5996,
+      "sha256": "f6fb1e4ac75157a2ac64ae8c3c6a4ee1e090af561944dfc581c86faafa73b79a"
+    },
+    {
+      "version": "0133",
+      "filename": "0133_lookup_returns_pending_membership.sql",
+      "bytes": 3628,
+      "sha256": "c52e116b3ad3bf0640ef65bfc31ee5302928cef110be12484e1686d6f0c52a18"
+    },
+    {
+      "version": "0134",
+      "filename": "0134_sale_idempotency.sql",
+      "bytes": 9239,
+      "sha256": "272ccd2717f3577a5ac6a7b9888a35ae2653fea635bd5d59b7e665c9d153a1b1"
+    },
+    {
+      "version": "0135",
+      "filename": "0135_provision_member_login.sql",
+      "bytes": 10126,
+      "sha256": "f25bc7295a18b579a07bc513b2551741d0563c2eb91a012d1f3c111af23ece0d"
+    },
+    {
+      "version": "0136",
+      "filename": "0136_canonical_phone_lookup.sql",
+      "bytes": 7846,
+      "sha256": "4ed9964244a0abecda069de47014e43e16a5a0ae8faad6b1e7cf26d1f1812ac1"
+    },
+    {
+      "version": "0137",
+      "filename": "0137_create_employee_guard_at_entry.sql",
+      "bytes": 3262,
+      "sha256": "2fc0b85ee375f66c97b66effac56929f321ef61bdef74a1604fc4349c3e52c21"
+    },
+    {
+      "version": "0138",
+      "filename": "0138_payment_and_void_single_action.sql",
+      "bytes": 12447,
+      "sha256": "4d33338bc2d8c2f9164805713e024eecb888fbc07e73f15300c2c7ceb2a2abd3"
+    },
+    {
+      "version": "0139",
+      "filename": "0139_adjust_stock_idempotency.sql",
+      "bytes": 7144,
+      "sha256": "696bfa2636012f8524c3f8ddbec00def5662fb3c103a1b30e7a31e4d2d1e2b73"
+    },
+    {
+      "version": "0140",
+      "filename": "0140_purchase_records_once.sql",
+      "bytes": 8481,
+      "sha256": "29bb265a1987594789439e65560bf7973915965233e8e4b5eaadff0ee42ef9ad"
+    },
+    {
+      "version": "0141",
+      "filename": "0141_reminder_config_write_contract.sql",
+      "bytes": 1682,
+      "sha256": "1f488b78eb00feb2724abf438ce6274f94d34fe1cc6cd77d0af1231213665fd8"
+    },
+    {
+      "version": "0142",
+      "filename": "0142_archive_company.sql",
+      "bytes": 2863,
+      "sha256": "d172f4b575d5168c3151902636f53bc516232b76fd4dd3ae977791491642891b"
+    },
+    {
+      "version": "0143",
+      "filename": "0143_reminder_config_dedupe.sql",
+      "bytes": 5455,
+      "sha256": "33ddb78280dfbf70c828b7ed5474f60a6d3fbc3164834f7e4bc94cfb3bfedfbb"
+    },
+    {
+      "version": "0144",
+      "filename": "0144_enable_realtime_publication.sql",
+      "bytes": 3422,
+      "sha256": "945517ebaafcfc89dadb4e5d9d5a47bb684a1859bd21ca68d286cb02991258ba"
+    },
+    {
+      "version": "0145",
+      "filename": "0145_update_product_writes_variants.sql",
+      "bytes": 5788,
+      "sha256": "3972c890225bf37eb38c6bfe7a79073e5ee9352e3df2780be03d712267af569d"
+    },
+    {
+      "version": "0146",
+      "filename": "0146_purchase_sets_current_price.sql",
+      "bytes": 5312,
+      "sha256": "071c5105c53920a4e5d4c202c7eeec09b137bda80e8028582cece91ed2644379"
+    },
+    {
+      "version": "0147",
+      "filename": "0147_admin_full_access_and_account_deletion.sql",
+      "bytes": 11149,
+      "sha256": "6a2a0a962471248fb4b3687f23b79b99454aae135e445c76c4e972fc8419add3"
+    },
+    {
+      "version": "0148",
+      "filename": "0148_server_side_pin.sql",
+      "bytes": 6389,
+      "sha256": "59fbba372401c83666fae2752d4d3ab97afe043602215b372a020e1a5d1d9e2b"
+    },
+    {
+      "version": "0149",
+      "filename": "0149_active_shop_source_of_truth.sql",
+      "bytes": 17033,
+      "sha256": "07ec0d0ac7dcf0dcdfccde43e7a6a8af745a65bdd5b3c75a1adf98efe86954ff"
+    },
+    {
+      "version": "0150",
+      "filename": "0150_shop_creation_and_switching.sql",
+      "bytes": 14204,
+      "sha256": "e463d7130e7669b6544e9498aebbfcc56229858336790631bb9e0e19781c45b1"
+    },
+    {
+      "version": "0151",
+      "filename": "0151_child_read_write_policies_shop_scope.sql",
+      "bytes": 9553,
+      "sha256": "34aa3d1d2c35fcc82ca874f0425ba3f34927cfc5356219a568bc46805c4409a8"
+    },
+    {
+      "version": "0152",
+      "filename": "0152_create_purchase_writes_inventory_movement.sql",
+      "bytes": 6388,
+      "sha256": "a82b01ef90b4eeb0a4388b3647a2201f5ebc5ea6ba35244f973214f487429d1a"
+    },
+    {
+      "version": "0153",
+      "filename": "0153_shop_context_invariants.sql",
+      "bytes": 5318,
+      "sha256": "1ecd248f19e2e3d9ab608bd6aeb1aa2c84d2070b0870bc1b747548effa79a1a5"
+    },
+    {
+      "version": "0154",
+      "filename": "0154_set_customer_credit_limit.sql",
+      "bytes": 2358,
+      "sha256": "50d79bd246512c291f57426afacbe2629b48b1809fc02a5497f32c292f733075"
+    },
+    {
+      "version": "0155",
+      "filename": "0155_credit_sale_rules_and_paid_ledger.sql",
+      "bytes": 7828,
+      "sha256": "8401aee4536d38f648fbb7b11b204d533347a21545eec1f4be2c19d2c89cd0d1"
+    },
+    {
+      "version": "0156",
+      "filename": "0156_fix_delete_my_account_varchar_compare.sql",
+      "bytes": 8634,
+      "sha256": "9deee8ae8d8986a738c31e64db5dc6d1398b87265586cb57adc53f2dd9f9a158"
+    },
+    {
+      "version": "0157",
+      "filename": "0157_stock_alert_settings.sql",
+      "bytes": 7823,
+      "sha256": "b29e1073b00df303f3c2b0cf7a166f9812564fc84309ad954a023b51b997f911"
+    },
+    {
+      "version": "0158",
+      "filename": "0158_product_barcodes_and_create_product.sql",
+      "bytes": 21471,
+      "sha256": "dfed902483d628963a4db5bb954687f1de7d7aa2d3969872085b4c6dd4068c1e"
+    },
+    {
+      "version": "0159",
+      "filename": "0159_unknown_cost_is_not_zero.sql",
+      "bytes": 2794,
+      "sha256": "222f149bfb16917cccd0d2851c1dfdfce9ab20009638242e7722436a52914032"
+    },
+    {
+      "version": "0160",
+      "filename": "0160_barcode_registry_and_history.sql",
+      "bytes": 21581,
+      "sha256": "aace62fb99c76af8fffc30fa5bb73387ba949c51364ecff139b75c825eafc5f9"
+    },
+    {
+      "version": "0161",
+      "filename": "0161_update_product_barcode_clear_and_claim.sql",
+      "bytes": 8078,
+      "sha256": "9ade0ca6dfbe6938b7511e723bc8ae5a96ea3cdb458baf2bba7828485bd39029"
+    },
+    {
+      "version": "0162",
+      "filename": "0162_one_category_for_pesticide.sql",
+      "bytes": 1069,
+      "sha256": "ea3cd95f539de697903b83cefe2f102300b29d206ddb292e967589cae2b28af3"
+    },
+    {
+      "version": "0163",
+      "filename": "0163_invite_identity_repair_and_shop_scope.sql",
+      "bytes": 9680,
+      "sha256": "fb6ad1ab9a5f0f24120afe0abc741a89d235da48289a8acfa7d9716c87fdbb8b"
+    },
+    {
+      "version": "0164",
+      "filename": "0164_roles_can_be_removed.sql",
+      "bytes": 6648,
+      "sha256": "f69deaf98b92a322997703d51de07c5eae7c4ed947113e65b5145fc8476c204e"
+    },
+    {
+      "version": "0165",
+      "filename": "0165_actions_happen_in_the_active_shop.sql",
+      "bytes": 12296,
+      "sha256": "3e463a49fd9223f174d7aaed085053837c1ccbb015c0f7a9b2a441067b562bbf"
+    },
+    {
+      "version": "0166",
+      "filename": "0166_shop_setup_takes_the_chosen_roles.sql",
+      "bytes": 11175,
+      "sha256": "822212272dd1e5c2cfc6d3c61f157b886be42834e0a897fe31e9a260a92b07c2"
+    },
+    {
+      "version": "0167",
+      "filename": "0167_two_account_roles.sql",
+      "bytes": 20447,
+      "sha256": "61cf5f1894ef30e5a0bb22363b355d62b70ae40eb64b6c468dc2477d9d1a6dbc"
+    },
+    {
+      "version": "0168",
+      "filename": "0168_notifications_live_again_and_branches_can_be_deleted.sql",
+      "bytes": 26311,
+      "sha256": "874b70b13cf157bedc7a2425f2874cda00bea7902375fb701f106d4c85706418"
+    },
+    {
+      "version": "0169",
+      "filename": "0169_a_shop_has_a_name_you_can_say_out_loud.sql",
+      "bytes": 8020,
+      "sha256": "650899dcd5eab51fa70cab6dc730b0a42d349ceab81d5fb783647e6152f60df8"
+    },
+    {
+      "version": "0170",
+      "filename": "0170_deleting_a_number_leaves_nothing_behind.sql",
+      "bytes": 9009,
+      "sha256": "7d1cea0146a11bc2be4b1c6d3e19343b818e75b9f5af3fbf378724383980564d"
+    },
+    {
+      "version": "0171",
+      "filename": "0171_a_member_always_has_a_branch.sql",
+      "bytes": 3184,
+      "sha256": "4c6e2b438137086a8173265a03db81297c50eaedb3450e19fd0f9616fcb66ab1"
+    },
+    {
+      "version": "0172",
+      "filename": "0172_a_location_is_a_point_not_a_typed_address.sql",
+      "bytes": 12835,
+      "sha256": "f759919d710b08df484b4da233f1f43ea44d6f5f8397b166888a04f4596a73f4"
+    },
+    {
+      "version": "0173",
+      "filename": "0173_a_branch_carries_its_own_pin.sql",
+      "bytes": 5663,
+      "sha256": "d4c73a1068d7d81c6606e22d818067d50bc72a65421f9a9eef47fc321f4caeb3"
+    },
+    {
+      "version": "0174",
+      "filename": "0174_a_location_can_be_taken_back.sql",
+      "bytes": 7336,
+      "sha256": "908eae458a23d2e1bd2aaec164ebc4eed2833cc80af565593e38ee05ab4fd372"
+    },
+    {
+      "version": "0175",
+      "filename": "0175_a_denial_still_denies.sql",
+      "bytes": 4140,
+      "sha256": "844d1d7474fdb520dfe1e5171c8f219e40008f61203b5545a9ce079d8a98e345"
+    },
+    {
+      "version": "0176",
+      "filename": "0176_no_anonymous_writes.sql",
+      "bytes": 2888,
+      "sha256": "c3e4cc84f47ec559afb403c90f8c87077dc6dd14d679cbe35ca38fc64bc1290f"
+    },
+    {
+      "version": "0177",
+      "filename": "0177_a_definer_knows_where_it_looks.sql",
+      "bytes": 1859,
+      "sha256": "16f7550785b93b78626707a8e1c710f2abb79d7caab6f7268a89ae27f15b91d3"
+    },
+    {
+      "version": "0178",
+      "filename": "0178_a_variant_belongs_to_a_shop.sql",
+      "bytes": 5951,
+      "sha256": "1f6e6d33720eda38f03f64e99e62e3c9e888a5e6b67f2d7d03bb15cad9649cbd"
+    },
+    {
+      "version": "0179",
+      "filename": "0179_cost_price_is_the_owner_s_business.sql",
+      "bytes": 5214,
+      "sha256": "5778314b3f073d5e3a5fa8b246a85c6d008ebca935d77cbc92e95c049541b809"
+    },
+    {
+      "version": "0180",
+      "filename": "0180_admin_is_not_a_boundary.sql",
+      "bytes": 5269,
+      "sha256": "b63789ec9f7429dbba0d43d4065a1d56f0eb6a3330a8da43810c7010f5b75bdb"
+    },
+    {
+      "version": "0181",
+      "filename": "0181_audit_rows_are_written_by_the_system_not_by_the_caller.sql",
+      "bytes": 5058,
+      "sha256": "3aba4c0d2c4b7c1ed2d69c1e37e6747596cbc3b07cd043667794f607732251cb"
+    },
+    {
+      "version": "0182",
+      "filename": "0182_settings_belong_to_their_shop.sql",
+      "bytes": 5391,
+      "sha256": "18e364afb82bb5de6c1a642264b0408540bb7946fbc3e78f917d30870e3d06e4"
+    },
+    {
+      "version": "0183",
+      "filename": "0183_deleting_a_role_revokes_its_access.sql",
+      "bytes": 6494,
+      "sha256": "d00d10383e2b3058b3908d94fdcc0a378e8f0d2a74061741f21a3f1c68b6737a"
+    },
+    {
+      "version": "0184",
+      "filename": "0184_a_branch_decides_how_far_it_serves.sql",
+      "bytes": 8932,
+      "sha256": "4aa39ffa7f8fa8330c17dd99ab82d083601dfd4ee9152fa5f1a4983f30e3cc15"
+    },
+    {
+      "version": "0185",
+      "filename": "0185_a_product_can_be_listed_on_the_marketplace.sql",
+      "bytes": 34201,
+      "sha256": "3f442e5d2af4260f0a76d272eeb0dbb2a4339e5a7f9fd3a2384363e9a3689edf"
+    },
+    {
+      "version": "0186",
+      "filename": "0186_the_branches_read_carries_its_marketplace_state.sql",
+      "bytes": 5712,
+      "sha256": "0f960736865e3626cc39cd6894aa7be3b83878643c36cf8cec208555c1914b86"
+    },
+    {
+      "version": "0187",
+      "filename": "0187_the_distance_belongs_to_the_farmer_not_the_branch.sql",
+      "bytes": 14152,
+      "sha256": "5921c5dfbf2c08b202ba8d9119ef6c07605b43cac2e3c247683146ac1b601c31"
+    },
+    {
+      "version": "0188",
+      "filename": "0188_a_branch_is_not_its_tenant.sql",
+      "bytes": 12486,
+      "sha256": "5f1c9712bc07e2f1ce1409bf613197a22fbcb58157ec47f3a9ae390496be41a8"
+    },
+    {
+      "version": "0189",
+      "filename": "0189_access_changes_keep_the_person_and_history.sql",
+      "bytes": 6657,
+      "sha256": "4425e3220b30eee35cb7dfdcd2830cc0f6b0ff5f1b2853d690bd2240539a2373"
+    },
+    {
+      "version": "0190",
+      "filename": "0190_invitation_starts_in_the_selected_branch.sql",
+      "bytes": 3918,
+      "sha256": "45706012fd06f88f66fa578687c4706f797fa230aaa8d86c7f895ccd86c1c54e"
+    },
+    {
+      "version": "0191",
+      "filename": "0191_operating_branches_preserve_the_business.sql",
+      "bytes": 11867,
+      "sha256": "f160b8dcdbfbabf2c6743fd3d7946a1a6205be5dafb7213ba15c52529a87e022"
+    },
+    {
+      "version": "0192",
+      "filename": "0192_consequential_records_guard_before_retry.sql",
+      "bytes": 11704,
+      "sha256": "3150d50d2c728064fed8622197ae20414b64f4b82c948e0d0067ccce58792088"
+    },
+    {
+      "version": "0193",
+      "filename": "0193_activity_reads_the_action_history.sql",
+      "bytes": 2067,
+      "sha256": "25c83d1202dd0f10d720621e190449eeeb17873fe1bf817b6d5d4f8b7bad92ba"
+    },
+    {
+      "version": "0194",
+      "filename": "0194_access_edits_do_not_widen_the_editor.sql",
+      "bytes": 6014,
+      "sha256": "9a26339d6dd18e49352ea453e2ef98511b2abe22d693de9b6d198f1c7028bf07"
+    },
+    {
+      "version": "0195",
+      "filename": "0195_permissions_are_not_just_navigation.sql",
+      "bytes": 4936,
+      "sha256": "42d55d912aa716222df87d58f51c8f76f8db8a3ce5b797bac365ae8d93b8365a"
+    },
+    {
+      "version": "0196",
+      "filename": "0196_a_branch_has_a_responsible_person.sql",
+      "bytes": 12000,
+      "sha256": "b633b9a435aa9a3b5d1e7017adbd1421c81febf55191635b1f851bf9770fc262"
+    },
+    {
+      "version": "0197",
+      "filename": "0197_a_notification_says_which_branch.sql",
+      "bytes": 10520,
+      "sha256": "e7ec29e75db83692b405d9447cd661ca448dacf5586785f46f9a10056d530a8d"
+    },
+    {
+      "version": "0198",
+      "filename": "0198_a_sale_keeps_its_due_date_and_leaves_a_movement.sql",
+      "bytes": 15819,
+      "sha256": "cd2113671a58aed97567c242580fd5827f6150df6477e6b3132db624450ce30c"
+    },
+    {
+      "version": "0199",
+      "filename": "0199_uploads_and_live_updates_survive_a_restore.sql",
+      "bytes": 9715,
+      "sha256": "8c75c5cbafd495271d561594f4bf5a645bf101ac745a7491fdc58bf6c113702f"
+    },
+    {
+      "version": "0200",
+      "filename": "0200_the_pre_login_lookup_returns_only_what_the_screen_shows.sql",
+      "bytes": 5801,
+      "sha256": "b12b14d243021d0e1de72b51b2681690fba518171345829d04bc9e97b40ca7fd"
+    },
+    {
+      "version": "0201",
+      "filename": "0201_the_pre_login_lookup_answers_for_the_number_only.sql",
+      "bytes": 8152,
+      "sha256": "f0d9d1096d8a06bb061cf20b6c6fccdd7721561212f303bd85096dfeae222ca2"
+    },
+    {
+      "version": "0202",
+      "filename": "0202_archiving_a_customer_needs_the_delete_permission.sql",
+      "bytes": 1857,
+      "sha256": "213d286c60f3a05bea1c739df4d6375a54958c917a7eac20dc74b855d8f1cd73"
+    }
+  ],
+  "ledger": {
+    "present": true,
+    "rows": 193,
+    "hasFileTable": "supabase_migrations.schema_migration_files",
+    "entries": [
+      {
+        "version": "0009",
+        "name": "complete_schema",
+        "sha256": "30d6984d5f36f5c3cc052c023d868bf141c9c7995abc14c0a8f86ef3c1d5a7e3",
+        "source": "adopted"
+      },
+      {
+        "version": "0010",
+        "name": "comprehensive_rls",
+        "sha256": "e2f27e3c8735e9a983be45d13cfc26bfdcba14ec07276ae3d3077151a7a0f06a",
+        "source": "adopted"
+      },
+      {
+        "version": "0011",
+        "name": "new_rpc_functions",
+        "sha256": "6860274bf004a3dc807164cf004f201b4e765686962fbe9bdad1c10d7be5e070",
+        "source": "adopted"
+      },
+      {
+        "version": "0012",
+        "name": "update_existing_rpcs",
+        "sha256": "50b5e4cef8c73392191cc32cf23c75f92c9f1ade16cf801e067d23ac37be855f",
+        "source": "adopted"
+      },
+      {
+        "version": "0013",
+        "name": "storage_buckets",
+        "sha256": "22c96eb9d2b3521bb605f785ea129577692a470830665d23f1fa5c2719197aff",
+        "source": "adopted"
+      },
+      {
+        "version": "0014",
+        "name": "add_barcode__return_enhancements",
+        "sha256": "dd33d16b620f9fcc46a7b988fdafd35335e8fe44facda0954a0b46c9162a8e1f",
+        "source": "adopted"
+      },
+      {
+        "version": "0015",
+        "name": "flexible_units",
+        "sha256": "ec12ec5453865ef665771e6390090d8b72e8b39364331c5e9d0e3488651181f0",
+        "source": "adopted"
+      },
+      {
+        "version": "0016",
+        "name": "customer_archive_sales_snapshot",
+        "sha256": "c919e90d156fe70b3e344f69dba89d80308b281f468fba2ba9c10d4afdf53cf1",
+        "source": "adopted"
+      },
+      {
+        "version": "0017",
+        "name": "phone_uniqueness",
+        "sha256": "0338187709bee6aca04ffe3b3cb5aeb72ce6b165ee2d5d6d0684a59c4d89d05b",
+        "source": "adopted"
+      },
+      {
+        "version": "0018",
+        "name": "seed_demo_users",
+        "sha256": "bdc41c9df0afb68bc6a03be04fed7c7707c5bd5e4acaad2fb8124385de45ebba",
+        "source": "adopted"
+      },
+      {
+        "version": "0019",
+        "name": "shop_onboarding",
+        "sha256": "4d9a939e34623795b04c16ec64804a153b677212a3e591be748d0674c808aeb0",
+        "source": "adopted"
+      },
+      {
+        "version": "0020",
+        "name": "fix_users_rls_for_login",
+        "sha256": "77005840967a95323a632787af091169177f34bfd1c98f5e18fd01cb27c9e639",
+        "source": "adopted"
+      },
+      {
+        "version": "0021",
+        "name": "shop_request_status_enum",
+        "sha256": "5b7cf3f800ac994a020de8dfb87cd2d3c14681f62b5ac75ffd960a31cacd7e1b",
+        "source": "adopted"
+      },
+      {
+        "version": "0022",
+        "name": "fix_all_rls_for_demo",
+        "sha256": "b7c2041fd2d8d7bb6996cf461bf5abeace0623a793fe308bc4ab67d69eff02e5",
+        "source": "adopted"
+      },
+      {
+        "version": "0023",
+        "name": "create_missing_rpc_functions",
+        "sha256": "690aed9b52642a23f661e5841d818021ad035613581d771fa114d1a90a96dbce",
+        "source": "adopted"
+      },
+      {
+        "version": "0024",
+        "name": "fix_rpc_parameter_names",
+        "sha256": "9f541cadbab8df20775073a8276747a7ee78b100c3b2be848ab80f6f3507402d",
+        "source": "adopted"
+      },
+      {
+        "version": "0025",
+        "name": "fix_all_rpc_parameter_names",
+        "sha256": "f41d38ff4239b208e8c89031949dc5ad54d6a38ca8dc06372fe00a03ebcdf2a4",
+        "source": "adopted"
+      },
+      {
+        "version": "0026",
+        "name": "fix_shop_and_product_rpc",
+        "sha256": "5d193ea90702ce53976a293869779dfc40500f41d2148a3759ef3c293c444528",
+        "source": "adopted"
+      },
+      {
+        "version": "0027",
+        "name": "final_correct_rpc_functions",
+        "sha256": "747db1dda044c9a239727cba7d5120b66960a9d658d49df1829226cafffa78fd",
+        "source": "adopted"
+      },
+      {
+        "version": "0028",
+        "name": "allow_employee_product_edit__fix_only_broken_functions",
+        "sha256": "712dc94cc047d82f54a61f0ba3e1c3201d0a29290f29adb105cafa126eb6acc0",
+        "source": "adopted"
+      },
+      {
+        "version": "0029",
+        "name": "enum_cast_fix__force_allow_employee_product_edit",
+        "sha256": "1efc9635cdef57bc1d0c06048737c31790c214bc4f6b4ec4c540485a2b210556",
+        "source": "adopted"
+      },
+      {
+        "version": "0030",
+        "name": "fix_customer_delete",
+        "sha256": "fa8269296b547915eaed3c261632f62a18b1fb9ee296015ecb98037659166b93",
+        "source": "adopted"
+      },
+      {
+        "version": "0031",
+        "name": "fix_product_delete_soft",
+        "sha256": "dba1507b709456a758e7d4cdc386c3f15b0157d45a0b11d6d6b7d86569e4208b",
+        "source": "adopted"
+      },
+      {
+        "version": "0032",
+        "name": "due_date_reminder_tables",
+        "sha256": "b8874d6663abe92aa1fbc867e61f064aee609627ff916c1891bb15d842acd28a",
+        "source": "adopted"
+      },
+      {
+        "version": "0033",
+        "name": "fix_process_return",
+        "sha256": "9cb646ba5e03599e4bbd7bab42199a4378c8a91b68bf4fad71695ee2a6432714",
+        "source": "adopted"
+      },
+      {
+        "version": "0034",
+        "name": "due_date_past_restriction",
+        "sha256": "32fdac8119fff768bb4c6be97ffff5b40a729dded00b41aa7ba59626b0f440b3",
+        "source": "adopted"
+      },
+      {
+        "version": "0035",
+        "name": "fix_process_return_correct",
+        "sha256": "3df0272a4ce5f6b0eb3805a82369c176e89089048025a6ce38450df71c5a2381",
+        "source": "adopted"
+      },
+      {
+        "version": "0036",
+        "name": "fix_void_sale_restore_stock_outstanding",
+        "sha256": "031eb030692cc7b8ea30b0fde21da154133f7111692c22e1f470dbdff6e7694e",
+        "source": "adopted"
+      },
+      {
+        "version": "0037",
+        "name": "permission_model_hardening",
+        "sha256": "43dfa13eabee680281687214942fb62bef5428afe1d84a3af1c326b4984e89aa",
+        "source": "adopted"
+      },
+      {
+        "version": "0038",
+        "name": "add_company_due_date",
+        "sha256": "fa620408725e8d2629911b0c814c0853fa5b4ef889941779ac8cda8f1c48a242",
+        "source": "adopted"
+      },
+      {
+        "version": "0039",
+        "name": "reminder_occurrence_model",
+        "sha256": "c74563b3b4de4934520e673389dc5216c1ac1e989ce6a31a7381d08aff9015c6",
+        "source": "adopted"
+      },
+      {
+        "version": "0040",
+        "name": "reminder_log_occurrence_id",
+        "sha256": "4fc42fc457096284f41455f138f3cc14527cae6f15d186c72c052f4fd56925c8",
+        "source": "adopted"
+      },
+      {
+        "version": "0041",
+        "name": "credit_lifecycle_enforcement",
+        "sha256": "a2cb49a916e58aaf5e2bc1c66ff8b6872f23697253baf29204f48c6bd1b292dd",
+        "source": "adopted"
+      },
+      {
+        "version": "0042",
+        "name": "security_rls_hardening__security_rls_hardening_deploy__security_rls_fix",
+        "sha256": "3adcb8974204627eb0c4e50dbe38807ab3bbfc80a49c77060ca32cf6cbb22177",
+        "source": "adopted"
+      },
+      {
+        "version": "0043",
+        "name": "login_lookup_function",
+        "sha256": "69bb605bfcbf41df69ce557104371180256f53ca03b1d4593d2f0cfefec21884",
+        "source": "adopted"
+      },
+      {
+        "version": "0044",
+        "name": "fix_void_adjust_actor_auth",
+        "sha256": "9abd8b912b110fef1f1776ce0524ab977858347ce72c32f2781e1be1f2af8753",
+        "source": "adopted"
+      },
+      {
+        "version": "0045",
+        "name": "fix_anon_customer_access",
+        "sha256": "aef9a9a3c293701e65caffba87a9bb6e00b388b75c38db5fd66922ed76e03ac9",
+        "source": "adopted"
+      },
+      {
+        "version": "0046",
+        "name": "phone_uniqueness_constraint",
+        "sha256": "075b1f63bb91638781c0a25eb7f2b0d6a21edabd1e59369c2439e5e593f217a4",
+        "source": "adopted"
+      },
+      {
+        "version": "0047",
+        "name": "add_unit_size_to_purchase_items__fix_purchase_rpcs",
+        "sha256": "af40bb4d0d15874256d70e1d012d59b415be4020a173f70d6eba15c32def364a",
+        "source": "adopted"
+      },
+      {
+        "version": "0048",
+        "name": "financial_integrity_phase1",
+        "sha256": "6e5202b8c7e1ff9b8d14c73ca259d10f52750ea9f7e752a79c3e464145dc7ead",
+        "source": "adopted"
+      },
+      {
+        "version": "0049",
+        "name": "fix_process_return_customer_id",
+        "sha256": "cbc028acc43a66825216d05a662d10e450f06f768661a09804d780db69ed6f5f",
+        "source": "adopted"
+      },
+      {
+        "version": "0050",
+        "name": "inventory_movements",
+        "sha256": "a966e2c73c5f3de4570c6e320d2580247345ba118b36d2ac725c0d16fc915b82",
+        "source": "adopted"
+      },
+      {
+        "version": "0051",
+        "name": "fix_void_sale_returned_qty",
+        "sha256": "dd95ef50bbb1220ce30f48130e5c0330b1857d972b2f8271fa35d7bc6a2303b7",
+        "source": "adopted"
+      },
+      {
+        "version": "0052",
+        "name": "block_return_on_voided_sale",
+        "sha256": "c564ee6d5ecd61d0a713a409dd649ec4b3b453dff3c1a626b4b28efd896268c3",
+        "source": "adopted"
+      },
+      {
+        "version": "0053",
+        "name": "rls_hardening",
+        "sha256": "18ad2690ccb5d7c3c3367d590bbf2c6539bdb294288d1befd157877289283567",
+        "source": "adopted"
+      },
+      {
+        "version": "0054",
+        "name": "revoke_anon_grants",
+        "sha256": "b74f5351c122e11233d5bdd9eec1c4c394acb65ad4ca4515033e252fa4fc4dfc",
+        "source": "adopted"
+      },
+      {
+        "version": "0055",
+        "name": "trusted_identity_rpc",
+        "sha256": "747aae81d9b57be36f7a2c77e756f8659705e9f4d812f06f3db008873ab1b8eb",
+        "source": "adopted"
+      },
+      {
+        "version": "0056",
+        "name": "financial_reconciliation__fix_actor_lookup",
+        "sha256": "582d9b1f6ed3f3ccaec1363fd3a84dec19cebe68b0060e579e010e1574807085",
+        "source": "adopted"
+      },
+      {
+        "version": "0057",
+        "name": "admin_profile_rpc__create_customer_rpc",
+        "sha256": "92a02628e71e8e8ae8e6fc2d180c2796185f97775a8c8c186c03b7bf6f06e7d1",
+        "source": "adopted"
+      },
+      {
+        "version": "0058",
+        "name": "fix_admin_profile_rls__grant_archive_restore_anon",
+        "sha256": "456f55301dba421dcf5cde5801bf9ffb42c215271493b8d52ffeda6401ba8cf4",
+        "source": "adopted"
+      },
+      {
+        "version": "0059",
+        "name": "grant_anon_users_permissions",
+        "sha256": "3aefb914b2865a624165c0499e402bccd9e8f3293af43c40a4aee6633a4e31d5",
+        "source": "adopted"
+      },
+      {
+        "version": "0060",
+        "name": "credit_limit_requests__reminder_groups",
+        "sha256": "675fee491a99cd8c7f1a244d1bf62125d1b7e45da05cf3c18548a362528925f4",
+        "source": "adopted"
+      },
+      {
+        "version": "0061",
+        "name": "fix_reminder_occurrences_rls",
+        "sha256": "c465727951d615aa080474f94d42d201a8f2a751f48a4ddd5fce80be5b9c8176",
+        "source": "adopted"
+      },
+      {
+        "version": "0062",
+        "name": "deploy_credit_limit_requests",
+        "sha256": "2a11a0a6563a10f3c824dbdc7486be314f37e265019f8c45d2fd527b950455a6",
+        "source": "adopted"
+      },
+      {
+        "version": "0063",
+        "name": "create_credit_limit_request_rpc",
+        "sha256": "4b43be67b9a6cdcfdf8587f0d72b855fe3ec47f6759331ae51a05b55325023d2",
+        "source": "adopted"
+      },
+      {
+        "version": "0064",
+        "name": "cleanup_qa_credit_requests",
+        "sha256": "df38ab8b987b81e4b6ba1fbf96f7e424123887863b946a6a3c1ec6bfe444c0f9",
+        "source": "adopted"
+      },
+      {
+        "version": "0065",
+        "name": "add_credit_request_reason",
+        "sha256": "a7b65c211b377d74d4bc30f612efd1b6bda309e871419a41d80df6217421af2f",
+        "source": "adopted"
+      },
+      {
+        "version": "0066",
+        "name": "fix_credit_request_rpc_auth",
+        "sha256": "21d78c3af8bb734c731cd0ae792bee928f035532ae1926fe8cd8bdff990e6486",
+        "source": "adopted"
+      },
+      {
+        "version": "0067",
+        "name": "fix_delete_credit_request_rpc",
+        "sha256": "ed7dbb959c7f67e631fdde7f3bd7a13f75b34d26bc3a595337006646ca74fe66",
+        "source": "adopted"
+      },
+      {
+        "version": "0068",
+        "name": "add_admin_auth_to_credit_approve_reject",
+        "sha256": "c95d136a0377c656379eee6a5dfdc99e6a5decb1b5a3e844b01895691490c884",
+        "source": "adopted"
+      },
+      {
+        "version": "0069",
+        "name": "fix_authorization_gaps",
+        "sha256": "a166bfd1f263a872f0dffe8e96ab124973a143160cfd90cb575510fb47b29dd3",
+        "source": "adopted"
+      },
+      {
+        "version": "0070",
+        "name": "add_run_sql_for_ci",
+        "sha256": "6e644f746d4cbcf6edf65fc665641690b419b15ad54b5fd5cbefdafe19d713ca",
+        "source": "adopted"
+      },
+      {
+        "version": "0071",
+        "name": "add_test_auth_helper",
+        "sha256": "834c023a6baf0d4428ec6ba242d0bd8aebe2d0adc17281ff00b327e539272094",
+        "source": "adopted"
+      },
+      {
+        "version": "0072",
+        "name": "incident_foundation_tables",
+        "sha256": "7e202abd86f2e88d9f8293e476bcdd6fc598448a7139383e17fb772a0020cd67",
+        "source": "adopted"
+      },
+      {
+        "version": "0073",
+        "name": "incident_safety_functions",
+        "sha256": "edd16ba4345191402c837d8ec1411a86ec633c33bb88b1c584ccd39c0dd00d0e",
+        "source": "adopted"
+      },
+      {
+        "version": "0074",
+        "name": "incident_rpcs",
+        "sha256": "2e4f3f3e34c65577c17ee1f2623ed6e62fba24f7f136853d7322caf1289f11e1",
+        "source": "adopted"
+      },
+      {
+        "version": "0075",
+        "name": "resolution_engineering_memory",
+        "sha256": "e7200a29d5250198daad732182ab232b5113e55d730c210dd2d82f553c56a6ec",
+        "source": "adopted"
+      },
+      {
+        "version": "0076",
+        "name": "agent_telemetry",
+        "sha256": "413aba9f293a6c86b5edc210b7e1c27faa49c7066c816075e4764e79a9de5669",
+        "source": "adopted"
+      },
+      {
+        "version": "0077",
+        "name": "impact_intelligence",
+        "sha256": "52868354125a9120b766fcf67387b58a1721016a16442aa8e29d5dfbc7d2836d",
+        "source": "adopted"
+      },
+      {
+        "version": "0078",
+        "name": "frontend_impact_intelligence",
+        "sha256": "bae96e88f21b9dc819b4b43b744e55b1aaa496a7b7edcc610774d3328e02e44c",
+        "source": "adopted"
+      },
+      {
+        "version": "0079",
+        "name": "split_payments",
+        "sha256": "d2dcd3047ac567f13a537eca20dfee8fb1668b938300daa2665d3fe5281da513",
+        "source": "adopted"
+      },
+      {
+        "version": "0080",
+        "name": "payment_idempotency",
+        "sha256": "65827d2183f264f404fc4785c44d03b9fd8a2897ce87f2b09b72deb1e12c03f4",
+        "source": "adopted"
+      },
+      {
+        "version": "0081",
+        "name": "fix_actor_auth_rpc",
+        "sha256": "b2efdceb2375259a44aee29f289a135a20a1fbb42217dcdc02759514faf7d468",
+        "source": "adopted"
+      },
+      {
+        "version": "0082",
+        "name": "fix_adjust_stock_schema",
+        "sha256": "62f22481600e9e87df044954e479d50dc021d4f14ef25a7e87fb6efe017b16fc",
+        "source": "adopted"
+      },
+      {
+        "version": "0083",
+        "name": "fix_remaining_actor_auth_rpc",
+        "sha256": "cf278e72db3b9bcfc5a72fa9fb31e18e1dbabc1d734b6b562625f8231a798142",
+        "source": "adopted"
+      },
+      {
+        "version": "0084",
+        "name": "fix_adjust_stock_variant_sync",
+        "sha256": "259d9472a96daeb0687cb19bbbd4017516f4e5feedf449a68361fec6347884de",
+        "source": "adopted"
+      },
+      {
+        "version": "0085",
+        "name": "fix_void_sale_return_items_column",
+        "sha256": "aba086d8bfd96b10cbf0655b81a6c36892d4f3d0a9c469127be32257b829e7a7",
+        "source": "adopted"
+      },
+      {
+        "version": "0086",
+        "name": "fix_payment_idempotency_race_condition",
+        "sha256": "0c02c75c83ec658aaac55b323fb0f98136fa2a1b028f61524d95f8583874d6dc",
+        "source": "adopted"
+      },
+      {
+        "version": "0087",
+        "name": "fix_returns_table_schema",
+        "sha256": "1e911276da9e56cc99744d53428750d796c50504867bb7bd89a47c33406a6217",
+        "source": "adopted"
+      },
+      {
+        "version": "0088",
+        "name": "fix_void_sale_and_param_names",
+        "sha256": "a8e9a7f5a8708f13925a670c2456bd08f8a875521d275f2c50d5b92c6e9c144b",
+        "source": "adopted"
+      },
+      {
+        "version": "0089",
+        "name": "add_business_settings_rls",
+        "sha256": "c31e9d0782ce42e2bc151ed19e6d2481cd01b3714960fc0d2584cd687e359edb",
+        "source": "adopted"
+      },
+      {
+        "version": "0090",
+        "name": "fix_delete_product_soft_delete",
+        "sha256": "bd8d410354761838b1237ce0df52871478b3a5e4ec773e1d845170a6de2cec9b",
+        "source": "adopted"
+      },
+      {
+        "version": "0091",
+        "name": "grant_role_permissions__grant_service_role_permissions",
+        "sha256": "df8749a2d17a430d380ad8ee1bab2a3caea60bf9c28caa4f781873ad66fe86c8",
+        "source": "adopted"
+      },
+      {
+        "version": "0092",
+        "name": "fix_shop_requests_missing_columns",
+        "sha256": "afd844e464d1752ede17c096c7fa0807050dbe8184197f28ddfa6aad94c77525",
+        "source": "adopted"
+      },
+      {
+        "version": "0093",
+        "name": "fix_create_customer_shop_id",
+        "sha256": "014009560e5c72facccb6a92491148dbc74f463e76b9563919e4b97c936c2147",
+        "source": "adopted"
+      },
+      {
+        "version": "0094",
+        "name": "tenant_membership_foundation",
+        "sha256": "b001768a1471ff97c98e6f00d4bdd20ee690c14bbe5b7e8325b74c4b29a3f3ea",
+        "source": "adopted"
+      },
+      {
+        "version": "0095",
+        "name": "unified_tenant_resolution",
+        "sha256": "6feefbc7b18dd453f50faa6308f84bd1936938c503a35901ab79014104ce8b08",
+        "source": "adopted"
+      },
+      {
+        "version": "0096",
+        "name": "lookup_user_membership",
+        "sha256": "e9cf5695a8be9b692ddcea3c65d5aa25e8c07bcf31dcb8fc3fc282fff11e4341",
+        "source": "adopted"
+      },
+      {
+        "version": "0097",
+        "name": "fix_all_table_grants",
+        "sha256": "630f974137960ea9603ef2fcc368eaa8aa09a38f79c7d65e62476691abb6a3e2",
+        "source": "adopted"
+      },
+      {
+        "version": "0098",
+        "name": "create_company_rpc",
+        "sha256": "cb48de67296fe80ef7d56587fe1061f6cb6055456cbe05c706578e718338c9c7",
+        "source": "adopted"
+      },
+      {
+        "version": "0099",
+        "name": "resolve_tenant_fallback",
+        "sha256": "7a0809b1af318511c4159f6946f3b6f7cb11931eef7d5d6c83db3ec7b2acf1b2",
+        "source": "adopted"
+      },
+      {
+        "version": "0100",
+        "name": "fix_product_company_nullable",
+        "sha256": "5871455ffe9782a96b5d10454d2a87769b3668aebbbb8d2a6e28f8889102445a",
+        "source": "adopted"
+      },
+      {
+        "version": "0101",
+        "name": "fix_product_company_resolution",
+        "sha256": "c1f71d6b3a03859e472caaab013addd31a1f24a08c36c696fdfa3f760743679b",
+        "source": "adopted"
+      },
+      {
+        "version": "0102",
+        "name": "fix_create_sale_schema",
+        "sha256": "9ee31e54238afdd75a0fb7f61fa83135ef51bd6f213e0980247a7ec66a93089e",
+        "source": "adopted"
+      },
+      {
+        "version": "0103",
+        "name": "fix_purchase_return_schema",
+        "sha256": "ea45296b10f612c58f056d4fd6a474b430ec1fcebc832365f50dc492ab6156cd",
+        "source": "adopted"
+      },
+      {
+        "version": "0104",
+        "name": "create_employee_rpc",
+        "sha256": "213d1be148323f6b9ee04c6dd0b29650bacdaa781b423bf7fa201f8281fd6ea4",
+        "source": "adopted"
+      },
+      {
+        "version": "0105",
+        "name": "employee_lifecycle_auth_fix",
+        "sha256": "f05a2502221244adbb6f3e6cfa1b946dd7799cfef155d97e13338a5f69582c7f",
+        "source": "adopted"
+      },
+      {
+        "version": "0106",
+        "name": "rbac_permissions",
+        "sha256": "453957fd4a0115963c3322c6bc12ceaf20fa784ff98b9c766a4cedbbe4607bba",
+        "source": "adopted"
+      },
+      {
+        "version": "0107",
+        "name": "roles_rbac_model",
+        "sha256": "132abd5b7be241bf055d01c1cb7451afebee01ad1d4ed6ce4c48affad19bff25",
+        "source": "adopted"
+      },
+      {
+        "version": "0108",
+        "name": "authoritative_access_and_business_areas",
+        "sha256": "6c3b7dad5ed2288f7fe7deb49bd58b0c4775e053296e666eb5c89d0714cc07bd",
+        "source": "adopted"
+      },
+      {
+        "version": "0109",
+        "name": "enforce_business_permissions",
+        "sha256": "5f27c9a88309893b267899a940ac56b8a70489aa862476ce89f889fc2f5f72aa",
+        "source": "adopted"
+      },
+      {
+        "version": "0110",
+        "name": "backfill_legacy_memberships",
+        "sha256": "687582f04c40d17025363c642fc123db025fcf83985991d5acef93b1fd8e2105",
+        "source": "adopted"
+      },
+      {
+        "version": "0111",
+        "name": "admin_management_defaults",
+        "sha256": "f1d2a09f83a7e7aa4fcd637211467f362fef4e5e84b2353171f4615baf8f6599",
+        "source": "adopted"
+      },
+      {
+        "version": "0112",
+        "name": "enforce_remaining_business_permissions",
+        "sha256": "f24ebe943a231bdd1c48eb8dbc7072a36fd932035731595934eafe53f0e0f0d2",
+        "source": "adopted"
+      },
+      {
+        "version": "0113",
+        "name": "user_membership_invariant",
+        "sha256": "7f5865c7d50cd7d66cd663b9bd050b24b00359f7fdcd8818daa87711c08ed113",
+        "source": "adopted"
+      },
+      {
+        "version": "0114",
+        "name": "fix_adjust_stock_variant_authority",
+        "sha256": "b90350d13923cbc4cf14b0e452a1cc515ddbe5218fc90b02b19d018a974da303",
+        "source": "adopted"
+      },
+      {
+        "version": "0115",
+        "name": "tenant_rls_and_anon_hardening",
+        "sha256": "5fae302b8c6501aacb89c61f2cabe7012b337bd491b35147b6b061e32f9dd024",
+        "source": "adopted"
+      },
+      {
+        "version": "0116",
+        "name": "reminder_occurrence_contract",
+        "sha256": "46b195df4e065ace044bd764cdb14438e5b69a29ff652c6a868e7a7954c1898f",
+        "source": "adopted"
+      },
+      {
+        "version": "0117",
+        "name": "membership_visibility_for_admin",
+        "sha256": "f0868bc15080e52dceb5cddc532324f227a784480e9c6f14b213b4e9a0f73746",
+        "source": "adopted"
+      },
+      {
+        "version": "0118",
+        "name": "branch_ownership_and_scope",
+        "sha256": "7fff9ce05d65ddf77abdba843c1ec05a320a7c0689457c5ad7a478962c1f51a5",
+        "source": "adopted"
+      },
+      {
+        "version": "0119",
+        "name": "trusted_context_and_branch_stamping",
+        "sha256": "8b9c7dab003b73600bfb3f7535403e1234e4882dced4816f4076b76e3e18baed",
+        "source": "adopted"
+      },
+      {
+        "version": "0120",
+        "name": "backfill_remaining_branch_ownership",
+        "sha256": "fc7eca8fe0c4f523638caae795a0539c30aca8414527f5fcc8e6ad269dd6fde6",
+        "source": "adopted"
+      },
+      {
+        "version": "0121",
+        "name": "platform_shop_approval_authorization",
+        "sha256": "ac945f27a8d6400f70cc29fa1989c7c45b2615fd94c9edca64b8c6a0748f84aa",
+        "source": "adopted"
+      },
+      {
+        "version": "0122",
+        "name": "reminder_config_contract",
+        "sha256": "bd9fa186065ed40706724eb2e7100ddd60e66e575bfbf863c2e552aecaee2fdc",
+        "source": "adopted"
+      },
+      {
+        "version": "0123",
+        "name": "reminder_logs_contract",
+        "sha256": "73761af1b982176e8dbdf50441d19b31d00d1206b29e9e94e4e42a38eb3ad27c",
+        "source": "adopted"
+      },
+      {
+        "version": "0124",
+        "name": "display_attribution_integrity",
+        "sha256": "b8acc592e1a87715c5837c2c7d86e8e7ad122e7f2eb648b558725d9dd3c0dad7",
+        "source": "adopted"
+      },
+      {
+        "version": "0125",
+        "name": "actor_attribution_on_writes",
+        "sha256": "60a493269c046a7c71e0eeaaa1e19abda1c59193f726de424139d633fe24b8b1",
+        "source": "adopted"
+      },
+      {
+        "version": "0126",
+        "name": "harden_jwt_claim_parsing",
+        "sha256": "de67084a8f4750f6acf14136410887e025463638ce0fe102a8c8a6960740c8ea",
+        "source": "adopted"
+      },
+      {
+        "version": "0127",
+        "name": "cogs_snapshot_integrity",
+        "sha256": "caef5da68fdfb6714487454dce00989d695f35853f203b7403def6512ffa0310",
+        "source": "adopted"
+      },
+      {
+        "version": "0128",
+        "name": "variant_stock_of_record",
+        "sha256": "a106279c98179be9732f36d1652cc735658771255d5877216edd544532c686f0",
+        "source": "adopted"
+      },
+      {
+        "version": "0129",
+        "name": "employee_invite_lifecycle",
+        "sha256": "b12776c552042983a3149890079b25a092a5afd5e9b9b92583ab4ba00e6d9432",
+        "source": "adopted"
+      },
+      {
+        "version": "0130",
+        "name": "restore_return_integrity_guards",
+        "sha256": "7184cf7fb3ed62d4e18edcf29fb72b12bf609e08033d4956e984f15932d94aa7",
+        "source": "adopted"
+      },
+      {
+        "version": "0131",
+        "name": "derive_employee_membership_role",
+        "sha256": "2272fbef370e6cc8a18a461e9702785a3bacddd64627c97eebadf51e727fc9ec",
+        "source": "adopted"
+      },
+      {
+        "version": "0132",
+        "name": "employee_overrides_on_create",
+        "sha256": "f6fb1e4ac75157a2ac64ae8c3c6a4ee1e090af561944dfc581c86faafa73b79a",
+        "source": "adopted"
+      },
+      {
+        "version": "0133",
+        "name": "lookup_returns_pending_membership",
+        "sha256": "c52e116b3ad3bf0640ef65bfc31ee5302928cef110be12484e1686d6f0c52a18",
+        "source": "adopted"
+      },
+      {
+        "version": "0134",
+        "name": "sale_idempotency",
+        "sha256": "272ccd2717f3577a5ac6a7b9888a35ae2653fea635bd5d59b7e665c9d153a1b1",
+        "source": "adopted"
+      },
+      {
+        "version": "0135",
+        "name": "provision_member_login",
+        "sha256": "f25bc7295a18b579a07bc513b2551741d0563c2eb91a012d1f3c111af23ece0d",
+        "source": "adopted"
+      },
+      {
+        "version": "0136",
+        "name": "canonical_phone_lookup",
+        "sha256": "4ed9964244a0abecda069de47014e43e16a5a0ae8faad6b1e7cf26d1f1812ac1",
+        "source": "adopted"
+      },
+      {
+        "version": "0137",
+        "name": "create_employee_guard_at_entry",
+        "sha256": "2fc0b85ee375f66c97b66effac56929f321ef61bdef74a1604fc4349c3e52c21",
+        "source": "adopted"
+      },
+      {
+        "version": "0138",
+        "name": "payment_and_void_single_action",
+        "sha256": "4d33338bc2d8c2f9164805713e024eecb888fbc07e73f15300c2c7ceb2a2abd3",
+        "source": "adopted"
+      },
+      {
+        "version": "0139",
+        "name": "adjust_stock_idempotency",
+        "sha256": "696bfa2636012f8524c3f8ddbec00def5662fb3c103a1b30e7a31e4d2d1e2b73",
+        "source": "adopted"
+      },
+      {
+        "version": "0140",
+        "name": "purchase_records_once",
+        "sha256": "29bb265a1987594789439e65560bf7973915965233e8e4b5eaadff0ee42ef9ad",
+        "source": "adopted"
+      },
+      {
+        "version": "0141",
+        "name": "reminder_config_write_contract",
+        "sha256": "1f488b78eb00feb2724abf438ce6274f94d34fe1cc6cd77d0af1231213665fd8",
+        "source": "adopted"
+      },
+      {
+        "version": "0142",
+        "name": "archive_company",
+        "sha256": "d172f4b575d5168c3151902636f53bc516232b76fd4dd3ae977791491642891b",
+        "source": "adopted"
+      },
+      {
+        "version": "0143",
+        "name": "reminder_config_dedupe",
+        "sha256": "33ddb78280dfbf70c828b7ed5474f60a6d3fbc3164834f7e4bc94cfb3bfedfbb",
+        "source": "adopted"
+      },
+      {
+        "version": "0144",
+        "name": "enable_realtime_publication",
+        "sha256": "945517ebaafcfc89dadb4e5d9d5a47bb684a1859bd21ca68d286cb02991258ba",
+        "source": "adopted"
+      },
+      {
+        "version": "0145",
+        "name": "update_product_writes_variants",
+        "sha256": "3972c890225bf37eb38c6bfe7a79073e5ee9352e3df2780be03d712267af569d",
+        "source": "adopted"
+      },
+      {
+        "version": "0146",
+        "name": "purchase_sets_current_price",
+        "sha256": "071c5105c53920a4e5d4c202c7eeec09b137bda80e8028582cece91ed2644379",
+        "source": "adopted"
+      },
+      {
+        "version": "0147",
+        "name": "admin_full_access_and_account_deletion",
+        "sha256": "6a2a0a962471248fb4b3687f23b79b99454aae135e445c76c4e972fc8419add3",
+        "source": "adopted"
+      },
+      {
+        "version": "0148",
+        "name": "server_side_pin",
+        "sha256": "59fbba372401c83666fae2752d4d3ab97afe043602215b372a020e1a5d1d9e2b",
+        "source": "adopted"
+      },
+      {
+        "version": "0149",
+        "name": "active_shop_source_of_truth",
+        "sha256": "07ec0d0ac7dcf0dcdfccde43e7a6a8af745a65bdd5b3c75a1adf98efe86954ff",
+        "source": "adopted"
+      },
+      {
+        "version": "0150",
+        "name": "shop_creation_and_switching",
+        "sha256": "e463d7130e7669b6544e9498aebbfcc56229858336790631bb9e0e19781c45b1",
+        "source": "adopted"
+      },
+      {
+        "version": "0151",
+        "name": "child_read_write_policies_shop_scope",
+        "sha256": "34aa3d1d2c35fcc82ca874f0425ba3f34927cfc5356219a568bc46805c4409a8",
+        "source": "adopted"
+      },
+      {
+        "version": "0152",
+        "name": "create_purchase_writes_inventory_movement",
+        "sha256": "a82b01ef90b4eeb0a4388b3647a2201f5ebc5ea6ba35244f973214f487429d1a",
+        "source": "adopted"
+      },
+      {
+        "version": "0153",
+        "name": "shop_context_invariants",
+        "sha256": "1ecd248f19e2e3d9ab608bd6aeb1aa2c84d2070b0870bc1b747548effa79a1a5",
+        "source": "adopted"
+      },
+      {
+        "version": "0154",
+        "name": "set_customer_credit_limit",
+        "sha256": "50d79bd246512c291f57426afacbe2629b48b1809fc02a5497f32c292f733075",
+        "source": "adopted"
+      },
+      {
+        "version": "0155",
+        "name": "credit_sale_rules_and_paid_ledger",
+        "sha256": "8401aee4536d38f648fbb7b11b204d533347a21545eec1f4be2c19d2c89cd0d1",
+        "source": "adopted"
+      },
+      {
+        "version": "0156",
+        "name": "fix_delete_my_account_varchar_compare",
+        "sha256": "9deee8ae8d8986a738c31e64db5dc6d1398b87265586cb57adc53f2dd9f9a158",
+        "source": "adopted"
+      },
+      {
+        "version": "0157",
+        "name": "stock_alert_settings",
+        "sha256": "b29e1073b00df303f3c2b0cf7a166f9812564fc84309ad954a023b51b997f911",
+        "source": "adopted"
+      },
+      {
+        "version": "0158",
+        "name": "product_barcodes_and_create_product",
+        "sha256": "dfed902483d628963a4db5bb954687f1de7d7aa2d3969872085b4c6dd4068c1e",
+        "source": "adopted"
+      },
+      {
+        "version": "0159",
+        "name": "unknown_cost_is_not_zero",
+        "sha256": "222f149bfb16917cccd0d2851c1dfdfce9ab20009638242e7722436a52914032",
+        "source": "adopted"
+      },
+      {
+        "version": "0160",
+        "name": "barcode_registry_and_history",
+        "sha256": "aace62fb99c76af8fffc30fa5bb73387ba949c51364ecff139b75c825eafc5f9",
+        "source": "adopted"
+      },
+      {
+        "version": "0161",
+        "name": "update_product_barcode_clear_and_claim",
+        "sha256": "9ade0ca6dfbe6938b7511e723bc8ae5a96ea3cdb458baf2bba7828485bd39029",
+        "source": "adopted"
+      },
+      {
+        "version": "0162",
+        "name": "one_category_for_pesticide",
+        "sha256": "ea3cd95f539de697903b83cefe2f102300b29d206ddb292e967589cae2b28af3",
+        "source": "adopted"
+      },
+      {
+        "version": "0163",
+        "name": "invite_identity_repair_and_shop_scope",
+        "sha256": "fb6ad1ab9a5f0f24120afe0abc741a89d235da48289a8acfa7d9716c87fdbb8b",
+        "source": "adopted"
+      },
+      {
+        "version": "0164",
+        "name": "roles_can_be_removed",
+        "sha256": "f69deaf98b92a322997703d51de07c5eae7c4ed947113e65b5145fc8476c204e",
+        "source": "adopted"
+      },
+      {
+        "version": "0165",
+        "name": "actions_happen_in_the_active_shop",
+        "sha256": "3e463a49fd9223f174d7aaed085053837c1ccbb015c0f7a9b2a441067b562bbf",
+        "source": "adopted"
+      },
+      {
+        "version": "0166",
+        "name": "shop_setup_takes_the_chosen_roles",
+        "sha256": "822212272dd1e5c2cfc6d3c61f157b886be42834e0a897fe31e9a260a92b07c2",
+        "source": "adopted"
+      },
+      {
+        "version": "0167",
+        "name": "two_account_roles",
+        "sha256": "61cf5f1894ef30e5a0bb22363b355d62b70ae40eb64b6c468dc2477d9d1a6dbc",
+        "source": "adopted"
+      },
+      {
+        "version": "0168",
+        "name": "notifications_live_again_and_branches_can_be_deleted",
+        "sha256": "874b70b13cf157bedc7a2425f2874cda00bea7902375fb701f106d4c85706418",
+        "source": "adopted"
+      },
+      {
+        "version": "0169",
+        "name": "a_shop_has_a_name_you_can_say_out_loud",
+        "sha256": "650899dcd5eab51fa70cab6dc730b0a42d349ceab81d5fb783647e6152f60df8",
+        "source": "adopted"
+      },
+      {
+        "version": "0170",
+        "name": "deleting_a_number_leaves_nothing_behind",
+        "sha256": "7d1cea0146a11bc2be4b1c6d3e19343b818e75b9f5af3fbf378724383980564d",
+        "source": "adopted"
+      },
+      {
+        "version": "0171",
+        "name": "a_member_always_has_a_branch",
+        "sha256": "4c6e2b438137086a8173265a03db81297c50eaedb3450e19fd0f9616fcb66ab1",
+        "source": "adopted"
+      },
+      {
+        "version": "0172",
+        "name": "a_location_is_a_point_not_a_typed_address",
+        "sha256": "f759919d710b08df484b4da233f1f43ea44d6f5f8397b166888a04f4596a73f4",
+        "source": "adopted"
+      },
+      {
+        "version": "0173",
+        "name": "a_branch_carries_its_own_pin",
+        "sha256": "d4c73a1068d7d81c6606e22d818067d50bc72a65421f9a9eef47fc321f4caeb3",
+        "source": "adopted"
+      },
+      {
+        "version": "0174",
+        "name": "a_location_can_be_taken_back",
+        "sha256": "908eae458a23d2e1bd2aaec164ebc4eed2833cc80af565593e38ee05ab4fd372",
+        "source": "adopted"
+      },
+      {
+        "version": "0175",
+        "name": "a_denial_still_denies",
+        "sha256": "844d1d7474fdb520dfe1e5171c8f219e40008f61203b5545a9ce079d8a98e345",
+        "source": "adopted"
+      },
+      {
+        "version": "0176",
+        "name": "no_anonymous_writes",
+        "sha256": "c3e4cc84f47ec559afb403c90f8c87077dc6dd14d679cbe35ca38fc64bc1290f",
+        "source": "applied"
+      },
+      {
+        "version": "0177",
+        "name": "a_definer_knows_where_it_looks",
+        "sha256": "16f7550785b93b78626707a8e1c710f2abb79d7caab6f7268a89ae27f15b91d3",
+        "source": "applied"
+      },
+      {
+        "version": "0178",
+        "name": "a_variant_belongs_to_a_shop",
+        "sha256": "1f6e6d33720eda38f03f64e99e62e3c9e888a5e6b67f2d7d03bb15cad9649cbd",
+        "source": "applied"
+      },
+      {
+        "version": "0179",
+        "name": "cost_price_is_the_owner_s_business",
+        "sha256": "5778314b3f073d5e3a5fa8b246a85c6d008ebca935d77cbc92e95c049541b809",
+        "source": "applied"
+      },
+      {
+        "version": "0180",
+        "name": "admin_is_not_a_boundary",
+        "sha256": "b63789ec9f7429dbba0d43d4065a1d56f0eb6a3330a8da43810c7010f5b75bdb",
+        "source": "applied"
+      },
+      {
+        "version": "0181",
+        "name": "audit_rows_are_written_by_the_system_not_by_the_caller",
+        "sha256": "3aba4c0d2c4b7c1ed2d69c1e37e6747596cbc3b07cd043667794f607732251cb",
+        "source": "applied"
+      },
+      {
+        "version": "0182",
+        "name": "settings_belong_to_their_shop",
+        "sha256": "18e364afb82bb5de6c1a642264b0408540bb7946fbc3e78f917d30870e3d06e4",
+        "source": "applied"
+      },
+      {
+        "version": "0183",
+        "name": "deleting_a_role_revokes_its_access",
+        "sha256": "d00d10383e2b3058b3908d94fdcc0a378e8f0d2a74061741f21a3f1c68b6737a",
+        "source": "applied"
+      },
+      {
+        "version": "0184",
+        "name": "a_branch_decides_how_far_it_serves",
+        "sha256": "4aa39ffa7f8fa8330c17dd99ab82d083601dfd4ee9152fa5f1a4983f30e3cc15",
+        "source": "applied"
+      },
+      {
+        "version": "0185",
+        "name": "a_product_can_be_listed_on_the_marketplace",
+        "sha256": "3f442e5d2af4260f0a76d272eeb0dbb2a4339e5a7f9fd3a2384363e9a3689edf",
+        "source": "applied"
+      },
+      {
+        "version": "0186",
+        "name": "the_branches_read_carries_its_marketplace_state",
+        "sha256": "0f960736865e3626cc39cd6894aa7be3b83878643c36cf8cec208555c1914b86",
+        "source": "applied"
+      },
+      {
+        "version": "0187",
+        "name": "the_distance_belongs_to_the_farmer_not_the_branch",
+        "sha256": "5921c5dfbf2c08b202ba8d9119ef6c07605b43cac2e3c247683146ac1b601c31",
+        "source": "applied"
+      },
+      {
+        "version": "0188",
+        "name": "a_branch_is_not_its_tenant",
+        "sha256": "5f1c9712bc07e2f1ce1409bf613197a22fbcb58157ec47f3a9ae390496be41a8",
+        "source": "applied"
+      },
+      {
+        "version": "0189",
+        "name": "access_changes_keep_the_person_and_history",
+        "sha256": "4425e3220b30eee35cb7dfdcd2830cc0f6b0ff5f1b2853d690bd2240539a2373",
+        "source": "applied"
+      },
+      {
+        "version": "0190",
+        "name": "invitation_starts_in_the_selected_branch",
+        "sha256": "45706012fd06f88f66fa578687c4706f797fa230aaa8d86c7f895ccd86c1c54e",
+        "source": "applied"
+      },
+      {
+        "version": "0191",
+        "name": "operating_branches_preserve_the_business",
+        "sha256": "f160b8dcdbfbabf2c6743fd3d7946a1a6205be5dafb7213ba15c52529a87e022",
+        "source": "applied"
+      },
+      {
+        "version": "0192",
+        "name": "consequential_records_guard_before_retry",
+        "sha256": "3150d50d2c728064fed8622197ae20414b64f4b82c948e0d0067ccce58792088",
+        "source": "applied"
+      },
+      {
+        "version": "0193",
+        "name": "activity_reads_the_action_history",
+        "sha256": "25c83d1202dd0f10d720621e190449eeeb17873fe1bf817b6d5d4f8b7bad92ba",
+        "source": "applied"
+      },
+      {
+        "version": "0194",
+        "name": "access_edits_do_not_widen_the_editor",
+        "sha256": "9a26339d6dd18e49352ea453e2ef98511b2abe22d693de9b6d198f1c7028bf07",
+        "source": "applied"
+      },
+      {
+        "version": "0195",
+        "name": "permissions_are_not_just_navigation",
+        "sha256": "42d55d912aa716222df87d58f51c8f76f8db8a3ce5b797bac365ae8d93b8365a",
+        "source": "applied"
+      },
+      {
+        "version": "0196",
+        "name": "a_branch_has_a_responsible_person",
+        "sha256": "b633b9a435aa9a3b5d1e7017adbd1421c81febf55191635b1f851bf9770fc262",
+        "source": "applied"
+      },
+      {
+        "version": "0197",
+        "name": "a_notification_says_which_branch",
+        "sha256": "e7ec29e75db83692b405d9447cd661ca448dacf5586785f46f9a10056d530a8d",
+        "source": "applied"
+      },
+      {
+        "version": "0198",
+        "name": "a_sale_keeps_its_due_date_and_leaves_a_movement",
+        "sha256": "cd2113671a58aed97567c242580fd5827f6150df6477e6b3132db624450ce30c",
+        "source": "applied"
+      },
+      {
+        "version": "0199",
+        "name": "uploads_and_live_updates_survive_a_restore",
+        "sha256": "8c75c5cbafd495271d561594f4bf5a645bf101ac745a7491fdc58bf6c113702f",
+        "source": "applied"
+      },
+      {
+        "version": "0200",
+        "name": "the_pre_login_lookup_returns_only_what_the_screen_shows",
+        "sha256": "b12b14d243021d0e1de72b51b2681690fba518171345829d04bc9e97b40ca7fd",
+        "source": "applied"
+      },
+      {
+        "version": "0201",
+        "name": "the_pre_login_lookup_answers_for_the_number_only",
+        "sha256": "f0d9d1096d8a06bb061cf20b6c6fccdd7721561212f303bd85096dfeae222ca2",
+        "source": "applied"
+      }
+    ]
+  },
+  "comparison": {
+    "pending": [
+      "0202 0202_archiving_a_customer_needs_the_delete_permission.sql"
+    ],
+    "ledgerOnly": [],
+    "changed": [],
+    "reconciled": [],
+    "unattested": [],
+    "order": {
+      "highestRecorded": "0201",
+      "hazards": []
+    }
+  },
+  "applied": [
+    {
+      "version": "0202",
+      "filename": "0202_archiving_a_customer_needs_the_delete_permission.sql",
+      "ok": true,
+      "statements": 3
+    }
+  ],
+  "exitCode": 0
+}

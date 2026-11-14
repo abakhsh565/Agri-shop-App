@@ -44,9 +44,9 @@ export function isNativeShell(): boolean {
  *
  * The shop is part of the link because an invitation is a claim about a specific
  * (shop, phone) pair — "this owner added this number" — and the phone alone cannot say
- * which owner that was. The sign-in screen checks the pair against the database before
- * it sends a code (`resolve_invite`), so an invitation cannot be completed by a
- * different number, and the invitee is told which shop invited them.
+ * which owner that was. The sign-in screen accepts the shop's short join code or its id,
+ * then checks the pair against the database before it sends a code (`resolve_invite`), so an
+ * invitation cannot be completed by a different number, and the invitee is told which shop invited them.
  *
  * `shopId` is optional only because a caller without an active shop has nothing to put
  * in it; with no shop the link still pre-fills the number, it just cannot be validated.
@@ -63,12 +63,15 @@ export function isNativeShell(): boolean {
 /** The app's own URL scheme. Must match the scheme declared in AndroidManifest.xml. */
 export const APP_SCHEME = "agrishop";
 
-export function inviteLink(phone: string, shopId?: string | null): string {
+export function inviteLink(phone: string, shopId?: string | null, shopCode?: string | null): string {
   const base = appShareUrl();
-  // Normalized, so the link is always in the form the sign-in field accepts —
-  // stored numbers appear as "923001234567", "+923001234567" and "0300…".
+  // Keep the invite on the same public entry point every employee already uses. The shop and
+  // normalized phone identify the invitation; the existing sign-in flow still verifies the
+  // (shop, phone) pair before sending a code or accepting the invitation.
   const query = `phone=${encodeURIComponent(normalizePhone(phone))}`;
-  const shop = shopId ? `&shop=${encodeURIComponent(shopId)}` : "";
+  const shop = shopCode || shopId ? `&shop=${encodeURIComponent(shopCode || shopId || "")}` : "";
+  // The employee sign-in accepts the short shop code, making the same link work even
+  // when the invitee must open the app manually instead of arriving by deep link.
   const target = base ? `${base}/login` : `${APP_SCHEME}://login`;
   return `${target}?${query}${shop}`;
 }

@@ -7,6 +7,7 @@
     "actionCenter": ["src/pages/**/dashboard/**", "src/components/**", "src/stores/**", "src/lib/i18n.ts"],
     "adminFullAccess": ["src/pages/admin/companies/**", "src/pages/admin/settings/**", "src/components/ui/ConfirmDialog.tsx", "src/lib/auth.ts", "src/lib/i18n.ts"],
     "adminMicrocopy": ["src/lib/i18n.ts", "src/pages/admin/**"],
+    "businessProfilePapers": ["src/pages/admin/settings/**", "src/components/shop/BusinessProfileSheet.tsx", "src/components/ui/ImageUpload.tsx", "src/lib/businessProfile.ts", "src/lib/storage.ts", "src/lib/i18n.ts"],
     "crossScreenSync": ["src/**"],
     "dashboardScope": ["src/pages/**/dashboard/**", "src/stores/**", "src/lib/i18n.ts"],
     "dependencyContinuity": ["src/lib/dependencyGraph.ts", "src/lib/setupStatus.ts", "src/components/ui/SetupChecklist.tsx", "src/components/ui/SetupProgress.tsx", "src/pages/**/dashboard/**", "src/lib/i18n.ts"],

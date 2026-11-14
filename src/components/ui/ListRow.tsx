@@ -15,10 +15,15 @@ export interface ListRowProps {
    * to restate that by hand to have richer content.
    */
   children?: ReactNode;
+  /**
+   * A mark that belongs to the name itself (a Main/Sub chip), drawn inline on the title line.
+   * Unlike `children`, it does not restack the row: the label and its mark stay one line.
+   */
+  badge?: ReactNode;
   /** Grey text shown inline after the name, as on the reference board. */
   qualifier?: string;
   /** Small tertiary line under the name. */
-  meta?: string;
+  meta?: ReactNode;
   description?: string;
   /** Right-aligned secondary value (e.g. "Auto", a date). */
   value?: string;
@@ -64,6 +69,7 @@ export default function ListRow({
   tile,
   title,
   children,
+  badge,
   qualifier,
   meta,
   description,
@@ -105,6 +111,7 @@ export default function ListRow({
               instead of being clipped mid-word. */}
           <div className={`flex items-baseline min-w-0 ${emphasis ? "ds-row-strong" : "ds-row-label"}`}>
             <span className="truncate min-w-0">{title}</span>
+            {badge && <span className="shrink-0 ms-1.5 flex items-center">{badge}</span>}
             {qualifier && <span className="ds-row-qualifier shrink-0 ms-1">{qualifier}</span>}
           </div>
           {meta && <p className="ds-row-meta truncate">{meta}</p>}

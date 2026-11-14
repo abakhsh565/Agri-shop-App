@@ -3,6 +3,7 @@ import { captureDataContext, isDataContextCurrent } from "@/lib/localCache";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { tNow } from "@/lib/i18n";
+import { resolveImageUrl } from "@/lib/storage";
 import type { Company } from "@/types";
 
 interface CompanyRow {
@@ -18,6 +19,14 @@ interface CompanyRow {
   created_at: string;
 }
 
+/** What this supplier is owed for the branch being worked in (0242). */
+interface BranchCompanyBalanceRow {
+  company_id: string;
+  total_purchases: number | string;
+  total_paid: number | string;
+  outstanding_payable: number | string;
+}
+
 function companyFromRow(r: CompanyRow): Company {
   return {
     id: r.id,
@@ -25,7 +34,7 @@ function companyFromRow(r: CompanyRow): Company {
     contactPerson: r.contact_person ?? undefined,
     phone: r.phone ?? undefined,
     address: r.address ?? undefined,
-    logoUrl: r.logo_url ?? undefined,
+    logoUrl: resolveImageUrl(r.logo_url),
     outstandingPayable: Number(r.outstanding_payable),
     totalPurchases: Number(r.total_purchases),
     dueDate: r.due_date ?? null,
@@ -86,8 +95,35 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
       set({ loading: false, ready: true, error: error.message });
       return;
     }
+    const mapped = (data as CompanyRow[]).map(companyFromRow);
+
+    // Payables are branch money too. The supplier row's shop-wide column answers a
+    // different question, and using it here put another branch's debt on this one.
+    // A failed read falls back to zero, never to the shop total.
+    const { data: branchBalances, error: balanceError } = await supabase.rpc(
+      "get_branch_company_balances"
+    );
+    if (!isDataContextCurrent(context)) return;
+    const balanceById = new Map<string, BranchCompanyBalanceRow>(
+      balanceError
+        ? []
+        : ((branchBalances as BranchCompanyBalanceRow[] | null) ?? []).map((row) => [
+            row.company_id,
+            row,
+          ])
+    );
     set({
-      companies: (data as CompanyRow[]).map(companyFromRow),
+      companies: mapped.map((company) => {
+        const balance = balanceById.get(company.id);
+        if (!balance) {
+          return { ...company, totalPurchases: 0, outstandingPayable: 0 };
+        }
+        return {
+          ...company,
+          totalPurchases: Number(balance.total_purchases),
+          outstandingPayable: Number(balance.outstanding_payable),
+        };
+      }),
       loading: false,
       ready: true,
     });
@@ -129,7 +165,7 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
       contactPerson: input.contactPerson,
       phone: input.phone,
       address: input.address,
-      logoUrl: input.logoUrl,
+      logoUrl: resolveImageUrl(input.logoUrl),
       outstandingPayable: 0,
       totalPurchases: 0,
       dueDate: null,
@@ -180,7 +216,9 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
               ...(input.contactPerson !== undefined && { contactPerson: input.contactPerson }),
               ...(input.phone !== undefined && { phone: input.phone }),
               ...(input.address !== undefined && { address: input.address }),
-              ...(input.logoUrl !== undefined && { logoUrl: input.logoUrl }),
+              // Same normalisation as a row read back from the database, so the logo that
+              // appears here the instant it is saved is the one every other screen will load.
+              ...(input.logoUrl !== undefined && { logoUrl: resolveImageUrl(input.logoUrl) }),
             }
           : c
       ),

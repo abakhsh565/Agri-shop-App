@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import DateField from "@/components/ui/DateField";
 import { formatCurrency, getStockStatus, productLowStockThreshold } from "@/lib/formatters";
 import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
-import { TrendingUp, Receipt, Wallet, AlertTriangle, Calendar, BarChart3 } from "lucide-react";
+import { AlertTriangle, Calendar, BarChart3, LayoutGrid } from "lucide-react";
 import { pkToday } from "@/lib/pkDate";
 import { summariseSales, profitDisplay } from "@/lib/profit";
 import { summariseMoneyIn, loadCreditPayments, type CreditPaymentRow } from "@/lib/money";
 import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
+import { useReturnTo } from "@/lib/useReturnTo";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -48,8 +52,66 @@ function startOf(period: Period, customFrom?: string, customTo?: string): { from
   return { from: 0, to: +now };
 }
 
+interface ChartBucket {
+  label: string;
+  value: number;
+}
+
+/** "3p", not "15:00": the strip is read at a glance, and a phone-width bar has room for four
+ *  characters. */
+function hourLabel(hour: number): string {
+  const suffix = hour < 12 ? "a" : "p";
+  const twelve = hour % 12 === 0 ? 12 : hour % 12;
+  return `${twelve}${suffix}`;
+}
+
+/**
+ * When the money came in, as bars the strip can show on one phone line.
+ *
+ * The bucket size follows the period, because the question does: a day is read in hours, a week
+ * in days, a month in weeks. Eight bars for a day, seven chunks otherwise — few enough that each
+ * label is legible at 9px, many enough to show a shape rather than a single blob. `from`/`to`
+ * define the window, so a bucket can never hold a sale from outside the period on screen.
+ */
+function buildBuckets(
+  sales: { totalAmount: number; createdAt: string }[],
+  period: Period,
+  from: number,
+  to: number,
+): ChartBucket[] {
+  if (period === "today") {
+    const buckets: ChartBucket[] = Array.from({ length: 8 }, (_, i) => ({ label: hourLabel(i * 3), value: 0 }));
+    for (const sale of sales) {
+      const hour = new Date(sale.createdAt).getHours();
+      buckets[Math.min(7, Math.max(0, Math.floor(hour / 3)))].value += sale.totalAmount;
+    }
+    return buckets;
+  }
+
+  const DAY = 86_400_000;
+  const spanDays = Math.max(1, Math.ceil((to - from) / DAY));
+  const bucketDays = period === "week" ? 1 : Math.max(1, Math.ceil(spanDays / 7));
+  const count = Math.max(1, Math.ceil(spanDays / bucketDays));
+  const starts = Array.from({ length: count }, (_, i) => from + i * bucketDays * DAY);
+  const buckets: ChartBucket[] = starts.map((start) => ({
+    label: new Date(start).toLocaleDateString(undefined, bucketDays >= 28 ? { month: "short" } : { day: "numeric", month: "short" }),
+    value: 0,
+  }));
+
+  for (const sale of sales) {
+    const index = Math.floor((+new Date(sale.createdAt) - from) / (bucketDays * DAY));
+    if (index >= 0 && index < buckets.length) buckets[index].value += sale.totalAmount;
+  }
+  return buckets;
+}
+
 export default function AdminReportsPage() {
   const t = useT();
+  const navigate = useNavigate();
+  const base = useShellBase();
+  // The long-form report is a drill-down from the Reports directory, whether it was reached
+  // from the directory or by a direct link/reload that has no navigation history behind it.
+  const returnTo = useReturnTo(`${base}/reports/directory`);
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const [period, setPeriod] = useState<Period>("month");
@@ -130,6 +192,40 @@ export default function AdminReportsPage() {
     const grossProfit = gross.profit;
     const margin = gross.margin;
     const profitState = profitDisplay(gross);
+
+    /*
+     * The same numbers for the window immediately before this one.
+     *
+     * A comparison is the difference between a figure and a fact: "Rs 26,000" says nothing an
+     * owner can act on, while "Rs 26,000, down 4% on the day before" does. The window is the
+     * SAME length as the one on screen, ending where it starts, so a day is compared with a
+     * day and a month with a month. All-time has no earlier window, so it carries no badges
+     * rather than a comparison invented against zero.
+     */
+    const span = Math.max(to - from, 1);
+    const prevFrom = from - span;
+    const prevTo = from;
+    const prevSales = mockSales.filter(
+      (s) => !s.isVoided && +new Date(s.createdAt) >= prevFrom && +new Date(s.createdAt) < prevTo,
+    );
+    const prevGross = summariseSales(prevSales, (id) => (id ? variantCost[id] : undefined));
+    const prevMoney = summariseMoneyIn({
+      sales: prevSales,
+      payments: creditPayments,
+      inPeriod: (iso) => {
+        const at = +new Date(iso);
+        return at >= prevFrom && at < prevTo;
+      },
+    });
+    const comparable = period !== "all" && prevFrom > 0;
+    const averageSale = sales.length ? revenue / sales.length : null;
+    const prevAverage = prevSales.length ? prevGross.revenue / prevSales.length : null;
+    /** Percent change, or null when there is nothing honest to compare with. */
+    const change = (nowValue: number | null, before: number | null): number | null => {
+      if (!comparable || nowValue == null || before == null || before === 0) return null;
+      return ((nowValue - before) / Math.abs(before)) * 100;
+    };
+
     const topEmployees = Object.values(byEmployee).sort((a, b) => b.total - a.total).slice(0, 4);
     const topProducts = Object.values(byProduct).sort((a, b) => b.total - a.total).slice(0, 5);
 
@@ -148,6 +244,17 @@ export default function AdminReportsPage() {
       revenue, cogs, grossProfit, margin, profitState, money,
       count: sales.length, topEmployees, topProducts,
       outstandingCredit, supplierPayable, lowStock,
+      averageSale,
+      chart: buildBuckets(sales, period, from, to),
+      // `null` is drawn as no badge, never as 0% — "we cannot compare" and "nothing changed"
+      // are different sentences, and only one of them is true here.
+      deltas: {
+        revenue: change(revenue, prevGross.revenue),
+        profit: profitState.kind === "unknown" ? null : change(grossProfit, prevGross.unknownLines === 0 ? prevGross.profit : null),
+        count: change(sales.length, prevSales.length),
+        average: change(averageSale, prevAverage),
+        moneyIn: change(money.total, prevMoney.total),
+      },
     };
   }, [period, customFrom, customTo, mockSales, mockProducts, mockCustomers, mockCompanies, variantCost, creditPayments]);
 
@@ -157,7 +264,26 @@ export default function AdminReportsPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("admin.reports")} />
+      <NavHeader
+        title={t("admin.reports")}
+        backTo={returnTo}
+        right={
+          base === "/admin" ? (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`${base}/reports/directory`, { state: { from: `${base}/reports` } })
+              }
+              aria-label={t("reports.directory")}
+              data-testid="reports-directory"
+              className="flex items-center justify-center size-11 rounded-full active:opacity-60"
+              style={{ color: "var(--text-primary)" }}
+            >
+              <LayoutGrid size={18} />
+            </button>
+          ) : undefined
+        }
+      />
 
       {/* Period filter — horizontal scroll */}
       <div
@@ -198,41 +324,75 @@ export default function AdminReportsPage() {
         </div>
       ) : (
         <>
-      {/* Gross profit hero */}
+      {/* The period's headline, read the way a shop's day is read: one figure, then a strip
+          showing WHEN the money came in. It replaces a green card that named only the profit
+          above a 2×2 grid of boxes — five numbers with no comparison between them and no shape,
+          which is the part an owner could not act on (owner's request, 2026-10-26). */}
       <div className="px-4 pt-3">
-        <div className="rounded-[var(--radius-card)] p-5" style={{ background: "var(--brand)" }}>
-          <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.55)" }}>
-            {t("admin.grossProfit")}
-          </p>
-          <p className="text-34 font-bold leading-tight" style={{ color: "#0a0a0a" }} data-testid="reports-gross-profit">
-            {report.profitState.kind === "unknown"
-              ? "—"
-              : `${report.profitState.kind === "atLeast" ? "≥ " : ""}${formatCurrency(report.grossProfit)}`}
-          </p>
-          <div className="flex items-center gap-1.5 mt-1" style={{ color: "rgba(0,0,0,0.7)" }}>
-            <TrendingUp size={13} />
-            {report.profitState.kind === "unknown" ? (
-              <span className="text-xs font-semibold">{t("profit.addCostToSeeProfit")}</span>
-            ) : (
-              <span className="text-xs font-semibold">{t("reports.marginRevenue", { margin: report.margin.toFixed(1), revenue: formatCurrency(report.revenue) })}</span>
-            )}
+        <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("reports.grossSales")}</p>
+              <p
+                className="text-28 font-bold leading-tight mt-1 break-words"
+                style={{ color: "var(--text-primary)" }}
+                data-testid="reports-gross-sales"
+              >
+                {formatCurrency(report.revenue)}
+              </p>
+            </div>
+            <Delta value={report.deltas.revenue} />
           </div>
-          {report.profitState.kind === "atLeast" && (
-            <p className="text-xs font-semibold mt-1" style={{ color: "rgba(0,0,0,0.7)" }}>
-              {t("profit.costMissingOn", { count: String(report.profitState.unknownLines) })}
-            </p>
-          )}
+          <SalesChart buckets={report.chart} />
         </div>
       </div>
 
-      {/* Stat grid */}
-      <div className="grid grid-cols-2 gap-3 px-4 pt-3">
-        <Stat icon={Receipt} label={t("admin.transactions")} value={String(report.count)} />
-        <Stat icon={Wallet} label={t("reports.costOfGoods")} value={formatCurrency(report.cogs)} />
-        {/* The headline figure, then the two parts below it — one number with one meaning,
-            and no way to read it as the other half of itself. */}
-        <Stat icon={Wallet} label={t("reports.moneyIn")} value={formatCurrency(report.money.total)} tone="good" testId="reports-money-in" />
-        <Stat icon={Wallet} label={t("reports.onCredit")} value={formatCurrency(report.money.creditGiven)} tone={report.money.creditGiven > 0 ? "warn" : undefined} />
+      {/* Metrics — the same period's figures as rows, each beside the period before it. The
+          order is the order the questions come in: what did I sell, what did I keep, how many
+          bills, what was an average bill, how much actually came in. A percent that cannot be
+          worked out honestly draws no badge rather than a zero. */}
+      <div className="px-4 pt-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-15 font-bold" style={{ color: "var(--text-primary)" }}>{t("reports.metrics")}</p>
+          <p className="text-11 shrink-0" style={{ color: "var(--text-secondary)" }}>{t("reports.vsPrevious")}</p>
+        </div>
+        <div className="mt-2">
+          <ListCard>
+            <MetricRow
+              label={t("reports.grossSales")}
+              value={formatCurrency(report.revenue)}
+              delta={report.deltas.revenue}
+              testId="reports-metric-revenue"
+            />
+            <MetricRow
+              label={t("admin.grossProfit")}
+              value={
+                report.profitState.kind === "unknown"
+                  ? t("profit.addCostToSeeProfit")
+                  : `${report.profitState.kind === "atLeast" ? "≥ " : ""}${formatCurrency(report.grossProfit)}`
+              }
+              delta={report.deltas.profit}
+              testId="reports-gross-profit"
+            />
+            <MetricRow
+              label={t("admin.transactions")}
+              value={String(report.count)}
+              delta={report.deltas.count}
+            />
+            <MetricRow
+              label={t("reports.averageSale")}
+              value={report.averageSale == null ? "—" : formatCurrency(report.averageSale)}
+              delta={report.deltas.average}
+            />
+            <MetricRow
+              label={t("reports.moneyIn")}
+              value={formatCurrency(report.money.total)}
+              delta={report.deltas.moneyIn}
+              testId="reports-money-in"
+            />
+            <MetricRow label={t("reports.costOfGoods")} value={formatCurrency(report.cogs)} />
+          </ListCard>
+        </div>
       </div>
 
       {/* Money in, where it came from */}
@@ -331,20 +491,29 @@ export default function AdminReportsPage() {
             <div className="flex gap-3">
               <div className="flex-1">
                 <p className="ds-section-label mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.from")}</p>
-                <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
-                  className="w-full outline-none" />
+                <DateField
+                  value={customFrom}
+                  max={customTo || todayISO}
+                  onChange={setCustomFrom}
+                  testId="reports-from"
+                />
               </div>
               <div className="flex-1">
                 <p className="ds-section-label mb-1" style={{ color: "var(--text-secondary)" }}>{t("admin.to")}</p>
-                <input type="date" value={customTo} max={todayISO} onChange={(e) => setCustomTo(e.target.value)}
-                  className="w-full outline-none" />
+                <DateField
+                  value={customTo}
+                  min={customFrom || undefined}
+                  max={todayISO}
+                  onChange={setCustomTo}
+                  testId="reports-to"
+                />
               </div>
             </div>
             <div className="flex gap-3">
               <button onClick={() => { setCustomFrom(""); setCustomTo(""); }}
                 className="flex-1 h-12 rounded-full text-sm font-bold" style={{ border: "1px solid var(--divider)", color: "var(--text-primary)" }}>{t("reports.clear")}</button>
               <button onClick={() => setShowDateModal(false)}
-                className="flex-1 h-12 rounded-full text-sm font-bold" style={{ background: "var(--brand)", color: "#0a0a0a" }}>{t("reports.apply")}</button>
+                className="flex-1 h-12 rounded-full text-sm font-bold" style={{ background: "var(--text-primary)", color: "var(--background)" }}>{t("reports.apply")}</button>
             </div>
           </div>
         </div>
@@ -353,13 +522,81 @@ export default function AdminReportsPage() {
   );
 }
 
-function Stat({ icon: Icon, label, value, tone, testId }: { icon: typeof Receipt; label: string; value: string; tone?: "good" | "warn"; testId?: string }) {
-  const color = tone === "good" ? "var(--brand-dark)" : tone === "warn" ? "var(--warning)" : "var(--text-primary)";
+/**
+ * One figure and the period it is being compared with, side by side.
+ *
+ * The name is quiet and the number is loud, which is the order these are read in; the badge
+ * comes last so the eye lands on the amount before the change. `null` draws nothing at all —
+ * a comparison that cannot be made is not a zero.
+ */
+function MetricRow({ label, value, delta, testId }: { label: string; value: string; delta?: number | null; testId?: string }) {
   return (
-    <div className="rounded-[var(--radius-card)] p-4" style={{ background: "var(--tone-card)" }}>
-      <Icon size={16} style={{ color: "var(--text-secondary)" }} />
-      <p className="ds-section-label mt-2" style={{ color: "var(--text-secondary)" }}>{label}</p>
-      <p className="text-base font-bold mt-0.5" style={{ color }} data-testid={testId}>{value}</p>
+    <ListRow>
+      <div className="flex items-center justify-between gap-3 w-full">
+        <div className="min-w-0">
+          <p className="text-12" style={{ color: "var(--text-secondary)" }}>{label}</p>
+          <p className="text-15 font-bold mt-0.5 break-words" style={{ color: "var(--text-primary)" }} data-testid={testId}>
+            {value}
+          </p>
+        </div>
+        <Delta value={delta ?? null} />
+      </div>
+    </ListRow>
+  );
+}
+
+/** Up is the shop's success colour, down is its error colour — the same pair every other screen
+ *  uses for the same two meanings, rather than a third palette for reports. */
+function Delta({ value }: { value: number | null }) {
+  if (value == null || !Number.isFinite(value)) return null;
+  const up = value >= 0;
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-11 font-bold shrink-0 tabular-nums"
+      style={{
+        background: up ? "rgba(132,204,22,0.16)" : "rgba(239,68,68,0.12)",
+        color: up ? "var(--brand-dark)" : "var(--error)",
+      }}
+      data-testid="reports-delta"
+    >
+      <span aria-hidden="true">{up ? "▲" : "▼"}</span>
+      {Math.abs(value).toFixed(1)}%
+    </span>
+  );
+}
+
+/**
+ * The strip of bars under the headline.
+ *
+ * Decorative on purpose: every figure it draws is also written as a row above (the total) or in
+ * the metrics list (the parts), so a screen reader loses no information by skipping it. Bars are
+ * brand-coloured and full-bleed to their bucket; an empty bucket keeps a 2px stub so the axis
+ * still reads as a timeline rather than a gap.
+ */
+function SalesChart({ buckets }: { buckets: ChartBucket[] }) {
+  const max = Math.max(1, ...buckets.map((b) => b.value));
+  return (
+    <div className="mt-3" aria-hidden="true">
+      <div className="flex items-end gap-1.5 h-24">
+        {buckets.map((bucket, i) => (
+          <div key={i} className="flex-1 flex items-end h-full">
+            <div
+              className="w-full rounded-t-[3px]"
+              style={{
+                height: bucket.value > 0 ? `${Math.max(4, (bucket.value / max) * 100)}%` : "2px",
+                background: bucket.value > 0 ? "var(--brand)" : "var(--divider)",
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-1.5 mt-1.5">
+        {buckets.map((bucket, i) => (
+          <span key={i} className="flex-1 text-center text-9 truncate" style={{ color: "var(--text-tertiary)" }}>
+            {bucket.label}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

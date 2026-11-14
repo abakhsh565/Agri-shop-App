@@ -1,0 +1,37 @@
+# THE SMOKE LANE — the intended E2E gate for `main`, one entry per core business promise.
+#
+# WHY A LANE AND NOT THE WHOLE SUITE. The full suite is 157 tests on ONE worker (the QA database is
+# single-writer and the fixture ids are shared and pinned), measured at ~32 s per test — about 80
+# minutes. As a required check on every `main` PR that is a wager, not a gate: one stale selector at
+# minute 60 sends the work back to the start. This lane is the same product surface in ~10 minutes,
+# and the full suite still runs every night (`e2e-full-nightly.yml`), so coverage does not shrink —
+# it stops blocking daytime releases.
+#
+# STATUS OF EACH ENTRY (measured on run 43430431726, 2026-11-13 — 76 failed / 71 passed / 56.9 min):
+#
+#   sessionRefresh        auth: a session survives a reload and a reopen           1 test fails
+#   otpResume             auth: an interrupted code entry is resumable             GREEN
+#   doubleTapSafety       sale + payment: one confirm is one action               1 test fails
+#   splitPayment          split payment / khata, UI to DB                         2 tests fail
+#   productOpeningStock   stock: opening stock is created with the variant        1 test fails
+#   voidSaleSafety        sale: voiding names the sale and voids once             1 test fails
+#   roleDeleteSafety      RBAC: a refused role delete is reported                 1 test fails
+#   roleInUseDeletion     RBAC: a role in use cannot be revoked                   2 tests fail
+#   accessUx              RBAC: adding an employee asks who/what/where            1 test fails
+#
+# `setupCompletion` and `fingerprintUnlock` are the only other fully green files; they are not core
+# money/RBAC flows, so they stay out of this lane and in the nightly suite.
+#
+# THIS LANE IS NOT GREEN YET, and pretending otherwise would be worse than the hour-long run: every
+# core flow above has at least one failing test, and the failures cluster into a handful of shared
+# causes (see the grouped report in the PR). The lane becomes the required gate for `main` once those
+# groups are closed — not before.
+sessionRefresh
+otpResume
+doubleTapSafety
+splitPayment
+productOpeningStock
+voidSaleSafety
+roleDeleteSafety
+roleInUseDeletion
+accessUx

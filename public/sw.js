@@ -1,5 +1,5 @@
 /*
- * AgriShop service worker — the file `src/main.tsx` has always asked for and never got.
+ * HisabPay service worker — the file `src/main.tsx` has always asked for and never got.
  *
  * WHY THIS EXISTS
  *   `src/main.tsx` registers `/sw.js` in every production web build. The file did not exist, so the

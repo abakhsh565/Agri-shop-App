@@ -80,7 +80,7 @@ one (`ORDER HAZARD`).
 
 **Refusals, all fail-closed:** production (`--env production`, before connecting, for reads *and*
 writes — production's schema does not match this directory and what it needs is §D's decision);
-`development` (no project ref); no target at all; `--apply` while the directory breaks its grammar;
+no target at all; `--apply` while the directory breaks its grammar;
 an out-of-order apply; and an apply while any recorded row lacks a hash.
 
 ## 4. The grammar, guarded

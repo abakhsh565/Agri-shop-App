@@ -45,3 +45,16 @@ export function pkWeekStart(): string {
 export function pkMonthStart(): string {
   return pkToday().substring(0, 7) + "-01";
 }
+
+/**
+ * The first day of the month `delta` months away from the one `iso` falls in.
+ *
+ * A month is the unit the ledger and every report group by, so "the last six months" is six
+ * calendar months ending with this one — not 180 days, which would put a different set of bills
+ * under the same tab on two consecutive days. `iso` is a plain PK day, so the arithmetic stays
+ * in UTC and no local offset can move the result across a month boundary.
+ */
+export function pkMonthStartOf(iso: string, delta = 0): string {
+  const [year, month] = iso.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1 + delta, 1)).toISOString().slice(0, 10);
+}

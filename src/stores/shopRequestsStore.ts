@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { tNow } from "@/lib/i18n";
 import { isStorablePlace, type PickedPlace } from "@/lib/geo";
+import { resolveImageUrl } from "@/lib/storage";
 
 export type ShopRequestStatus = "pending" | "approved" | "hold" | "rejected";
 
@@ -57,7 +58,7 @@ function requestFromRow(r: ShopRequestRow): ShopRequest {
     shopCity: r.shop_city ?? undefined,
     shopType: r.shop_type,
     businessRegistrationNumber: r.business_registration_number ?? undefined,
-    logoUrl: r.logo_url ?? undefined,
+    logoUrl: resolveImageUrl(r.logo_url),
     cnicFrontUrl: r.cnic_front_url ?? undefined,
     cnicBackUrl: r.cnic_back_url ?? undefined,
     businessLicenseUrl: r.business_license_url ?? undefined,

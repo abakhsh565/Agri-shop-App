@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
+import Photo from "@/components/ui/Photo";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
@@ -10,21 +11,27 @@ import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import SetupChecklist from "@/components/ui/SetupChecklist";
+import RecordPaymentTargetSheet from "@/components/payments/RecordPaymentTargetSheet";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useShopStore } from "@/stores/shopStore";
 import { supabase } from "@/lib/supabase";
-import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
+import { formatCurrency, formatDate, formatSmartDateTime } from "@/lib/formatters";
 import { generateReminders, calculatePaymentStatus, loadBusinessSettings } from "@/lib/reminderEngine";
 import { computeOverdueCreditTotal } from "@/lib/signalEngine";
 import { summariseSales, profitDisplay } from "@/lib/profit";
 import { summariseMoneyIn, loadCreditPayments, type CreditPaymentRow } from "@/lib/money";
 import { useT } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
-import { AlertTriangle, TrendingUp, ChevronRight, ChevronDown, TrendingDown, ShoppingCart, Search, Bell, Wallet, CheckCircle2, HandCoins, PackagePlus, Store } from "lucide-react";
+import { canSeeDashboard } from "@/lib/tenantContext";
+import { branchKind } from "@/lib/branchKind";
+import { AlertTriangle, CalendarDays, ChevronRight, ChevronDown, PackageX, ShoppingCart, Search, Bell, Truck, Wallet, CheckCircle2, HandCoins, PackagePlus, Store } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import QuickAlertsPanel, { type QuickAlertItem } from "@/components/dashboard/QuickAlertsPanel";
+import { getCreditRequestsDB, type LocalCreditRequest } from "@/lib/localGroupRegistry";
+import { latestRedCreditOverride, nextHarvestWindow, pkDayStartISO } from "@/lib/quickAlerts";
 
 function initBgColor(name: string | null | undefined) {
   const safeName = String(name ?? '');
@@ -77,16 +84,19 @@ export default function AdminDashboardPage() {
   const isUrdu = language === "ur";
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [showNotifs, setShowNotifs] = useState(false);
-  const { items: allNotifications, unread, load, subscribe, markAllRead, markOneRead, ready: notificationsReady } = useNotificationStore();
+  // Record Payment asks whether the money is going to a customer or a supplier before it
+  // opens a screen; both sides are reachable from Home now, not just the customer one.
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const { items: allNotifications, load, subscribe, markAllRead, markManyRead, markOneRead, ready: notificationsReady } = useNotificationStore();
   const mockSales = useSalesStore((s) => s.sales);
   const mockProducts = useProductsStore((s) => s.products);
   const mockCompanies = useCompaniesStore((s) => s.companies);
   const mockEmployees = useEmployeesStore((s) => s.employees);
   const customers = useCustomersStore((s) => s.customers);
+  const customersReady = useCustomersStore((s) => s.ready);
   // Read both stores unconditionally: short-circuiting a hook call is what
   // crashed this screen, since React must see the same hooks every render.
   const salesReady = useSalesStore((s) => s.ready);
-  const customersReady = useCustomersStore((s) => s.ready);
   const listsReady = salesReady && customersReady;
   const [allReturns, setAllReturns] = useState<{ amount: number; createdAt: string }[]>([]);
   // The udhaar payments, raw rows, so the date pill can filter them without a second query.
@@ -150,6 +160,7 @@ export default function AdminDashboardPage() {
   const activeBranchId = useShopStore((s) => s.activeBranchId);
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
   const inAddedBranch = branchesLoaded && !!activeBranch && !activeBranch.isMain;
+  const mainBranch = branches.find((b) => b.isMain) ?? null;
   // The same sentence the Branches screen puts on a row, from the same derivation.
   const branchContext = activeBranch ? branchContextLabel(t, activeBranch) : null;
 
@@ -166,11 +177,24 @@ export default function AdminDashboardPage() {
    * Notifications screen and see them all), but this screen is about the branch you are
    * standing in — its sales, its staff, its bell. Mixing two branches into this list is
    * how a figure from Branch A ends up explained by an event from Branch B.
+   *
+   * `shop_id` is the BUSINESS, not the branch (owner's correction, 2026-10-30): filtering on it
+   * alone let the main branch's sales show up in an added branch's bell while this comment
+   * claimed otherwise. In an added branch the filter is `branch_id`; on the main branch it stays
+   * the business's rows, which is what "the main branch is the business" means here.
    */
   const notifications = useMemo(
-    () => allNotifications.filter((n) => !activeShopId || n.shop_id === activeShopId),
-    [allNotifications, activeShopId],
+    () => (inAddedBranch && activeBranch
+      ? allNotifications.filter((n) => n.branch_id === activeBranch.id)
+      : allNotifications.filter((n) => !activeShopId || n.shop_id === activeShopId)),
+    [allNotifications, activeShopId, inAddedBranch, activeBranch],
   );
+  const scopedUnread = notifications.filter((n) => !n.read);
+  /** Rows that came from a branch other than the one being read, named so they cannot be misread. */
+  const branchNameOf = (n: (typeof notifications)[number]) =>
+    inAddedBranch || !n.branch_id || n.branch_id === mainBranch?.id
+      ? null
+      : branches.find((b) => b.id === n.branch_id)?.name ?? null;
 
   // Date helpers — use Pakistan local time (Asia/Karachi, UTC+5) for all date comparisons.
   // en-CA locale produces YYYY-MM-DD format.
@@ -258,15 +282,12 @@ export default function AdminDashboardPage() {
   const outOfStockCount = mockProducts.filter(p => p.stockQty <= 0).length;
   const totalPayable = mockCompanies.reduce((s, c) => s + c.outstandingPayable, 0);
   
-  const [pendingCreditRequests, setPendingCreditRequests] = useState(0);
+  const [creditRequests, setCreditRequests] = useState<LocalCreditRequest[]>([]);
+  const [sentToday, setSentToday] = useState(0);
   const [dueReminders, setDueReminders] = useState<any[]>([]);
   const [bizSettings, setBizSettings] = useState<{crops: any[]}>({crops: []});
   const [customerCropsMap, setCustomerCropsMap] = useState<Record<string, string[]>>({});
   useEffect(() => {
-    // Check for pending credit limit requests
-    supabase.from("credit_limit_requests").select("id", { count: "exact", head: true }).eq("status", "pending")
-      .then(({ count }) => setPendingCreditRequests(count || 0))
-      .then(() => {}, () => {});
     loadBusinessSettings().then(setBizSettings).catch(() => {});
     // Load all customer crops for harvest alert filtering
     import("@/lib/reminderEngine").then(async (m) => {
@@ -277,14 +298,184 @@ export default function AdminDashboardPage() {
       setCustomerCropsMap(map);
     }).catch(() => {});
   }, [customers.length]);
-  function customerCropsHas(customerId: string, cropName: string) {
-    return (customerCropsMap[customerId] || []).includes(cropName);
-  }
+  // Credit requests are decisions awaiting the owner; reminder logs are proof of work already
+  // done. Both live in their own tables and are only read here for the triage card.
+  useEffect(() => {
+    let alive = true;
+    if (!workingBranchId || switchingBranch) return;
+    getCreditRequestsDB()
+      .then((requests) => { if (alive) setCreditRequests(requests); })
+      .catch(() => {});
+    supabase
+      .from("reminder_logs")
+      .select("id", { count: "exact", head: true })
+      .gte("sent_at", pkDayStartISO())
+      .then(({ count }) => { if (alive) setSentToday(count ?? 0); }, () => {});
+    return () => { alive = false; };
+  }, [workingBranchId, switchingBranch]);
   useEffect(() => { generateReminders({ customers, sales: mockSales }).then(setDueReminders); }, [customers, mockSales]);
   const dueReminderCount = dueReminders.filter(r => new Date(r.triggerDate) <= new Date()).length;
   const creditLimitReached = customers.filter(c => c.outstandingBalance > 0 && c.creditLimit > 0 && c.outstandingBalance >= c.creditLimit).length;
   const delayedCount = customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, new Date()) === "delayed").length;
   const highRiskCount = customers.filter(c => c.outstandingBalance > 0 && calculatePaymentStatus(c, new Date()) === "high_risk").length;
+
+  const followupCount = dueReminderCount + delayedCount;
+  const pendingCredit = [...creditRequests]
+    .filter((request) => request.status === "pending")
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const creditOverride = latestRedCreditOverride(creditRequests, customers, now);
+  const harvestWindow = nextHarvestWindow(
+    bizSettings.crops,
+    customers,
+    customerCropsMap,
+    now,
+  );
+  const quickAlertItems: QuickAlertItem[] = [];
+
+  if (pendingCredit.length === 1) {
+    const request = pendingCredit[0];
+    quickAlertItems.push({
+      id: `credit-request-${request.id}`,
+      tone: "critical",
+      icon: AlertTriangle,
+      title: t("quickAlerts.creditRequestTitle", { customer: request.customerName }),
+      body: t("quickAlerts.creditRequestBody", {
+        from: formatRs(request.currentLimit),
+        to: formatRs(request.requestedLimit),
+      }),
+      meta: formatSmartDateTime(request.createdAt, now, t),
+      action: t("admin.review"),
+      priority: 100,
+      onPress: () => navigate(`/admin/alerts/credit-requests/${request.id}`),
+    });
+  } else if (pendingCredit.length > 1) {
+    quickAlertItems.push({
+      id: "credit-requests",
+      tone: "critical",
+      icon: AlertTriangle,
+      title: t("quickAlerts.creditRequestsTitle", { count: String(pendingCredit.length) }),
+      body: t("quickAlerts.creditRequestsBody"),
+      meta: t("quickAlerts.awaitingDecision"),
+      action: t("admin.review"),
+      priority: 100,
+      onPress: () => navigate("/admin/alerts/reminders", { state: { tab: "action", subTab: "critical" } }),
+    });
+  } else if (creditOverride) {
+    quickAlertItems.push({
+      id: `credit-override-${creditOverride.request.id}`,
+      tone: "critical",
+      icon: AlertTriangle,
+      title: t("quickAlerts.creditOverrideTitle"),
+      body: t("quickAlerts.creditOverrideBody", {
+        approver: creditOverride.request.reviewedBy || t("common.owner"),
+        amount: formatRs(creditOverride.approvedAmount),
+        customer: creditOverride.customer.name,
+      }),
+      meta: formatSmartDateTime(creditOverride.request.reviewedAt ?? creditOverride.request.createdAt, now, t),
+      action: t("admin.review"),
+      priority: 95,
+      onPress: () => navigate(`/admin/alerts/credit-overrides/${creditOverride.customer.id}`),
+    });
+  } else if (highRiskCount + creditLimitReached > 0) {
+    const flagged = highRiskCount + creditLimitReached;
+    quickAlertItems.push({
+      id: "flagged-credit",
+      tone: "critical",
+      icon: AlertTriangle,
+      title: flagged === 1
+        ? t("quickAlerts.creditFlaggedTitleOne")
+        : t("quickAlerts.creditFlaggedTitle", { count: String(flagged) }),
+      body: t("quickAlerts.creditFlaggedBody"),
+      meta: t("quickAlerts.needsReview"),
+      action: t("admin.review"),
+      priority: 85,
+      onPress: () => navigate("/admin/alerts/credit-overrides"),
+    });
+  }
+
+  if (outOfStockCount > 0) {
+    quickAlertItems.push({
+      id: "out-of-stock",
+      tone: "warning",
+      icon: PackageX,
+      title: outOfStockCount === 1
+        ? t("quickAlerts.outOfStockTitleOne")
+        : t("quickAlerts.outOfStockTitle", { count: String(outOfStockCount) }),
+      body: t("quickAlerts.outOfStockBody"),
+      meta: t("quickAlerts.needsReview"),
+      action: t("admin.view"),
+      priority: 80,
+      onPress: () => navigate("/admin/alerts/inventory"),
+    });
+  }
+
+  if (totalPayable > 0) {
+    quickAlertItems.push({
+      id: "supplier-payable",
+      tone: "warning",
+      icon: Truck,
+      title: t("quickAlerts.supplierTitle", { amount: formatRs(totalPayable) }),
+      body: t("quickAlerts.supplierBody"),
+      meta: t("quickAlerts.needsReview"),
+      action: t("admin.review"),
+      priority: 75,
+      onPress: () => navigate("/admin/purchases/payments"),
+    });
+  }
+
+  if (followupCount > 0) {
+    quickAlertItems.push({
+      id: "followups-due",
+      tone: "warning",
+      icon: Bell,
+      title: followupCount === 1
+        ? t("quickAlerts.followupsDueTitleOne")
+        : t("quickAlerts.followupsDueTitle", { count: String(followupCount) }),
+      body: t("quickAlerts.followupsDueBody"),
+      meta: t("emp.today"),
+      action: t("admin.review"),
+      priority: 70,
+      onPress: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
+    });
+  } else if (sentToday > 0) {
+    quickAlertItems.push({
+      id: "reminders-sent",
+      tone: "warning",
+      icon: Bell,
+      title: sentToday === 1
+        ? t("quickAlerts.remindersSentTitleOne")
+        : t("quickAlerts.remindersSentTitle", { count: String(sentToday) }),
+      body: t("quickAlerts.remindersSentBody"),
+      meta: t("emp.today"),
+      action: t("admin.view"),
+      priority: 60,
+      onPress: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "recently_sent" } }),
+    });
+  }
+
+  if (harvestWindow) {
+    quickAlertItems.push({
+      id: "harvest",
+      tone: "neutral",
+      icon: CalendarDays,
+      title: harvestWindow.days === 1
+        ? t("quickAlerts.harvestTitleOne", { crop: harvestWindow.crop.name })
+        : t("quickAlerts.harvestTitle", {
+          crop: harvestWindow.crop.name,
+          count: String(harvestWindow.days),
+        }),
+      body: harvestWindow.farmers.length === 0
+        ? t("quickAlerts.harvestBodyEmpty")
+        : harvestWindow.farmers.length === 1
+          ? t("quickAlerts.harvestBodyOne")
+          : t("quickAlerts.harvestBody", { count: String(harvestWindow.farmers.length) }),
+      meta: formatDate(harvestWindow.date),
+      action: t("quickAlerts.plan"),
+      priority: 50,
+      onPress: () => navigate("/admin/alerts/harvest", { state: { crop: harvestWindow.crop.name } }),
+    });
+  }
+  quickAlertItems.sort((a, b) => b.priority - a.priority);
 
   // Employee performance — filtered by selected date filter
   const empStats = mockEmployees.map((emp) => {
@@ -310,6 +501,8 @@ export default function AdminDashboardPage() {
     await Promise.all([
       useSalesStore.getState().load(),
       useProductsStore.getState().load(),
+      useEmployeesStore.getState().load(),
+      useCustomersStore.getState().load(),
       load(),
     ]);
   }
@@ -350,9 +543,7 @@ export default function AdminDashboardPage() {
             className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0 overflow-hidden transition-transform active:scale-90"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
-            {user?.photoUrl
-              ? <img src={user.photoUrl} alt={displayName} className="w-full h-full object-cover" />
-              : initials}
+            <Photo src={user?.photoUrl} alt={displayName} className="w-full h-full object-cover" fallback={initials} />
           </button>
         )}
 
@@ -384,7 +575,12 @@ export default function AdminDashboardPage() {
               day. On an added branch the branch is already the first line, so this one
               says what is IN it — the two lines never repeat each other. */}
           <span className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-            {activeBranch?.name ? `${activeBranch.name} · ${todayLabel}` : todayLabel}
+            {/* The kind travels with the name: "Main" and "Sub" are what tell an owner that
+                the figures below are the parent shop or a branch added later, and the two
+                never share a ledger. */}
+            {activeBranch?.name
+              ? `${activeBranch.name} · ${branchKind(t, activeBranch.isMain)} · ${todayLabel}`
+              : todayLabel}
           </span>
         </button>
 
@@ -410,9 +606,9 @@ export default function AdminDashboardPage() {
                 counted another branch's events would send the owner looking here for
                 something that is not in this list. The Notifications screen is where
                 every branch is counted, and it says so with its own tabs. */}
-            {unread(activeShopId) > 0 && (
+            {scopedUnread.length > 0 && (
               <span className="absolute top-1 end-1 bg-red-500 text-white text-8 font-bold rounded-full min-w-[13px] h-[13px] flex items-center justify-center px-[2px]">
-                {unread(activeShopId)}
+                {scopedUnread.length}
               </span>
             )}
           </button>
@@ -429,7 +625,10 @@ export default function AdminDashboardPage() {
           >
             {/* Header — clickable → full notifications page */}
             <button
-              onClick={() => { navigate("/admin/notifications"); setShowNotifs(false); }}
+              onClick={() => {
+                navigate("/admin/notifications", { state: { from: "/admin/dashboard" } });
+                setShowNotifs(false);
+              }}
               className="px-4 py-3 flex items-center justify-between shrink-0 w-full active:opacity-70 transition-opacity"
               style={{ borderBottom: "1px solid var(--divider)" }}
             >
@@ -437,12 +636,24 @@ export default function AdminDashboardPage() {
                 {t("dashboard.notifications")}
               </p>
               <div className="flex items-center gap-2">
-                {unread(activeShopId) > 0 && (
+                {scopedUnread.length > 0 && (
                   <span className="text-10 font-bold px-1.5 py-0.5 rounded-full" style={{ background: "var(--brand)", color: "#0a0a0a" }}>
-                    {unread(activeShopId)}
+                    {scopedUnread.length}
                   </span>
                 )}
-                <span className="text-10 font-semibold" style={{ color: "var(--brand-dark, #65a30d)" }} onClick={(e) => { e.stopPropagation(); markAllRead(); }}>{t("notifications.markAllRead")}</span>
+                <span
+                  className="text-10 font-semibold"
+                  style={{ color: "var(--brand-dark, #65a30d)" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Marking read applies to what this bell is counting. In an added branch that
+                    // is that branch; on the main branch it is everything, as before.
+                    if (inAddedBranch) void markManyRead(scopedUnread.map((n) => n.id));
+                    else markAllRead();
+                  }}
+                >
+                  {t("notifications.markAllRead")}
+                </span>
               </div>
             </button>
 
@@ -501,6 +712,13 @@ export default function AdminDashboardPage() {
                               <div className="flex-1 min-w-0">
                                 <p className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>{n.title}</p>
                                 {n.body && <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>{n.body}</p>}
+                                {/* On the main branch this list carries other branches' events, so
+                                    a row says which branch it came from. */}
+                                {branchNameOf(n) && (
+                                  <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>
+                                    {branchNameOf(n)}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           </button>
@@ -537,11 +755,16 @@ export default function AdminDashboardPage() {
           follows it on a shop that cannot trade yet, and is absent once the shop is set up. ── */}
       {/* `data-tour` anchors: the guided tour rings these two real blocks. Additive
           attributes only — nothing here looks or behaves differently because of them. */}
+      {/* Visibility is a per-role decision (migration 0250), not a side effect of holding
+          `sales.view`: a role can be shown the shop's takings without being able to void a
+          sale. An owner, and an account whose visibility has not been read yet, see it. */}
+      {canSeeDashboard("sales_overview") && (
       <div className="px-4 pt-3 animate-fade-in-up" data-tour="home:kpis">
         <button
-          className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform active:scale-[0.98]"
+          className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform hover:opacity-95 active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
-          onClick={() => navigate("/admin/sales")}
+          onClick={() => navigate("/admin/settings/hub/finance")}
+          data-testid="dashboard-overview-card"
         >
           <p className="ds-section-label mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
             {t("admin.totalSales")}
@@ -588,6 +811,7 @@ export default function AdminDashboardPage() {
           </div>
         </button>
       </div>
+      )}
 
       {/* ── First-run guidance, directly under the sale card.
           On a shop that cannot trade yet this is what to do next, so it follows the figures
@@ -597,6 +821,7 @@ export default function AdminDashboardPage() {
       <SetupChecklist testId="setup-next-step" className="px-4 pt-4 animate-fade-in-up" />
 
       {/* ── Summary: Action needed · Follow-ups · Out of stock ── */}
+      {canSeeDashboard("quick_alerts") && (
       <div className="px-4 pt-4 flex gap-2 animate-fade-in-up">
         <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'critical' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--tone-card)" }}>
           <p className="text-16 font-bold" style={{ color: (highRiskCount + creditLimitReached) > 0 ? "var(--error)" : "var(--text-secondary)" }}>{highRiskCount + creditLimitReached}</p>
@@ -611,6 +836,7 @@ export default function AdminDashboardPage() {
           <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("signal.detailOutOfStock")}</p>
         </button>
       </div>
+      )}
 
       {/* ── Quick Actions ──
           One glyph, one word, one surface. The three actions used to be flat outlined boxes
@@ -620,15 +846,17 @@ export default function AdminDashboardPage() {
       <div className="px-4 pt-4" data-tour="home:actions">
         <div className="grid grid-cols-3 gap-2.5">
           {([
-            { icon: ShoppingCart, label: t("dashboard.newSale"), to: "/admin/sale", primary: true },
-            { icon: HandCoins,    label: t("dashboard.recordPayment"), to: "/admin/customers", primary: false },
+            { icon: ShoppingCart, label: t("dashboard.newSale"), go: () => navigate("/admin/sale"), primary: true },
+            // Record Payment asks which side the money is on rather than assuming the customer
+            // one: what a customer owes and what a supplier is owed are different books.
+            { icon: HandCoins,    label: t("dashboard.recordPayment"), go: () => setRecordPaymentOpen(true), primary: false },
             // The purchase glyph, not a delivery truck: this button records stock coming in,
             // and it is the same mark the Purchases screens and that FAB already use.
-            { icon: PackagePlus,  label: t("admin.purchases") ?? "Purchase", to: "/admin/purchases/new", primary: false },
-          ] as const).map(({ icon: Icon, label, to, primary }) => (
+            { icon: PackagePlus,  label: t("admin.purchases") ?? "Purchase", go: () => navigate("/admin/purchases/new"), primary: false },
+          ] as const).map(({ icon: Icon, label, go, primary }) => (
             <button
-              key={to}
-              onClick={() => navigate(to)}
+              key={label}
+              onClick={go}
               className="h-14 rounded-[var(--radius-tile)] flex flex-col items-center justify-center gap-1 ds-pressable"
               style={primary
                 ? { background: "var(--brand)", color: "#0a0a0a" }
@@ -641,118 +869,20 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* ── Quick Alerts: 3 summary rows with premium card design ── */}
-      {(() => {
-        const criticalCount = totalPayable > 0 ? 1 : 0;
-        const followupCount = dueReminderCount + delayedCount;
-        let harvestDays: number | null = null;
-        let harvestCustomerCount = 0;
-        const nowRef = new Date();
-        for (const crop of bizSettings.crops) {
-          const harvest = new Date(nowRef.getFullYear(), crop.harvestMonth - 1, crop.harvestDay || 1);
-          if (harvest < nowRef) harvest.setFullYear(nowRef.getFullYear() + 1);
-          const d = Math.ceil((harvest.getTime() - nowRef.getTime()) / 86400000);
-          if (d > 0 && d <= 30 && (harvestDays === null || d < harvestDays)) {
-            harvestDays = d;
-            harvestCustomerCount = customers.filter(c => c.outstandingBalance > 0 && customerCropsHas(c.id, crop.name)).length;
-          }
-        }
-        const items: { key: string; icon: React.ReactNode; title: string; subtitle: string; action: string; actionColor: string; cardBg: string; onClick: () => void; count: number }[] = [];
-        const criticalTotal = highRiskCount + creditLimitReached + criticalCount + pendingCreditRequests;
-        if (criticalTotal > 0) {
-          const parts: string[] = [];
-          if (highRiskCount > 0) parts.push(highRiskCount + (t("inline.high_risk_x")));
-          if (creditLimitReached > 0) parts.push(creditLimitReached + (t("inline.credit_limit")));
-          if (criticalCount > 0) parts.push(t("inline.supplier"));
-          if (pendingCreditRequests > 0) parts.push(pendingCreditRequests + (t("inline.request") + (pendingCreditRequests > 1 ? "s" : "")));
-          const urgentTab = highRiskCount > 0 ? "critical" : creditLimitReached > 0 || pendingCreditRequests > 0 ? "warning" : "critical";
-          items.push({
-            key: "critical",
-            icon: <AlertTriangle size={18} />,
-            title: t(criticalTotal === 1 ? "dashboard.actionNeeded" : "dashboard.actionsNeeded", { count: criticalTotal }),
-            subtitle: parts.join(t("inline.text")),
-            action: t("admin.review"),
-            actionColor: "var(--error)",
-            cardBg: "var(--surface)",
-            onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "action", subTab: urgentTab } }),
-            count: criticalTotal,
-          });
-        }
-        if (followupCount > 0) {
-          const parts: string[] = [];
-          if (dueReminderCount > 0) parts.push(dueReminderCount + (t("inline.reminder") + (dueReminderCount !== 1 ? "s" : "")));
-          if (delayedCount > 0) parts.push(delayedCount + (t("inline.delayed_x")));
-          items.push({
-            key: "followups",
-            icon: <Bell size={18} />,
-            title: t(followupCount === 1 ? "dashboard.followupReady" : "dashboard.followupsReady", { count: followupCount }),
-            subtitle: parts.join(t("inline.text_x")),
-            action: t("admin.view"),
-            actionColor: "var(--warning)",
-            cardBg: "var(--surface)",
-            onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
-            count: followupCount,
-          });
-        }
-        if (harvestDays !== null) {
-          items.push({
-            key: "harvest",
-            icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>,
-            title: t(harvestDays === 1 ? "dashboard.harvestSoon" : "dashboard.harvestSoonPlural", { count: harvestDays }),
-            subtitle: harvestCustomerCount > 0 ? harvestCustomerCount + (t("inline.customers_pending")) : "",
-            action: "",
-            actionColor: "var(--text-secondary)",
-            cardBg: "var(--surface)",
-            onClick: () => navigate("/admin/alerts/reminders", { state: { tab: "followups", subTab: "ready" } }),
-            count: harvestDays,
-          });
-        }
-        if (items.length === 0) return null;
-        return (
-          <div className="px-4 pt-5">
-            {/* A label above one card of rows — the same shape as Recent Sales and every
-                other list in the app. It used to be a card wrapping a column of three more
-                cards, which is the double surface the rest of the app no longer uses. */}
-            <p className="ds-section-label mb-2 px-1" style={{ color: "var(--text-secondary)" }}>
-              {t("admin.quickAlerts")}
-            </p>
-            <ListCard>
-              {items.map((item) => (
-                <ListRow
-                  key={item.key}
-                  onClick={item.onClick}
-                  tile={
-                    <div
-                      className="size-9 rounded-full flex items-center justify-center shrink-0"
-                      style={{
-                        background: item.key === "critical" ? "var(--error-bg)" : item.key === "followups" ? "var(--warning-bg)" : "var(--surface-2)",
-                        color: item.key === "critical" ? "var(--error)" : item.key === "followups" ? "var(--warning)" : "var(--text-secondary)",
-                      }}
-                    >
-                      {item.icon}
-                    </div>
-                  }
-                  title={item.title}
-                  meta={item.subtitle || undefined}
-                  trailing={
-                    item.action ? (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-12 font-semibold" style={{ color: item.actionColor }}>
-                          {item.action}
-                        </span>
-                        <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                      </div>
-                    ) : undefined
-                  }
-                />
-              ))}
-            </ListCard>
-          </div>
-        );
-      })()}
+      {/* ── Quick Alerts: ranked triage, three decisions at most ──
+          Home is a triage surface. Each row is a real record or count and opens the screen that
+          owns it; the complete list remains in the Action Center. ── */}
+      {canSeeDashboard("quick_alerts") && (
+        <QuickAlertsPanel
+          title={t("admin.quickAlerts")}
+          items={quickAlertItems.slice(0, 3)}
+          viewAllLabel={t("common.viewAll")}
+          onViewAll={() => navigate("/admin/alerts/reminders", { state: { tab: "action", subTab: "critical" } })}
+        />
+      )}
 
       {/* ── Employee Performance ── */}
-      {empStats.length > 0 && (
+      {canSeeDashboard("team_performance") && empStats.length > 0 && (
         <div className="px-4 pt-5">
           <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
             {t("admin.employeePerformance")}
@@ -793,7 +923,7 @@ export default function AdminDashboardPage() {
           <SkeletonList rows={3} tile />
         </div>
       )}
-      {listsReady && recentSales.length > 0 && (
+      {canSeeDashboard("sales_overview") && listsReady && recentSales.length > 0 && (
         <div className="px-4 pt-5 pb-6">
           <div className="flex items-center justify-between mb-3">
             <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
@@ -815,13 +945,18 @@ export default function AdminDashboardPage() {
               <ListRow
                 key={sale.id}
                 onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                tile={cImg ? (
-                  <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
-                ) : (
-                  <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
-                    {(sale.customerName ?? '?').charAt(0).toUpperCase()}
-                  </div>
-                )}
+                tile={
+                  <Photo
+                    src={cImg}
+                    alt={sale.customerName}
+                    className="size-9 rounded-full object-cover shrink-0"
+                    fallback={
+                      <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
+                        {(sale.customerName ?? '?').charAt(0).toUpperCase()}
+                      </div>
+                    }
+                  />
+                }
                 trailing={
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
@@ -850,6 +985,21 @@ export default function AdminDashboardPage() {
           </ListCard>
         </div>
       )}
+
+      {/* Which side is this payment on? Asked once, here, because the list, the balance, the
+          form and the money movement that follow all belong to one side. */}
+      <RecordPaymentTargetSheet
+        open={recordPaymentOpen}
+        onClose={() => setRecordPaymentOpen(false)}
+        onCustomers={() => {
+          setRecordPaymentOpen(false);
+          navigate("/admin/customers/outstanding");
+        }}
+        onSuppliers={() => {
+          setRecordPaymentOpen(false);
+          navigate("/admin/purchases/payables");
+        }}
+      />
     </div>
     </PullToRefresh>
   );

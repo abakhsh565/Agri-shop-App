@@ -1,15 +1,18 @@
 import { useMemo, useState } from "react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import DateField from "@/components/ui/DateField";
 import { useThemeStore } from "@/stores/themeStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useUIStore } from "@/stores/uiStore";
 import { Calculator, CheckCircle, AlertTriangle } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { useShellBase } from "@/lib/useShellBase";
 
 export default function DailyCashReconciliationPage() {
   const t = useT();
+  const base = useShellBase();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
   const sales = useSalesStore((s) => s.sales);
@@ -71,18 +74,17 @@ export default function DailyCashReconciliationPage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("payments.dailyReconciliation")} />
+      <NavHeader title={t("payments.dailyReconciliation")} backTo={`${base}/settings/hub/finance`} historyBack />
 
       <div className="flex flex-col gap-4 p-4">
         {/* Date selector */}
         <div>
           <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.selectDate")}</p>
-          <input
-            type="date"
+          <DateField
             value={selectedDate}
             max={new Date().toISOString().slice(0, 10)}
-            onChange={(e) => { setSelectedDate(e.target.value); setSaved(false); setCountedCash(""); }}
-            className="w-full outline-none"
+            onChange={(v) => { setSelectedDate(v); setSaved(false); setCountedCash(""); }}
+            testId="reconciliation-date"
           />
         </div>
 
@@ -127,7 +129,7 @@ export default function DailyCashReconciliationPage() {
               onChange={(e) => { setCountedCash(e.target.value); setSaved(false); }}
               placeholder={t("payments.cashCountedPlaceholder")}
               className="w-full h-12 rounded-[var(--radius-input)] ps-10 pe-4 text-sm outline-none"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--divider)", color: "var(--text-primary)" }}
+              style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
             />
           </div>
         </div>

@@ -34,21 +34,14 @@ beforeAll(async () => {
   // The caller is the fixture shop's owner, whose owner membership already
   // exists — that is what gives him tenant access. The Supabase Auth
   // credential is provisioned on demand by execRpcAsUser.
-  // Best-effort by design: the employee row may not have an auth identity yet
-  // (the credential is provisioned on demand by execRpcAsUser), so a missing
-  // identity here is not a failure — the password is set when the credential
-  // is created.
-  try {
-    await qaServiceClient.auth.admin.updateUserById(employee, { password: `QA-test-${employee}-2024!` });
-  } catch {
-    /* best-effort: no auth identity exists for this employee yet */
-  }
-  // 0286: accept_my_invitation writes 'membership_invitation_accepted' with user_id = the
-  // invitee and entity_id = the MEMBERSHIP id, so the old entity_id-only sweep misses it
-  // and the users delete below then trips on audit_events_user_id_fkey. Clear rows the user
-  // ACTED (by user id, resolved by phone so a rerun also clears the previous run's
-  // employee) as well as rows ABOUT the user and its memberships.
-  await sql(`DELETE FROM audit_events WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001') OR entity_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001') OR entity_id IN (SELECT id FROM memberships WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')) OR details->>'name'='QA RBAC Employee'`);
+  //
+  // No INSERT here. This used to upsert his row from an `adminPhone` that was never declared, and
+  // the file's own contract says that row is the seeded owner and must never be written. What the
+  // suite needs is the row's EXISTENCE, which the fixtures guarantee.
+  const [{ rows: ownerRows }] = [await sql(`SELECT id FROM users WHERE id = '${admin}'`)];
+  expect(ownerRows.length, 'the seeded owner row this suite acts as must exist').toBe(1);
+  await qaServiceClient.auth.admin.updateUserById(employee, { password: `QA-test-${employee}-2024!` }).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM audit_events WHERE entity_id IN ('${employee}') OR details->>'name'='QA RBAC Employee'`);
   await sql(`DELETE FROM user_permissions WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
   await sql(`DELETE FROM memberships WHERE user_id IN (SELECT id FROM users WHERE id='${employee}' OR phone='923008880001')`);
   await sql(`DELETE FROM users WHERE id='${employee}' OR phone='923008880001'`);
@@ -105,8 +98,8 @@ afterAll(async () => {
   await sql(`DELETE FROM users WHERE id='${employee}'`);
   // This file's own rows, removed and read back: a cleanup that silently failed is what made the
   // NEXT run fail with a duplicate phone.
-  await trySql('customers', sql(`DELETE FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}'`));
-  await trySql('branches', sql(`DELETE FROM branches WHERE id='${WAREHOUSE}'`));
+  await sql(`DELETE FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM branches WHERE id='${WAREHOUSE}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   const { rows: left } = await sql(
     `SELECT (SELECT count(*) FROM customers WHERE phone='${DENIED_CUSTOMER_PHONE}')
           + (SELECT count(*) FROM branches WHERE id='${WAREHOUSE}') AS n`

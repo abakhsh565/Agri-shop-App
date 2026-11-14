@@ -59,6 +59,9 @@ export const QA_DB_SSL = Object.freeze({ rejectUnauthorized: false });
 
 /** The complete set of app users whose QA auth credentials may ever be repaired. */
 export const QA_PROVISIONING_FIXTURES = Object.freeze([
+  // The fixture shop's owner (Khalid Khan). Suites that need owner power sign in as him, and
+  // `QA_IDS.owner` is the id they use; without him provisioned, those sign-ins have no account.
+  Object.freeze({ id: '10000000-0000-0000-0000-000000000003', phone: '923001234567' }),
   Object.freeze({ id: '10000000-0000-0000-0000-000000000001', phone: '923009999999' }),
   Object.freeze({ id: '10000000-0000-0000-0000-000000000002', phone: '923008888888' }),
   Object.freeze({ id: '90000000-0000-0000-0000-0000000000a1', phone: '923007700001' }),

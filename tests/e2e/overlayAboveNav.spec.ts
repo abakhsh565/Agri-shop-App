@@ -14,7 +14,8 @@
  * The assertion is the browser's own hit test, not a z-index number: the point is what the
  * user can touch, and a hit test is the only thing that answers that.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import { cleanupFixtures, loginViaUi, setupFixtures } from './helpers';
 
 const OWNER_PHONE = '923001234567';

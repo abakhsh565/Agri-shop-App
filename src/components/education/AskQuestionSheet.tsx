@@ -46,8 +46,7 @@ export default function AskQuestionSheet({ onClose }: { onClose: () => void }) {
           data-testid="ask-input"
           className="w-full mt-3 p-3 text-14 rounded-[var(--radius-tile)] outline-none resize-none"
           style={{
-            background: "var(--surface-2)",
-            border: "1px solid var(--divider)",
+            background: "var(--field-bg)",
             color: "var(--text-primary)",
           }}
         />

@@ -22,6 +22,13 @@ const EMPLOYEE_KINDS = new Set(["sale", "payment", "return", "stock_adjust", "lo
 const PERSONAL_KINDS = new Set(["sale", "payment", "return"]);
 
 /**
+ * Kinds whose screens no longer exist. Historical rows stay in the table, but showing one would
+ * open a dead notification that points at a removed route; hiding it is the difference between
+ * preserving history and presenting a broken door.
+ */
+const RETIRED_KINDS = new Set(["employee_access_request"]);
+
+/**
  * Kinds that are an account's own private activity. An owner sees their own and never
  * another person's — "your profile was updated" is nobody else's business.
  */
@@ -70,6 +77,8 @@ export function visibleToCurrentUser(
     : undefined
   ) ?? accountRole;
   const isOwnerHere = roleHere === "admin" || roleHere === "owner";
+
+  if (RETIRED_KINDS.has(row.kind)) return false;
 
   if (!isOwnerHere) {
     if (!EMPLOYEE_KINDS.has(row.kind)) return false;

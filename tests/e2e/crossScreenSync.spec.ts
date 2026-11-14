@@ -16,7 +16,9 @@
  * still tries a quiet network (bounded, optional) and REQUIRES rendered text — so a blank route
  * still fails this lane loudly, and every data assertion below is unchanged.
  */
-import { test, expect } from '@playwright/test';
+// Imported from `./base` so the worker-scoped ownership cleanup also covers the failure path: this
+// lane registers five rows, and a failing test restarts the worker before its own `afterAll` can run.
+import { test, expect } from './base';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import {

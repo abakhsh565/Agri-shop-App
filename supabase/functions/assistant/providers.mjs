@@ -61,6 +61,16 @@ function traceEntry(name, args, outcome) {
  * `tool` is the key: the chat has one renderer per tool, so the card it draws for
  * `sales_summary` is the sales card and not a generic table of keys.
  */
+function scopeInstruction(ctx) {
+  if (ctx?.experience === "co_owner") {
+    return "This person is a Co-Owner. Their access is limited to the branch they are working in. Never imply they can see another branch or the whole shop.";
+  }
+  if (ctx?.experience === "employee") {
+    return "This person is an employee. Use only the tools their permissions include and the branch they are working in. Never imply wider access.";
+  }
+  return "This person owns the shop. Do not claim a permission restriction for them.";
+}
+
 function widgetFor(result) {
   return {
     tool: result.tool,
@@ -156,6 +166,25 @@ const RULES = [
     args: () => ({}),
   },
   {
+    tool: "branch_overview",
+    test: /\b(branches?|locations?|shops?)\b/i,
+    // "employees in the branch" is a team question, not a branch-directory question.
+    unless: /\b(employee|staff|team|performance|sales|purchase)\b/i,
+    args: () => ({}),
+  },
+  {
+    // "How is Ali selling" and "employee performance" are one question. It is checked before
+    // the generic activity rule so a performance question is not answered with a log page.
+    tool: "employee_performance",
+    test: /\b(employee|staff|team|worker)\b.*\b(performance|sales|selling|sold)\b|\b(performance|how is .* selling|sales by)\b.*\b(employee|staff|team|worker)\b|\bperformance of\b/i,
+    args: (t) => ({ name: findName(t, ["employee", "staff", "of", "for"]) }),
+  },
+  {
+    tool: "employee_directory",
+    test: /\b(who works|list (the )?(employees|staff|team)|all (employees|staff)|employees? (list|directory)|team (list|directory)|staff (list|directory)|who is in|employees? (in|at)|staff (in|at)|team (in|at))\b/i,
+    args: (t) => ({ branch: findName(t, ["in", "at"]) }),
+  },
+  {
     tool: "profit_summary",
     // "profit", "margin", "how much did I earn on"
     test: /\b(profit|margin|kamai|munafa)\b/i,
@@ -190,6 +219,16 @@ const RULES = [
     args: (t) => ({ name: "", range: detectRange(t) }),
   },
   {
+    tool: "purchases_overview",
+    test: /\b(purchases?|stock in|bought from|supplier bills?|bills? from)\b/i,
+    args: (t) => ({ range: detectRange(t) }),
+  },
+  {
+    tool: "finance_overview",
+    test: /\b(finance|expenses?|expenditure|income|receivables?|payables?|money in|money out|cash flow|net position|drawings?)\b/i,
+    args: (t) => ({ range: detectRange(t) }),
+  },
+  {
     // Before the customer rule: "how much do I owe the suppliers" is a question about the shop's
     // own payables, and the word "owe" used to send it to a customer's account instead — which
     // answered "which customer?" to a question that named a supplier.
@@ -198,12 +237,27 @@ const RULES = [
     args: (t) => ({ name: findName(t, ["supplier", "company", "to"]) }),
   },
   {
+    tool: "customer_directory",
+    test: /\b(who owes|all customers|customer list|customers list|outstanding customers|receivables|who has credit|which customers|list customers)\b/i,
+    args: () => ({}),
+  },
+  {
     tool: "customer_account",
     // Any name after "customer", or a bare name with an asking-word near it. Not when the
     // sentence is about a supplier, which is the other thing a shop owes.
     test: /\b(customer|khata|udhaar|credit|owes?|balance|last purchase)\b/i,
     unless: /\b(supplier|company|companies|vendor|payable)\b/i,
     args: (t) => ({ name: findName(t, ["customer", "of", "for"]) }),
+  },
+  {
+    tool: "inventory_overview",
+    test: /\b(inventory|stock value|stock overview|how much stock|all stock|stock summary)\b/i,
+    args: () => ({}),
+  },
+  {
+    tool: "product_catalogue",
+    test: /\b(product list|products list|catalogue|all products|what do i sell|item list|price list|items i stock)\b/i,
+    args: () => ({}),
   },
   {
     tool: "product_stock",
@@ -329,8 +383,8 @@ export async function askDeterministic(text, ctx) {
     return {
       model: "built-in",
       answer:
-        "I can answer from this shop's own records: today's sales, profit, what a customer owes, a sale's details, stock levels, supplier dues and what you are allowed to do. Ask me one of those, or say which screen you are stuck on.",
-      speak: "I can answer from this shop's own records. Ask me about today's sales, profit, a customer's credit, one sale's details, stock, or supplier dues.",
+        "I can answer from this shop's own records: today's sales, profit, purchases, money and expenses, customer credit, a sale's details, stock, branches, employees, suppliers and what you are allowed to do. Ask me one of those, or say which screen you are stuck on.",
+      speak: "I can answer from this shop's own records. Ask me about sales, profit, purchases, money, customer credit, stock, branches, employees, or supplier dues.",
       calls,
       sources: [],
       widgets: [],
@@ -447,7 +501,13 @@ export async function askGemini({ apiKey, model, text, ctx, photo, history = [],
       model,
       baseUrl,
       body: {
-        systemInstruction: { parts: [{ text: `${PROMPT}\nToday is ${new Date().toISOString().slice(0, 10)}.` }] },
+        systemInstruction: {
+          parts: [
+            {
+              text: `${PROMPT}\n${scopeInstruction(ctx)}\nToday is ${new Date().toISOString().slice(0, 10)}.`,
+            },
+          ],
+        },
         contents,
         tools: declarations.length ? [{ functionDeclarations: declarations }] : undefined,
         generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
@@ -668,7 +728,20 @@ async function tryModel({ apiKey, model, text, ctx, photo, history, hasAnother, 
   return null;
 }
 
+function photoUnavailable(note) {
+  return {
+    model: "built-in",
+    answer: "I cannot read a photo just now. Type the sale number written on it and I will look it up.",
+    speak: "I cannot read photos just now. Type the sale number on it and I will look it up.",
+    calls: [],
+    sources: [],
+    widgets: [],
+    notes: note ? [note] : [],
+  };
+}
+
 export async function ask({ text, ctx, photo, history, apiKey, model, fallbackModel = FALLBACK_MODEL, baseUrl }) {
+  if (photo?.data && !apiKey) return photoUnavailable();
   if (apiKey) {
     // The configured model first, then the small one. Both run the same tools under the same gate,
     // so which one answers changes the wording and nothing else.
@@ -688,6 +761,11 @@ export async function ask({ text, ctx, photo, history, apiKey, model, fallbackMo
       });
       if (out) return guardMoneyTopic({ ...out, model: name, photo: !!photo?.data }, ctx);
     }
+    // A photo question with no model must not fall through to the keyword router: its default
+    // text contains "sale", so it used to answer a receipt photo with today's sales totals.
+    if (photo?.data) {
+      return photoUnavailable("The writing helper was unavailable, so the photo could not be read.");
+    }
     const degraded = await askDeterministic(text, ctx);
     return guardMoneyTopic(
       {
@@ -697,17 +775,6 @@ export async function ask({ text, ctx, photo, history, apiKey, model, fallbackMo
       },
       ctx,
     );
-  }
-  if (photo?.data) {
-    return {
-      model: "built-in",
-      answer:
-        "I cannot read a photo just now. Type the sale number written on it and I will look it up.",
-      speak: "I cannot read photos just now. Type the sale number on it and I will look it up.",
-      calls: [],
-      sources: [],
-      widgets: [],
-    };
   }
   return askDeterministic(text, ctx);
 }

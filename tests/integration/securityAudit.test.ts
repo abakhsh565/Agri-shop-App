@@ -13,6 +13,28 @@ import { QA_IDS, setupUsers } from '../setup/fixtures';
 
 import { randomUUID } from 'crypto';
 const RUN = Date.now().toString(36);
+
+/**
+ * Cleanup that REPORTS instead of swallowing — the employeeInviteLifecycle pattern. `beforeAll`
+ * called `throwIfCleanupFailed`, which was never defined here, so the suite died on a
+ * ReferenceError before a single RLS assertion ran.
+ */
+const cleanupFailures: string[] = [];
+async function trySql(label: string, p: Promise<unknown>): Promise<void> {
+  try {
+    await p;
+  } catch (error) {
+    cleanupFailures.push(`${label}: ${(error as Error).message}`);
+  }
+}
+function throwIfCleanupFailed(context: string): void {
+  if (cleanupFailures.length) {
+    throw new Error(
+      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
+        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
+    );
+  }
+}
 const EMP_ID = randomUUID();
 const CUST_ID = randomUUID();
 const EMP_PHONE = `923${RUN.slice(-8).padStart(8, '0')}`;
@@ -36,37 +58,12 @@ describe('Security Audit — RLS & Authorization', () => {
       throwIfCleanupFailed('Security Audit — RLS & Authorization beforeAll cleanup');
 });
 
-  /**
- * Cleanup that REPORTS instead of swallowing — the customerDeletionSecurity /
- * employeeInviteLifecycle pattern. This suite shares the QA database with the
- * other integration files, so a silent catch here would leave rows in place
- * and the next suite would fail deep inside a test with an authorization error
- * that is really leftover state. Failures are collected and the caller throws
- * with their names (throwIfCleanupFailed, wired in beforeAll/afterAll).
- */
-const cleanupFailures: string[] = [];
-async function trySql(label: string, p: Promise<unknown>): Promise<void> {
-  try {
-    await p;
-  } catch (error) {
-    cleanupFailures.push(`${label}: ${(error as Error).message}`);
-  }
-}
-function throwIfCleanupFailed(context: string): void {
-  if (cleanupFailures.length) {
-    throw new Error(
-      `${context}: cleanup failed — ${cleanupFailures.join(' | ')}. ` +
-        `Leftover rows from this suite's namespace will contaminate the next run; fix the leak here rather than re-running.`,
-    );
-  }
-}
-
-afterAll(async () => {
+  afterAll(async () => {
     await trySql('credit_limit_requests', execSqlAsAdmin(`DELETE FROM credit_limit_requests WHERE customer_id = '${CUST_ID}'`));
     await trySql('customers', execSqlAsAdmin(`DELETE FROM customers WHERE id = '${CUST_ID}'`));
     await trySql('users', execSqlAsAdmin(`DELETE FROM users WHERE id = '${EMP_ID}'`));
-      throwIfCleanupFailed('Security Audit — RLS & Authorization afterAll cleanup');
-});
+    throwIfCleanupFailed('Security Audit — RLS & Authorization afterAll cleanup');
+  });
 
   // ─── RLS: All critical tables have RLS enabled ────────────────────────────
 
@@ -537,7 +534,9 @@ afterAll(async () => {
     await execSqlAsAdmin(`UPDATE users SET phone = '923009999999', role = 'admin', is_active = true WHERE id = '${QA_IDS.admin}'`);
     await execSqlAsAdmin(`UPDATE auth.users SET phone = '923009999999' WHERE id = '${QA_IDS.admin}'`);
 
-    // Ensure admin exists with correct state (other tests delete it via cleanupTestData)
+    // Ensure the admin exists with the correct state. Nothing deletes the fixture accounts any more
+    // (tests/unit/qaFixtureKeepList.test.ts holds that rule), but this suite also re-seeds them so it
+    // never depends on whoever ran last.
     await execSqlAsAdmin(`
       INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id)
       VALUES ('${QA_IDS.admin}', 'QA Admin', '923009999999', 'admin', false, true, '${QA_IDS.shop}')

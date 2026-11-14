@@ -67,10 +67,6 @@ const ALLOWED: Array<{ selector: string; why: string }> = [
     selector: ".dark textarea.bg-transparent",
     why: "a field that asks to be transparent inside a filled pill must stay transparent",
   },
-  {
-    selector: "body:has(.fixed.inset-0.z-50)",
-    why: "page scroll lock while a sheet or dialog is open",
-  },
 ];
 
 function sourceFiles(): Array<{ file: string; text: string }> {
@@ -151,26 +147,34 @@ describe("the RTL compatibility layer stays deleted", () => {
     expect(offenders, "legacy literal colour classes returned — use the token utility").toEqual([]);
   });
 
-  it("the surviving dark field rule points at the control outline, not the hairline", () => {
-    // The regression this guard was written for. An element-level dark rule sets
-    // `border-color` on every input with `!important`, so it outranks both the base-layer
-    // field rule and the Input component's class. It was pointed at `--divider` — the
-    // in-card hairline, 13/255 from the dark field tone — which kept every dark-mode field
-    // edge invisible even after the token itself had been fixed.
+  it("the field edge comes from the control outline, and dark mode cannot outrank its states", () => {
+    // The regression this guard was written for. An element-level dark rule set `border-color`
+    // on every input with `!important`, so it outranked both the base-layer field rule and the
+    // Input component's class; pointed at `--divider` (the in-card hairline), it made every
+    // dark field edge invisible. The edge now belongs to ONE contract — the `--field-border`
+    // pair, which focus paints brand green — so the guard checks the token that names it and
+    // that no dark rule re-declares a border that would freeze the default/focus/disabled
+    // states out of reach again.
     const css = fs.readFileSync(path.join(ROOT, "src/index.css"), "utf8");
-    const blocks = css.match(/\.dark[^{}]*\binput\b[^{}]*\{[^}]*\}/g) ?? [];
-    expect(blocks.length, "the dark field rule disappeared — was it replaced by a real fix?")
+
+    expect(
+      css,
+      "the resting field edge must come from --border-control, never the --divider hairline",
+    ).toMatch(/--field-border:\s*var\(--border-control\)/);
+    expect(css, "the field edge was pointed at a hairline").not.toMatch(
+      /--field-border:\s*var\(--(?:divider|hairline)\)/,
+    );
+
+    const darkFieldBlocks = css.match(/\.dark[^{}]*\binput\b[^{}]*\{[^}]*\}/g) ?? [];
+    expect(darkFieldBlocks.length, "the dark field rule disappeared — was it replaced?")
       .toBeGreaterThan(0);
 
-    const outlines = blocks
-      .flatMap((b) => [...b.matchAll(/border-color:\s*([^;]+);/g)])
-      .map((m) => m[1].replace(/!important/g, "").trim());
-
-    expect(outlines, "no field outline declared in dark — a field would be invisible")
-      .not.toEqual([]);
-    for (const value of outlines) {
-      expect(value, "a field outline must come from --border-control, never the --divider hairline")
-        .toBe("var(--border-control)");
-    }
+    const forcedEdges = darkFieldBlocks.flatMap((block) => [
+      ...block.matchAll(/border(?:-color)?:\s*[^;]+;/g),
+    ]);
+    expect(
+      forcedEdges,
+      "a forced dark edge outranks the field contract, so focus and disabled can never paint",
+    ).toEqual([]);
   });
 });

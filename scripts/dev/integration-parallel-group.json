@@ -1,0 +1,11 @@
+{
+  "files": [
+    "accountDeletion.test.ts",
+    "branchPlaceRead.test.ts",
+    "customerDeletionSecurity.test.ts",
+    "placeLocation.test.ts",
+    "impactIntelligence.test.ts",
+    "incidentFoundation.test.ts",
+    "frontendImpact.test.ts"
+  ]
+}

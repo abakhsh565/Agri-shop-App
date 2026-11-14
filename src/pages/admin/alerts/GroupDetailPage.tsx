@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
+import Photo from "@/components/ui/Photo";
 import NavHeader from "@/components/ui/NavHeader";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
+import { useAppBack } from "@/hooks/useAppBack";
 import { formatCurrency } from "@/lib/formatters";
 import { loadLocalGroups, deleteLocalGroup, updateLocalGroup } from "@/lib/localGroupRegistry";
 import { Users, Trash2, ChevronLeft, Bell, MoreVertical } from "lucide-react";
@@ -22,6 +24,7 @@ const TRIGGER_KEYS: Record<string, string> = {
 export default function GroupDetailPage() {
   const { groupId } = useParams<{ groupId: string }>();
   const navigate = useNavigate();
+  const back = useAppBack();
   const t = useT();
   const { language } = useThemeStore();
   const isUrdu = language === "ur";
@@ -44,7 +47,7 @@ export default function GroupDetailPage() {
     if (!groupId) return;
     setDeleting(true);
     await deleteLocalGroup(groupId);
-    navigate(-1);
+    back();
   }
 
   if (loading) {
@@ -156,7 +159,11 @@ export default function GroupDetailPage() {
                 className="w-full px-4 py-3.5 flex items-center gap-3 text-start transition-opacity active:opacity-70"
                 style={{ borderBottom: "1px solid var(--divider)" }}
               >
-                {customer.imageUrl ? (<img src={customer.imageUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />) : (<div className="w-10 h-10 rounded-full flex items-center justify-center text-12 font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#3f6212" }}>{customer.name ? customer.name.charAt(0) : "?".toUpperCase()}</div>)}
+                <Photo
+                  src={customer.imageUrl}
+                  className="w-10 h-10 rounded-full object-cover shrink-0"
+                  fallback={<div className="w-10 h-10 rounded-full flex items-center justify-center text-12 font-bold shrink-0" style={{ background: customer.outstandingBalance > 0 ? "#fee2e2" : "#d9f99d", color: customer.outstandingBalance > 0 ? "#dc2626" : "#3f6212" }}>{customer.name ? customer.name.charAt(0) : "?".toUpperCase()}</div>}
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-14 font-semibold truncate" style={{ color: "var(--text-primary)" }}>{customer.name}</p>
                   <p className="text-12 mt-0.5" style={{ color: "var(--text-secondary)" }}>

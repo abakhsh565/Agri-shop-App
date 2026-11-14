@@ -22,6 +22,10 @@
  *       permissive by being edited and reviewed;
  *     • the fixtures themselves must EXIST (the keep-list identities with an active membership, the
  *       FK-referenced supplier), because "the baseline is intact" is a claim about them;
+ *     • the CRITICAL VALUES of the shared rows match the declaration — customer money and credit, the
+ *       supplier's payable, product and variant stock, variant prices. A count cannot see a paid
+ *       balance or a sold-out variant: the row is present, correctly identified, and wrong. These are
+ *       exactly the cells the write lanes mutate, so a red run's leftover fails here by column name;
  *     • each fixture must be in the WORK CONTEXT the declaration names — the branch an employee may
  *       work in (`fixtures.workContext`; 0188 makes an empty scope mean NO branch) and the shop the
  *       owner fixture is currently working in (`user_active_shops`, 0149) — because a fixture that is
@@ -48,6 +52,17 @@ import { BUSINESS_TABLES, QA_PROJECT_REF, qaDatabaseUrl } from './lib.mjs';
 
 export const DECLARATION_FILE = 'scripts/dev/qa-baseline.json';
 
+/**
+ * Table and column names are interpolated into the value SELECTs, so they are validated first. They
+ * come from the reviewed declaration rather than a request, but "trusted input" is how a read-only tool
+ * grows a write path it did not intend.
+ */
+function assertPlainName(name, kind) {
+  if (typeof name !== 'string' || !/^[a-z][a-z0-9_]{0,62}$/.test(name)) {
+    throw new Error(`[QA BASELINE] refusing to use "${String(name)}" as a ${kind} name`);
+  }
+}
+
 /** Read the reviewed declaration. A missing file is a refusal, never an empty default. */
 export function readDeclaration(file = DECLARATION_FILE) {
   return JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'));
@@ -56,7 +71,8 @@ export function readDeclaration(file = DECLARATION_FILE) {
 /**
  * The whole decision, as a pure function: no I/O, no clock, no database. `observed` is what the
  * database currently holds, shaped as:
- *   { tables: { name: number }, fixtures: { users: [{phone, membershipStatus}], companies: [{id}],
+ *   { tables: { name: number }, values: { 'table:id': {column: value} | null },
+ *     fixtures: { users: [{phone, membershipStatus}], companies: [{id}],
  *     workContext: { owner: {shopId, branchId}|null, employees: [{phone, membership}] } },
  *     isolatedTenant: { tables: { name: number }, identities: [{phone, membership}] } }
  */
@@ -118,6 +134,50 @@ export function classifyBaseline(observed, declaration) {
   for (const company of declaration.fixtures?.companies ?? []) {
     if (!(observed.fixtures?.companies ?? []).some((c) => c.id === company.id)) {
       failures.push(`fixture company ${company.id} is MISSING — ${company.why ?? ''}`.trim());
+    }
+  }
+
+  // CRITICAL VALUES (EC4) — money, credit and stock, not just row presence. Compared numerically,
+  // because pg returns `numeric` columns as strings ('30000.00') and a string compare would pass or
+  // fail on formatting rather than on the value. A row the checker could not read FAILS: a check that
+  // passes by absence is the defect this whole file exists to avoid.
+  for (const entry of declaration.values ?? []) {
+    if (!entry.table || !entry.id || !entry.expect) {
+      failures.push(
+        `the declaration has a \`values\` entry without table/id/expect: ${JSON.stringify(entry).slice(0, 120)}`,
+      );
+      continue;
+    }
+    const key = `${entry.table}:${entry.id}`;
+    const row = (observed.values ?? {})[key] ?? null;
+    if (!row) {
+      failures.push(
+        `${entry.table} ${entry.id} is declared for its values but was NOT observed — the value check would otherwise pass by absence${entry.why ? ` (${entry.why})` : ''}`,
+      );
+      continue;
+    }
+    let moved = 0;
+    for (const [column, expected] of Object.entries(entry.expect)) {
+      const found = row[column];
+      if (found === null || found === undefined) {
+        moved += 1;
+        failures.push(`${entry.table}.${column} for ${entry.id} is NULL, declared ${expected} — ${entry.why ?? 'reviewed value'}`);
+        continue;
+      }
+      const same =
+        typeof expected === 'number' && Number.isFinite(Number(found))
+          ? Number(found) === expected
+          : String(found) === String(expected);
+      if (same) continue;
+      moved += 1;
+      failures.push(
+        `${entry.table}.${column} for ${entry.id}: declared ${expected}, found ${found} — a lane moved a shared value and did not restore it (${entry.why ?? 'reviewed value'})`,
+      );
+    }
+    if (!moved) {
+      notes.push(
+        `${entry.table} ${entry.id}: ${Object.keys(entry.expect).length} critical value(s) — as declared (${entry.why ? entry.why.split('.')[0] : 'reviewed'})`,
+      );
     }
   }
 
@@ -236,6 +296,27 @@ export async function observe(client, declaration) {
     ? (await client.query('select id from companies where id = any($1)', [companyIds])).rows
     : [];
 
+  // CRITICAL VALUES: one read per declared row. A table or column that does not exist is recorded as
+  // `null` for that row rather than allowed to throw, so a schema change reads as baseline drift with a
+  // name instead of as "the database is unreachable" — two very different diagnoses.
+  const values = {};
+  for (const entry of declaration.values ?? []) {
+    if (!entry.table || !entry.id || !entry.expect) continue;
+    assertPlainName(entry.table, 'table');
+    const columns = Object.keys(entry.expect);
+    if (!columns.length) continue;
+    for (const column of columns) assertPlainName(column, 'column');
+    const key = `${entry.table}:${entry.id}`;
+    const tableExists = (await client.query(
+      `select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r' and c.relname = $1`, [entry.table],
+    )).rows.length;
+    if (!tableExists) { values[key] = null; continue; }
+    values[key] = (await client.query(
+      `select ${columns.join(', ')} from ${entry.table} where id = $1`, [entry.id],
+    )).rows[0] ?? null;
+  }
+
   const tenantId = declaration.isolatedTenant?.id;
   let isolatedTenant = null;
   if (tenantId) {
@@ -298,6 +379,7 @@ export async function observe(client, declaration) {
   return {
     tables,
     absentTables,
+    values,
     fixtures: {
       users: users.map((u) => ({ phone: u.phone, membershipStatus: u.membership_status ?? null })),
       companies: companies.map((c) => ({ id: c.id })),
@@ -331,7 +413,7 @@ export async function checkBaseline(declaration = readDeclaration()) {
 }
 
 /** A declaration draft from the current database — printed for review, never written automatically. */
-function propose(observed) {
+function propose(observed, declaration) {
   const draft = {};
   for (const [name, count] of Object.entries(observed.tables)) {
     draft[name] = {
@@ -340,7 +422,15 @@ function propose(observed) {
       why: '<review: say WHICH rows these are — fixture, tagged suite fixture, hand-entered, or history>',
     };
   }
-  return draft;
+  // The critical values are drafted for the rows ALREADY declared: a draft cannot invent a row to
+  // check, and printing today's values is the review step ("is this the baseline, or a leftover?").
+  const values = (declaration.values ?? []).map((entry) => ({
+    table: entry.table,
+    id: entry.id,
+    why: '<review: keep the reason, or say what legitimately changed>',
+    expect: observed.values?.[`${entry.table}:${entry.id}`] ?? {},
+  }));
+  return values.length ? { ...draft, values } : draft;
 }
 
 // ── CLI ───────────────────────────────────────────────────────────────────────────────
@@ -376,7 +466,7 @@ async function main() {
     const result = classifyBaseline(observed, declaration);
 
     if (proposing) {
-      console.log(JSON.stringify(propose(observed), null, 2));
+      console.log(JSON.stringify(propose(observed, declaration), null, 2));
       await client.query('ROLLBACK');
       return;
     }

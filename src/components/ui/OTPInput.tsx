@@ -70,11 +70,15 @@ export default function OTPInput({ value, onChange, length = 6, disabled, error 
              in-card hairline — so a box had no discernible edge in either theme. They now
              name the tokens directly: `--surface` for the fill, `--border-control` for the
              outline that actually reads as a field edge in light AND dark. */
-          className="ds-otp-box text-center font-semibold rounded-[var(--radius-tile)] outline-none focus:ring-2 disabled:opacity-40"
+          /* No inline border: the field contract supplies the resting edge and the focus
+             colour. Only the error state names a colour, and it does so as a class so a
+             focused box can still turn brand green. */
+          className={`ds-otp-box text-center font-semibold rounded-[var(--radius-tile)] outline-none focus:ring-2 disabled:opacity-40 ${
+            error ? "border-[#ef4444]" : ""
+          }`}
           style={{
             background: "var(--surface)",
             color: "var(--text-primary)",
-            border: `1px solid ${error ? "var(--error)" : "var(--border-control)"}`,
             // The focus ring follows the theme's own ring token instead of a fixed black,
             // which is invisible on a dark field.
             boxShadow: "none",

@@ -119,26 +119,32 @@ async function cleanup() {
   await trySql('fresh-users', sql(`DELETE FROM users WHERE shop_id IN (SELECT id FROM shops WHERE name LIKE 'QA Fresh Shop%')`));
   // A shop the registration flow created and a failed run left orphaned. `purge_shop_data`
   // erases the shop's records AND the shop row, which is the same erasure the product does.
-  await trySql('select', sql(`SELECT public.purge_shop_data(id) FROM shops WHERE name LIKE 'QA Fresh Shop%'`));
+  await sql(`SELECT public.purge_shop_data(id) FROM shops WHERE name LIKE 'QA Fresh Shop%'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   // Rows a failed run can leave behind: the customer this lane puts inside the fresh
   // account's shop, matched by name and by the number (the phone carries its own unique
   // index, so a survivor would make the next run fail for the wrong reason).
-  await trySql('customers', sql(`DELETE FROM customers WHERE name LIKE 'QA Delete %' OR name = 'QA Fresh Customer'`));
-  await trySql('customers-2', sql(`DELETE FROM customers WHERE phone LIKE '%9630003'`));
-  await trySql('products', sql(`DELETE FROM products WHERE name LIKE 'QA Fresh %'`));
-  await trySql('memberships', sql(`DELETE FROM memberships WHERE tenant_id = '${MAIN_SHOP}'`));
-  await trySql('user_active_shops', sql(`DELETE FROM user_active_shops WHERE shop_id = '${MAIN_SHOP}'`));
+  await sql(`DELETE FROM customers WHERE name LIKE 'QA Delete %' OR name = 'QA Fresh Customer'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM customers WHERE phone LIKE '%9630003'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM products WHERE name LIKE 'QA Fresh %'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM memberships WHERE tenant_id = '${MAIN_SHOP}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(`DELETE FROM user_active_shops WHERE shop_id = '${MAIN_SHOP}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   // People BEFORE shops: `users.shop_id` references `shops(id)` with no cascade, so a shop cannot
   // be dropped while a profile still names it — the very FK the product's own deletion has to
   // sequence around, and doing it in the wrong order here left a QA shop behind after every run.
   for (const phone of TOUCHED_PHONES) {
     const digits = phone.replace(/\D/g, '');
-    await trySql('audit_events', sql(`DELETE FROM audit_events WHERE user_id IN (SELECT id FROM users WHERE phone LIKE '%${digits.slice(-10)}')`));
-    await trySql('users', sql(`DELETE FROM users WHERE phone LIKE '%${digits.slice(-10)}'`));
-    await trySql('shop_requests', sql(`DELETE FROM shop_requests WHERE right(regexp_replace(owner_phone, '\\D', '', 'g'), 10) = '${digits.slice(-10)}'`));
+    await sql(
+      `DELETE FROM audit_events WHERE user_id IN (SELECT id FROM users WHERE phone LIKE '%${digits.slice(-10)}')`
+    ).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(`DELETE FROM users WHERE phone LIKE '%${digits.slice(-10)}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+    await sql(
+      `DELETE FROM shop_requests WHERE right(regexp_replace(owner_phone, '\\D', '', 'g'), 10) = '${digits.slice(-10)}'`
+    ).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
   }
-  await trySql('shops', sql(`DELETE FROM shops WHERE id = '${MAIN_SHOP}'`));
-  await trySql('auth.users', sql(`DELETE FROM auth.users WHERE email LIKE '%${FRESH_PHONE_E164}%' OR email LIKE '%${ACTOR_PHONE}%' OR email LIKE '%${SIDE_EMPLOYEE_PHONE}%'`));
+  await sql(`DELETE FROM shops WHERE id = '${MAIN_SHOP}'`).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
+  await sql(
+    `DELETE FROM auth.users WHERE email LIKE '%${FRESH_PHONE_E164}%' OR email LIKE '%${ACTOR_PHONE}%' OR email LIKE '%${SIDE_EMPLOYEE_PHONE}%'`
+  ).catch((cleanupError) => { console.warn("[cleanup] suppressed failure", cleanupError); });
 }
 
 beforeAll(async () => {

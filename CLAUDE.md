@@ -1,4 +1,10 @@
 # CLAUDE.md
+
+> **Project rule — read `AGENTS.md` §9 first.** Work only on `dev`, one small batch per commit,
+> run `npx tsc --noEmit` and `npx vitest run tests/unit` (0 failed) before every commit, record a
+> `docs/PRODUCTION_MIGRATION_PLAN.md` §5 disposition for every new migration in the same commit,
+> and never push directly to `staging` or `main` — promotion is a gated pull request along
+> `dev -> staging -> main`. The guidelines below apply on top of that chain, not instead of it.
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 ## 1. Think Before Coding

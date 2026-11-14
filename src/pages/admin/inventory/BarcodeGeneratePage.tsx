@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useProductsStore } from "@/stores/productsStore";
@@ -8,6 +7,7 @@ import { barcodeToSvg, generateProductBarcode } from "@/lib/barcode";
 import { formatCurrency } from "@/lib/formatters";
 import { Download, Share2, Check, Package, Copy } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { useAppBack } from "@/hooks/useAppBack";
 
 const CATEGORY_COLOR: Record<string, { bg: string; fg: string }> = {
   spray: { bg: "rgba(59,130,246,0.1)", fg: "#3b82f6" },
@@ -18,7 +18,7 @@ const CATEGORY_COLOR: Record<string, { bg: string; fg: string }> = {
 
 export default function BarcodeGeneratePage() {
   const t = useT();
-  const navigate = useNavigate();
+  const back = useAppBack();
   const products = useProductsStore((s) => s.products);
   const { addToast } = useUIStore();
   const printRef = useRef<HTMLDivElement>(null);
@@ -176,7 +176,7 @@ export default function BarcodeGeneratePage() {
             <div className="flex flex-col items-center py-16 gap-2">
               <Package size={40} style={{ color: "var(--text-secondary)" }} />
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t("admin.allHaveBarcodes")}</p>
-              <button onClick={() => navigate(-1)} className="text-sm font-bold" style={{ color: "var(--brand)" }}>{t("common.goBack")}</button>
+              <button onClick={back} className="text-sm font-bold" style={{ color: "var(--brand)" }}>{t("common.goBack")}</button>
             </div>
           )}
         </div>

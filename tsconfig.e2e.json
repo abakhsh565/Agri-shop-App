@@ -1,0 +1,27 @@
+// WHY THIS FILE EXISTS
+// tsconfig.json includes only `src` and `vite.config.ts`, so `npx tsc --noEmit` never looked at the
+// Playwright tree. That blind spot is not theoretical: tests/e2e/helpers.ts called
+// `OWNER_LOGIN_PHONE` without ever declaring it, `tsc` reported nothing, and every lane that signed
+// in as the owner died at runtime on a ReferenceError before touching the app — which is one of the
+// reasons the E2E lane burned its whole 60-minute budget.
+//
+// This project is deliberately NARROW: the whole `tests/` tree carries pre-existing type errors in
+// unit fixtures that are unrelated to what runs in CI's browser lane. The files that actually run
+// there are these, so these are the files that must type-check.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": [
+    "tests/e2e/**/*.ts",
+    "tests/setup/**/*.ts",
+    "playwright.config.ts",
+    "playwright.coowner.config.ts",
+    "playwright.media.config.ts"
+  ]
+}

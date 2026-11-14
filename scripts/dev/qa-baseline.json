@@ -167,6 +167,78 @@
     }
   },
 
+  "_valuesReadme": [
+    "EC4 — CRITICAL VALUES, not just counts and ids.",
+    "",
+    "A count cannot see a lane that PAID a shared customer and left the balance moved, or sold stock",
+    "and left the variant short: the row is still there, still the right id, and wrong. These are the",
+    "exact cells the write lanes mutate — `retryAfterTimeout` and `doubleTapSafety` move customer money,",
+    "`actionCenter` moves customer C's credit limit, `voidSaleSafety` moves variant A's stock — so a red",
+    "run's leftover now fails the gate by COLUMN name instead of waiting to become the next lane's",
+    "fixture.",
+    "",
+    "Each entry is a contract: every column under `expect` must equal the reviewed value, in both",
+    "directions, and a row that cannot be read fails rather than being skipped. The expected values are",
+    "the ones `tests/setup/qa-fixtures.ts` declares, and `tests/unit/qaBaselinePolicy.test.ts` fails if",
+    "the two declarations ever disagree — so this is a check on the database, not a second opinion about",
+    "the fixture.",
+    "",
+    "Maintenance: if a lane legitimately changes one of these values, either restore it (it is shared, so",
+    "it is not the lane's to leave changed) or re-review this entry WITH `qa-fixtures.ts` in the same",
+    "change. The two are one declaration in two places; the guard is what keeps them that way."
+  ],
+
+  "values": [
+    {
+      "table": "customers",
+      "id": "20000000-0000-0000-0000-000000000001",
+      "why": "QA Customer A — the customer the payment lanes pay and the credit lane limits; these four columns are what an unbalanced test leaves behind",
+      "expect": { "credit_limit": 50000, "outstanding_balance": 30000, "total_purchases": 80000, "total_paid": 50000 }
+    },
+    {
+      "table": "customers",
+      "id": "20000000-0000-0000-0000-000000000002",
+      "why": "QA Customer B — deliberately OVER its limit (26000 > 25000): the dashboard Quick Alerts rule is asserted against this row, so a changed balance silently disarms that lane",
+      "expect": { "credit_limit": 25000, "outstanding_balance": 26000, "total_purchases": 40000, "total_paid": 14000 }
+    },
+    {
+      "table": "customers",
+      "id": "20000000-0000-0000-0000-000000000003",
+      "why": "QA Customer C — `actionCenter` raises and approves a credit-limit request against this row; the approved limit is a shared cell even though the request rows are per-run",
+      "expect": { "credit_limit": 10000, "outstanding_balance": 0, "total_purchases": 15000, "total_paid": 15000 }
+    },
+    {
+      "table": "companies",
+      "id": "50000000-0000-0000-0000-000000000001",
+      "why": "QA Supplier A — supplier payments move `outstanding_payable`, and `doubleTapSafety` pays it twice to prove idempotency",
+      "expect": { "outstanding_payable": 15000, "total_purchases": 50000 }
+    },
+    {
+      "table": "products",
+      "id": "30000000-0000-0000-0000-000000000001",
+      "why": "QA Product A — the catalogue stock figure the dashboard counts; a lane that sells and does not restore leaves this and the variant below disagreeing",
+      "expect": { "stock_qty": 100 }
+    },
+    {
+      "table": "products",
+      "id": "30000000-0000-0000-0000-000000000002",
+      "why": "QA Product B — out of stock on purpose: the dashboard's \"out of stock\" alert exists because of this zero",
+      "expect": { "stock_qty": 0 }
+    },
+    {
+      "table": "product_variants",
+      "id": "40000000-0000-0000-0000-000000000001",
+      "why": "QA Variant A — `voidSaleSafety` decrements exactly this stock and puts it back by voiding; when its assertion failed above the void the row stayed at 98 for every lane after it. Price is the money half of the same row",
+      "expect": { "stock_qty": 100, "selling_price": 500, "cost_price": 300 }
+    },
+    {
+      "table": "product_variants",
+      "id": "40000000-0000-0000-0000-000000000002",
+      "why": "QA Variant B — the zero-stock variant the out-of-stock alert reads",
+      "expect": { "stock_qty": 0, "selling_price": 2000, "cost_price": 1500 }
+    }
+  ],
+
   "isolatedTenant": {
     "id": "1e5f7e4b-7ed0-4787-8148-8f289fc1c107",
     "why": "The dedicated tenant the two write lanes need (`setupCompletion`, `dependencyContinuity`): app-created through the real registration flow on 2026-10-04, with a default branch, its four built-in roles and ZERO business rows. The gate asserts it is still empty, because that emptiness is the lanes' premise and a hand run could fill it",

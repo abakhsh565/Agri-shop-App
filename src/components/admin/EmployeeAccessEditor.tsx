@@ -38,9 +38,11 @@ export interface EmployeeAccessEditorProps {
    * make impossible — forty unticked boxes are a claim about a person's access.
    */
   state: "loading" | "ready" | "error";
+  /** Employee access can only reduce the inherited role. This is the default and the rule. */
+  restrictOnly?: boolean;
 }
 
-export default function EmployeeAccessEditor({ roleDefaults, value, onChange, state }: EmployeeAccessEditorProps) {
+export default function EmployeeAccessEditor({ roleDefaults, value, onChange, state, restrictOnly = true }: EmployeeAccessEditorProps) {
   const t = useT();
 
   // Waiting and failed are drawn here, once, for every screen that edits an employee's access.
@@ -71,7 +73,7 @@ export default function EmployeeAccessEditor({ roleDefaults, value, onChange, st
        * role is the exception, and an exception is visible on its own.
        */}
       <p className="text-12 leading-snug mb-2" style={{ color: "var(--text-secondary)" }} data-testid="emp-access-context">
-        {t("access.subheading")}
+        {t(restrictOnly ? "access.restrictOnlyHint" : "access.subheading")}
       </p>
 
       <PermissionChecklist
@@ -80,6 +82,7 @@ export default function EmployeeAccessEditor({ roleDefaults, value, onChange, st
         roleDefaults={roleDefaults}
         maxHeight="400px"
         testIdPrefix="emp-perm"
+        restrictOnly={restrictOnly}
       />
     </div>
   );

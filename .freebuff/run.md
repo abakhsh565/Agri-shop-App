@@ -1,5 +1,27 @@
 # Run Instructions
 
+## Preview policy — ALWAYS OPEN DEVELOPMENT (owner's rule, 2026-10-25)
+
+Whenever the app is opened for the owner to look at — "open the app", "open the preview",
+"show me the app" — open the **DEVELOPMENT** environment, never staging and never production,
+unless the owner explicitly asks for staging or production in that request. Development is the
+Vite server on `.env.local` talking to the local Supabase stack (`http://127.0.0.1:54321`), and it
+announces itself as `[EnvGuard] serving DEVELOPMENT → localdev`.
+
+```bash
+npm run local:db -- up          # the local stack must answer first
+node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5174
+```
+
+Register that server as the thread's preview. The staging preview (`5173`, `--mode qa`) is for
+Playwright lanes and QA checks only — it is not the preview shown to the owner. Production is a
+hosted project and is never opened as a preview.
+
+**The rule is wider than the preview (owner, 2026-10-26).** No migration, deployment, data change
+or verification pass is run against staging or production unless the owner names that environment
+in the request. Development is the only active workspace; promotion is a human decision. See
+`AGENTS.md` → *Environment workflow*.
+
 ## How to reproduce the dev server
 
 1. `cd` to the project root
@@ -9,7 +31,7 @@
    - `VITE_SUPABASE_ANON_KEY` — public anon key
    - `VITE_SUPABASE_PROJECT_ID` — project ID (used to construct URL if VITE_SUPABASE_URL not set)
 
-## How to run the server
+## How to run the QA/staging server (test lanes only — not the preview)
 
 ```bash
 PORT=5173 npx vite --mode qa --host 0.0.0.0 --port 5173
@@ -20,17 +42,20 @@ On Windows PowerShell:
 $env:PORT='5173'; npx vite --mode qa --host 0.0.0.0 --port 5173
 ```
 
-**Do NOT use `npm run dev` for the preview.** The `dev` script is `vite --host 0.0.0.0` —
-it omits `--mode qa` (confirmed from package.json), so it starts without `.env.qa` and is
-not the server the E2E suite reuses. Always pass `--mode qa` explicitly, as above.
+**This QA server is the exception, not the preview.** The `dev` script is `vite --host 0.0.0.0`
+— it omits `--mode qa`, so it reads `.env.local` and is the DEVELOPMENT preview described at
+the top of this file. The server above is only for the E2E suite and QA checks; the owner is
+shown the development server, never this one.
 
-`--mode qa` is required, not optional. It is what makes Vite load `.env.qa` and
+`--mode qa` is required for THIS server, not optional. It is what makes Vite load `.env.qa` and
 therefore the QA Supabase project (`bpybjrjenwccowvtrevu`). Without it the server falls
 back to `.env.local` or the scaffold default in `utils/supabase/info.tsx`, which is how a
 test can silently end up reading production data. `src/lib/envGuard.ts` hard-fails a dev
 server that points at production, and `assertQaEnvironment()` asserts QA server-side; the
-Playwright config reuses an already-running server on 5173, so a server on the wrong mode
-would be reused silently. Playwright's own `webServer` command already passes `--mode qa`.
+Playwright config reuses an already-running server on 5173, and that reuse is now verified:
+`tests/e2e/global-setup.ts` reads the running server's own identity before the run and fails
+it closed unless the server reports `MODE=qa` and the QA project (`bpybjrjenwccowvtrevu`) —
+another application holding the port is rejected the same way, never driven silently. Playwright's own `webServer` command already passes `--mode qa`.
 
 Default port from `vite.config.ts` is 8443 with `strictPort: true`. Using `--port 5173` overrides that.
 

@@ -33,7 +33,7 @@ name, domain, status, screens, components, state/stores, libs, DB tables, RPC/AP
 permissions, business rules, direct dependencies, dependent features, tests, evidence
 (status + what it proves + where the log lives), last verified date, known risks.
 
-27 registered capabilities (`status` is `LIVE` unless noted):
+29 registered capabilities (`status` is `LIVE` unless noted):
 
 | Feature | Domain | Key screens | Depends on | Evidence |
 |---|---|---|---|---|
@@ -49,6 +49,8 @@ permissions, business rules, direct dependencies, dependent features, tests, evi
 | Low-stock thresholds and alert settings | Inventory | `alerts/inventory`, `settings` | products, inventory, notifications, settings | FIXED + REVERIFIED (0182) |
 | Purchases and supplier ordering | Purchasing | `purchases*` | companies, products | VALID |
 | Supplier payments and daily cash | Payments | `payments*` | purchases, companies | VALID |
+| Owner payment reminders (customer, supplier, general) | Finance | `settings/hub/finance/reminders`, `payments/cash-position` | customers, supplier payments | VALID (0257; local DB probe) |
+| Recorded money, receipts, corrections and the money statement | Finance | `settings/hub/finance/*` | sales, purchases, customers, branch scope | VALID (0261/0262; local DB + browser probe) |
 | Customers, credit limits and payments | Credit | `customers*` | branch scope | VALID |
 | Sales, cart and split payment | Sales | `sale*`, `sales*` | customers, products, employees, branch scope | VALID |
 | Void a sale | Sales | `sales/:saleId` | sales, audit | VALID |
@@ -57,13 +59,14 @@ permissions, business rules, direct dependencies, dependent features, tests, evi
 | Notifications | Messaging | `notifications` | — | VALID |
 | Dashboard and action center | Overview | `dashboard` | sales, customers, inventory, stock alerts, reminders, notifications, language | VALID |
 | Reports and exports | Reports | `reports` | sales, purchases, supplier payments, customers, inventory | VALID |
-| Shop settings and business configuration | Settings | `settings`, `more` | branch scope, language | VALID |
+| Shop settings and business configuration, incl. the per-branch overview | Settings | `settings`, `more` | branch scope, language | VALID (overview: 0236/0237, lane `dashboardScope`) |
 | Activity log and audit events | Audit | `activity` | — | FIXED + REVERIFIED (0181) |
 | Offline queue and sync | Reliability | — | login, sales | VALID (status PARTIAL: offline PIN open, PIPELINE B1) |
 | Bilingual language system (EN/LTR + UR/RTL) | Language | all | — | VALID |
 | In-app guide and education content | Onboarding | `guide` | language | VALID |
 | Super-admin console | Platform | `/super-admin` | registration, RBAC | VALID |
 | Assistant, recommendations and signals | Assistant | `assistant` | dashboard, sales, customers | VALID |
+| Production error reporting and release timeline | Reliability | — (no screen) | — | VALID in a real browser; **BLOCKED** in production until a DSN exists (`docs/MONITORING.md` §2) |
 
 Add a record when a **meaningful capability** is added or materially changed; do not add records
 for individual elements.

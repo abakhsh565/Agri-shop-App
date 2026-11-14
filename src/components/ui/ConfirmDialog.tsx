@@ -27,6 +27,14 @@ interface ConfirmDialogProps {
   tertiaryLabel?: string;
   onTertiary?: () => void;
   /**
+   * A quiet destructive answer beside the confirm one, when the alert has exactly two outcomes
+   * and one of them throws work away — "Save as draft" / "Discard". It takes the cancel slot
+   * rather than a third line, so the reader chooses between the only two things that can happen.
+   * Dismissing the alert (backdrop, Escape) still calls `onCancel`, which is the answer that keeps
+   * the screen as it is; a stray tap must not be able to throw work away.
+   */
+  secondaryDestructive?: { label: string; onClick: () => void };
+  /**
    * When set, the action stays disabled until the user types this text exactly
    * (trimmed). Used where a single tap is too easy to make by accident — deleting
    * the account, where the name is the one thing the owner certainly knows.
@@ -52,7 +60,7 @@ interface ConfirmDialogProps {
 export default function ConfirmDialog({
   open, title, message, confirmLabel, cancelLabel,
   destructive = false, loading = false, confirmDisabled = false, children,
-  tertiaryLabel, onTertiary,
+  tertiaryLabel, onTertiary, secondaryDestructive,
   requireTypedText, typedPrompt,
   onConfirm, onCancel,
 }: ConfirmDialogProps) {
@@ -121,23 +129,43 @@ export default function ConfirmDialog({
 
         {children && <div className="mb-5">{children}</div>}
         <div className="flex gap-2.5">
-          <button
-            type="button"
-            data-testid="confirm-cancel"
-            onClick={onCancel}
-            disabled={loading}
-            className="flex-1 font-semibold disabled:opacity-50"
-            style={{
-              height: 48,
-              borderRadius: "var(--radius-field)",
-              background: "var(--tone-card)",
-              color: "var(--text-primary)",
-              fontSize: "var(--text-meta)",
-              fontWeight: "var(--weight-strong)",
-            }}
-          >
-            {cancelText}
-          </button>
+          {secondaryDestructive ? (
+            <button
+              type="button"
+              data-testid="confirm-secondary-destructive"
+              onClick={secondaryDestructive.onClick}
+              disabled={loading}
+              className="flex-1 font-semibold disabled:opacity-50"
+              style={{
+                height: 48,
+                borderRadius: "var(--radius-field)",
+                background: "var(--tone-card)",
+                color: "var(--error)",
+                fontSize: "var(--text-meta)",
+                fontWeight: "var(--weight-strong)",
+              }}
+            >
+              {secondaryDestructive.label}
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-testid="confirm-cancel"
+              onClick={onCancel}
+              disabled={loading}
+              className="flex-1 font-semibold disabled:opacity-50"
+              style={{
+                height: 48,
+                borderRadius: "var(--radius-field)",
+                background: "var(--tone-card)",
+                color: "var(--text-primary)",
+                fontSize: "var(--text-meta)",
+                fontWeight: "var(--weight-strong)",
+              }}
+            >
+              {cancelText}
+            </button>
+          )}
           <button
             type="button"
             data-testid="confirm-submit"

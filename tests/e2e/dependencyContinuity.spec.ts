@@ -28,7 +28,8 @@
  *
  * QA database only. Everything it creates is removed in afterAll.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 import {
   WRITE_TENANT,
   claimWriteTenantLeftovers,

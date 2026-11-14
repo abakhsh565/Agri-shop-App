@@ -487,8 +487,7 @@ export default function DeleteTargetSheet({
               data-testid="delete-feedback"
               className="w-full mt-2 rounded-[var(--radius-field)] p-3 text-13 outline-none resize-none"
               style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--border-control)",
+                background: "var(--field-bg)",
                 color: "var(--text-primary)",
               }}
             />

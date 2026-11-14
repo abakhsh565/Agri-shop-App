@@ -9,7 +9,7 @@ Production has not been touched. Every claim below names the evidence that suppo
 <!-- ENGINEERING-OS-CHECKPOINT:BEGIN -->
 ```json
 {
-  "updatedAt": "2026-10-13T16:06:30.810Z",
+  "updatedAt": "2026-10-24T14:46:24.771Z",
   "branch": "staging-snapshot",
   "head": "2cc37359028879b6e8b789f1cef49e79d08a04eb",
   "nextCommand": "owner: (1) add PROD_DB_PASS and run backup-database.yml for production — the daily backup has failed every run since 2026-10-03 and the newest artifact is 2026-10-01; (2) add the four ANDROID_* secrets so an APK can be signed (the job dies at 'Decode release keystore'); (3) rotate the QA DB password + old service-role key found in git history; (4) decide production's demo rows (docs/PRODUCTION_DATA_POLICY.md §6) after a fresh backup. Repo-side: docs/ENVIRONMENT_PIPELINE.md lists what closes each gap.",
@@ -22,178 +22,270 @@ Production has not been touched. Every claim below names the evidence that suppo
     "projectId": null
   },
   "verified": {
-    "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398",
-    "at": "2026-09-23T20:57:24.182Z",
-    "treeHash": "180304489445a40e32c5"
+    "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5",
+    "at": "2026-10-24T14:46:24.767Z",
+    "treeHash": "c9ff5299ed2dd3ce2a97"
   },
   "lanes": {
     "accessUx": {
       "status": "pass",
-      "hash": "a8a59367f3f15d956ec9",
-      "at": "2026-09-27T19:26:53.989Z",
-      "head": "91ae70e6c6fa5021b7643a6d71daf98fff49114d"
+      "hash": "4ac8ac22d96e8c2b8453",
+      "at": "2026-10-24T14:07:06.476Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "actionCenter": {
       "status": "pass",
-      "hash": "69351adb68674b31fc32",
-      "at": "2026-09-23T23:58:01.162Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "99d1d6854bb9c0064990",
+      "at": "2026-10-24T14:10:35.795Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "crossScreenSync": {
       "status": "pass",
-      "hash": "6cff70491e57ea574c68",
-      "at": "2026-09-24T00:10:58.708Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "657f1c9def4a4c7649d3",
+      "at": "2026-10-24T14:17:58.924Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "dashboardScope": {
       "status": "pass",
-      "hash": "8953eb20153fcf3431b5",
-      "at": "2026-09-24T00:12:21.829Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "ea5a6ef6494ddb9d96a2",
+      "at": "2026-10-24T14:18:57.924Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "imageSync": {
       "status": "pass",
-      "hash": "3a0543b2d56bbe751574",
-      "at": "2026-09-24T09:46:33.555Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "5e55a86f79d84c88f9dc",
+      "at": "2026-10-24T14:28:06.540Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "rtlLtr": {
       "status": "pass",
-      "hash": "7e737cfed8d6085ace17",
-      "at": "2026-09-24T09:56:13.841Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "1e8181b8228267ac6b26",
+      "at": "2026-10-24T14:39:22.451Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "splitPayment": {
       "status": "pass",
-      "hash": "367b2ec9e608320a073f",
-      "at": "2026-09-24T09:59:34.626Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "7fc6dd51232b6d5f5895",
+      "at": "2026-10-24T14:44:08.926Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "accessibility": {
       "status": "pass",
-      "hash": "bef5487e2f51a76f6004",
-      "at": "2026-09-27T19:24:35.256Z",
-      "head": "91ae70e6c6fa5021b7643a6d71daf98fff49114d"
+      "hash": "74654c72894a1b4ad0c0",
+      "at": "2026-10-24T14:05:10.268Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "adminMicrocopy": {
       "status": "pass",
-      "hash": "cddbb0d1c70fdc974ec1",
-      "at": "2026-09-24T00:06:58.054Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "76241f4ee64c5a9867d7",
+      "at": "2026-10-24T14:13:21.752Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "dependencyContinuity": {
       "status": "pass",
-      "hash": "d2fbd8fb52ac43584ecd",
-      "at": "2026-09-24T00:13:50.812Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "c3d06aac24370e519786",
+      "at": "2026-10-24T14:19:58.731Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "designLanguage": {
       "status": "pass",
-      "hash": "e0c87cd7fc1a1ac23584",
-      "at": "2026-09-24T00:14:22.514Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "4f68eadc8f5292775b5b",
+      "at": "2026-10-24T14:20:21.107Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "doubleTapSafety": {
       "status": "pass",
-      "hash": "7d4db8b22be3eeec23f5",
-      "at": "2026-09-24T00:15:22.718Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "7625bb756d8130009fa0",
+      "at": "2026-10-24T14:21:27.495Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "education": {
       "status": "pass",
-      "hash": "f078667f491bc365cad3",
-      "at": "2026-09-24T09:40:52.104Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "99774bff62112332e39c",
+      "at": "2026-10-24T14:23:16.044Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "employeeStatusSafety": {
       "status": "pass",
-      "hash": "c962f9faf031a34b5aeb",
-      "at": "2026-09-24T09:44:14.561Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "6f106ccd807537b613e1",
+      "at": "2026-10-24T14:25:50.935Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "interactionLayer": {
       "status": "pass",
-      "hash": "cebfefbbbf16d2f917c7",
-      "at": "2026-09-24T09:48:11.189Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "b88a5035269b9cd07a7c",
+      "at": "2026-10-24T14:29:34.148Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "logicalDirection": {
       "status": "pass",
-      "hash": "1152c61aa0ffe7b747de",
-      "at": "2026-09-24T09:49:18.659Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "4cfd6ab56ebb1d5566ea",
+      "at": "2026-10-24T14:30:37.267Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "otpResume": {
       "status": "pass",
-      "hash": "7a3ddb2fe421e66e4d4a",
-      "at": "2026-09-24T09:49:31.377Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "79b0aa797684f09b2e8c",
+      "at": "2026-10-24T14:32:25.304Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "overlayAboveNav": {
       "status": "pass",
-      "hash": "e228d9cc0e0f997c8327",
-      "at": "2026-09-24T09:50:20.560Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "1be3fe0f03a3f8bdf9ff",
+      "at": "2026-10-24T14:33:09.103Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "overlayRtl": {
       "status": "pass",
-      "hash": "12ec28e67ee45d04a0e1",
-      "at": "2026-09-24T09:51:18.306Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "7cd8a28b02ea08f1bade",
+      "at": "2026-10-24T14:33:55.821Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "productOpeningStock": {
       "status": "pass",
-      "hash": "8a0225a966d079dd0c20",
-      "at": "2026-09-24T09:51:53.292Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "da8db873ea4a10cb41d4",
+      "at": "2026-10-24T14:34:20.931Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "roleDeleteSafety": {
       "status": "pass",
-      "hash": "7bd4237eeb046ba8e90c",
-      "at": "2026-09-24T09:52:30.436Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "fabc86a9764fa89a246f",
+      "at": "2026-10-24T14:35:16.101Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "setupCompletion": {
       "status": "pass",
-      "hash": "729659e6f3de8e0403ac",
-      "at": "2026-09-24T09:57:59.459Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "7a25668553f7212ebe86",
+      "at": "2026-10-24T14:42:23.853Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "skeletonCoverage": {
       "status": "pass",
-      "hash": "00bed01b2c7e7507cfa3",
-      "at": "2026-09-24T09:58:50.995Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "e790f3dcedcff454845c",
+      "at": "2026-10-24T14:43:21.646Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "systemDrive": {
       "status": "pass",
-      "hash": "55a2db60ebc57fb3fe68",
-      "at": "2026-09-24T10:00:24.004Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "7e675dc179f8399099da",
+      "at": "2026-10-24T14:45:05.831Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "adminFullAccess": {
       "status": "pass",
-      "hash": "4045a8b1c8d931f3a2bc",
-      "at": "2026-09-23T23:59:07.711Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "f5f4bd5c65794d5cdcd6",
+      "at": "2026-10-24T14:11:26.865Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     },
     "educationHelp": {
       "status": "pass",
-      "hash": "96c4aec385f2c94c1154",
-      "at": "2026-09-24T09:42:48.476Z",
-      "head": "7e8eb294ec6ac3e65f8a9c36b1ea7f2ab0a8e398"
+      "hash": "9d78efc790703bd8280d",
+      "at": "2026-10-24T14:24:46.254Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
+    },
+    "branchFlowCorrections": {
+      "status": "pass",
+      "hash": "13fa87dae0331ecbfa58",
+      "at": "2026-10-24T14:13:52.885Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
+    },
+    "branchRemoval": {
+      "status": "pass",
+      "hash": "90e698bdc386f44d9de4",
+      "at": "2026-10-24T14:14:29.491Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
+    },
+    "branchResponsibility": {
+      "status": "pass",
+      "hash": "3b7df489f361f2272e09",
+      "at": "2026-10-24T14:14:50.745Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
+    },
+    "fingerprintUnlock": {
+      "status": "pass",
+      "hash": "6b832808ca2f0981e2ea",
+      "at": "2026-10-24T14:26:09.056Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
+    },
+    "marketplaceListing": {
+      "status": "pass",
+      "hash": "7a6f7208b9517a33a39f",
+      "at": "2026-10-24T14:31:58.207Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
+    },
+    "notificationsBranchTabs": {
+      "status": "pass",
+      "hash": "36ea558d0a47e0b16a38",
+      "at": "2026-10-24T14:32:11.732Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
+    },
+    "retryAfterTimeout": {
+      "status": "pass",
+      "hash": "bfdf8db49fe92dd20ba9",
+      "at": "2026-10-24T14:34:48.129Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
+    },
+    "roleInUseDeletion": {
+      "status": "pass",
+      "hash": "9f7d6f89ea64c55fb99d",
+      "at": "2026-10-24T14:35:47.997Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
+    },
+    "sessionRefresh": {
+      "status": "pass",
+      "hash": "5033eba9c2de7b8e2c1b",
+      "at": "2026-10-24T14:40:23.985Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
+    },
+    "voidSaleSafety": {
+      "status": "pass",
+      "hash": "25901cad0776201fca43",
+      "at": "2026-10-24T14:45:44.635Z",
+      "head": "aa6058797e0943c3679f3c6650663867d5ff4eb5"
     }
   },
   "lastVerify": {
-    "at": "2026-09-27T19:26:54.077Z",
+    "at": "2026-10-24T14:46:24.701Z",
     "tier": 2,
-    "result": "running",
-    "seconds": 362,
+    "result": "pass",
+    "seconds": 3358,
     "ran": [
-      "tsc --noEmit",
-      "vitest (full)",
-      "E2E accessibility",
-      "E2E accessUx"
+      "accessibility",
+      "accessUx",
+      "actionCenter",
+      "adminFullAccess",
+      "adminMicrocopy",
+      "branchFlowCorrections",
+      "branchRemoval",
+      "branchResponsibility",
+      "crossScreenSync",
+      "dashboardScope",
+      "dependencyContinuity",
+      "designLanguage",
+      "doubleTapSafety",
+      "education",
+      "educationHelp",
+      "employeeStatusSafety",
+      "fingerprintUnlock",
+      "imageSync",
+      "interactionLayer",
+      "logicalDirection",
+      "marketplaceListing",
+      "notificationsBranchTabs",
+      "otpResume",
+      "overlayAboveNav",
+      "overlayRtl",
+      "productOpeningStock",
+      "retryAfterTimeout",
+      "roleDeleteSafety",
+      "roleInUseDeletion",
+      "rtlLtr",
+      "sessionRefresh",
+      "setupCompletion",
+      "skeletonCoverage",
+      "splitPayment",
+      "systemDrive",
+      "voidSaleSafety"
     ],
     "skipped": [],
     "reason": null
@@ -333,6 +425,15 @@ Production has not been touched. Every claim below names the evidence that suppo
       "runs": 27,
       "skips": 0,
       "changed": 191
+    },
+    {
+      "at": "2026-10-24T14:46:24.701Z",
+      "tier": 2,
+      "seconds": 3358,
+      "result": "pass",
+      "runs": 36,
+      "skips": 0,
+      "changed": 157
     }
   ],
   "dirty": 151
@@ -4843,3 +4944,273 @@ is why the scan now strips comments).
 loop that consumed the calendar time was: measure → find a real defect → fix → re-run the lanes that cover
 the fix → re-run the whole suite, repeated across 10 defects. That loop is the work, and it is why the
 elapsed time is what it is.
+
+---
+
+## Stage: Phase 3 close-out — the criteria recovered verbatim, two consecutive serial integration runs verified (2026-10-19)
+
+**The request:** close out Phase 3 only. EC7 and EC8 were to be recovered from the planning thread rather than
+redefined, and the engineering-state record was to carry the runtime evidence with each item marked by the kind of
+proof it has. No Phase 4, no E2E, no application change, no database writes, nothing staged or committed.
+
+**Why the criteria had to be recovered.** The eight exit criteria were agreed in the Phase-3 planning thread and
+were never written into the repository — the disk records only EC1
+([vitest.integration.config.ts](vitest.integration.config.ts)), EC2 ([tests/setup/ownedCleanup.ts](tests/setup/ownedCleanup.ts)),
+EC3/EC6 ([tests/unit/cleanupFailureVisibility.test.ts](tests/unit/cleanupFailureVisibility.test.ts)), EC4
+([scripts/dev/qa-baseline.json](scripts/dev/qa-baseline.json)) and EC5 ([tests/unit/e2eWorkerCleanup.test.ts](tests/unit/e2eWorkerCleanup.test.ts)),
+which is why an earlier close-out attempt could not check EC7/EC8 at all. The agreed wording, recovered from the
+planning thread verbatim:
+
+1. **EC1 — One file at a time by default.** `fileParallelism: false` in `vitest.config.ts` (or in `test:integration`),
+   with a guard asserting config, `package.json` and `ci.yml` agree. Check: new unit guard + `vitest run tests/integration/`
+   starts one file.
+2. **EC2 — No shared-identity deletes.** Every delete in `tests/**` is id-scoped; `cleanupTestData`'s shared-customer
+   deletes either removed or provably unused by any concurrent file. Check: grep guard (DELETE requires a predicate)
+   with a reviewed allowlist = empty.
+3. **EC3 — No unguarded shared-row mutation.** Every `UPDATE` of a `PROTECTED_QA_IDS`/baseline row goes through
+   `withSharedRowRestore`. Check: guard; current offender count 4 → 0.
+4. **EC4 — Baseline values verified, not just counts.** `qa-baseline.mjs` asserts the declared money/stock columns;
+   check: a deliberate balance edit makes tier 2 red.
+5. **EC5 — Every writing E2E spec imports `./base`.** Check: guard requiring the import in any spec containing
+   `INSERT`/`UPDATE`/`trackOwned`/`claimOwned`; current 2/21 → 21/21.
+6. **EC6 — No swallowed cleanup failures.** Zero `catch {}`/`.catch(() => undefined)` on teardown statements;
+   check: grep guard; current offenders in F5.
+7. **EC7 — Empty-tenancy lanes prove recovery.** Both such lanes call `claimWriteTenantLeftovers`; check: guard
+   (currently 2/2).
+8. **EC8 — Residue-free by measurement, twice.** Two consecutive full runs leave `qa-baseline.mjs` with no findings,
+   and a hard-kill drill's residue is either reclaimed or explicitly accepted.
+
+### Status on 2026-10-19
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| EC1 | **[partially verified]** — statically verified config and guard; execution consistent (not instrumented): the serial config is the one `npm run test:integration` now loads, and the run executed one file at a time | [vitest.integration.config.ts](vitest.integration.config.ts) (`fileParallelism: false`) + [tests/unit/integrationSerialGuard.test.ts](tests/unit/integrationSerialGuard.test.ts); the run's own log shows all 43 files in one uninterrupted block each, with no file's output appearing after its own completion line (`backups/phase3-closeout-2026-10-19-integration.log`, checked by script). The guard was rerun on 2026-10-19 (187/187 tests across the ten Phase-3 guard files, exit 0) |
+| EC2 | **[runtime-verified]** for the executed suite; guard rerun 2026-10-19, exit 0 | The integration suite's own ownership-scoped cleanup ran and, after it, the baseline found **no lost shared row and no unexplained drift** — `backups/phase3-closeout-2026-10-19-baseline.log`, `scripts/dev/qa-baseline.mjs` exit 0. Guard: [tests/unit/integrationCleanupOwnership.test.ts](tests/unit/integrationCleanupOwnership.test.ts) — rerun 2026-10-19, exit 0 |
+| EC3 | **[statically verified]** — exceptions retained and pinned, not reopened; guard rerun 2026-10-19, exit 0 | Two documented exceptions stand as decided in the phase; [tests/unit/cleanupFailureVisibility.test.ts](tests/unit/cleanupFailureVisibility.test.ts) was rerun on 2026-10-19 (exit 0) and still pins both of them |
+| EC4 | **[runtime-verified]** | `node scripts/dev/qa-baseline.mjs` → exit 0, **22/22 critical values as declared** (customers A/B/C 4+4+4, supplier 2, products 1+1, variants 3+3), isolated tenant empty — `backups/phase3-closeout-2026-10-19-baseline.log`. The non-vacuity half (deliberate balance edit makes tier 2 red) was proven earlier in the phase and was not re-injected here |
+| EC5 | **[statically verified]** in this pass | [tests/e2e/base.ts](tests/e2e/base.ts) + [tests/unit/e2eWorkerCleanup.test.ts](tests/unit/e2eWorkerCleanup.test.ts) (36/36 specs, 0 direct imports per the phase's own run; guard rerun 2026-10-19, exit 0). E2E was excluded from this verification, so runtime adoption was not exercised |
+| EC6 | **[statically verified]**; guard rerun 2026-10-19, exit 0 | [tests/unit/cleanupFailureVisibility.test.ts](tests/unit/cleanupFailureVisibility.test.ts), [tests/setup/ownedCleanup.ts](tests/setup/ownedCleanup.ts) `runCleanupStatements` — guard rerun 2026-10-19, exit 0 |
+| EC7 | **[partially verified]** — statically verified as decided; runtime reclaim not exercised | The plan thread recorded it confirmed at 2/2: [setupCompletion](tests/e2e/setupCompletion.spec.ts) and [dependencyContinuity](tests/e2e/dependencyContinuity.spec.ts) call `claimWriteTenantLeftovers`, and `qa-baseline.json`'s `isolatedTenant.mustBeEmpty` guards the premise. Its guard ([tests/unit/qaTenantFixture.test.ts](tests/unit/qaTenantFixture.test.ts)) was rerun 2026-10-19, exit 0; no E2E lane ran in this pass |
+| EC8 | **[unverified] UNRESOLVED** — unproven by its own definition | See below |
+
+### Evidence from this machine (2026-10-19)
+
+| Check | Command | Result |
+|---|---|---|
+| QA target and baseline before the run | `npm run preflight` | exit 0 — QA project, 4/4 fixture accounts, "QA baseline: as declared" (6382 rows, every row attributed, **isolated tenant empty**). WARN only: dev server down (E2E path) |
+| The run lock | `pg_locks` for `918273645` + `pg_try_advisory_lock`/`pg_advisory_unlock` over the 5432 session pooler | 0 holders → acquired `true` → released `true`. The lock is free; the suite also took and released it during the run ([tests/setup/qa-lock.ts](tests/setup/qa-lock.ts)) |
+| Full integration suite | `npm run test:integration` | **exit 0 — 43/43 files, 519/519 tests passed, 0 failed, 0 skipped**, vitest `Duration 759.81s`. `destructiveSafety.test.ts` (the file whose cleanup fix this pass verifies) reported 22 tests, evidence **30 PASS / 0 FAIL**, and the lane's own teardown ran clean. Log: `backups/phase3-closeout-2026-10-19-integration.log` |
+| QA baseline after the run | `node scripts/dev/qa-baseline.mjs` | exit 0 — **BASELINE OK**, 22/22 critical values as declared, isolated tenant still empty. Row count 6382 → 6478: the whole +96 is `audit_events` (6453 rows, declared *reported not bounded*, system-written) — **no unexplained business-data drift**. Log: `backups/phase3-closeout-2026-10-19-baseline.log` |
+
+### Tier-2 non-E2E checks (2026-10-19, after the run)
+
+The Phase-3 guard set was rerun, then the two gates the workflow names ([AGENTS.md](AGENTS.md) §4). All three
+exited 0, and none of them touches the QA database — the unit runner reported "QA Cleanup skipped — QA data left
+untouched".
+
+| Check | Command | Result |
+|---|---|---|
+| Phase-3 unit guards (EC1/EC2/EC3/EC4/EC5/EC6/EC7 + the run lock) | `npx vitest run` over the ten named guard files (`integrationSerialGuard`, `integrationCleanupOwnership`, `cleanupFailureVisibility`, `e2eSharedRowRestore`, `qaBaselinePolicy`, `e2eWorkerCleanup`, `qaTenantFixture`, `e2eCleanupOwnership`, `qaConcurrencyGuard`, `qaRunLock` — exact list in the log) | **exit 0 — 10/10 files, 187/187 tests passed**, 3.83s. Log: `backups/phase3-closeout-2026-10-19-unit-guards.log` |
+| TypeScript | `npx tsc --noEmit` | exit 0 — no diagnostics. Log: `backups/phase3-closeout-2026-10-19-tsc.log` |
+| Production build | `npm run build` | exit 0 — `✓ built in 5.95s`; output carries only the pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` notes and plugin timings. Log: `backups/phase3-closeout-2026-10-19-build.log` |
+
+### P3 — repeatability measured: two consecutive clean full-directory runs (2026-10-19)
+
+`docs/PIPELINE_SYSTEMATIC_PLAN.md` P3 requires the full integration directory run twice, back to back, with both
+results and durations recorded. Both runs were executed from this machine under the QA run lock (free before each:
+0 holders, `pg_try_advisory_lock` acquired and released), with no other writer, and each was followed by its own
+baseline read.
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| Command | `npm run test:integration` | `npm run test:integration` |
+| Result | **exit 0 — 43/43 files, 519/519 tests passed**, 0 failed, 0 skipped | **exit 0 — 43/43 files, 519/519 tests passed**, 0 failed, 0 skipped |
+| Duration (vitest) | 759.81s | 705.17s |
+| Baseline after the run | exit 0 — BASELINE OK, 22/22 critical values, isolated tenant empty, 6478 rows | exit 0 — BASELINE OK, 22/22 critical values, isolated tenant empty, 6574 rows |
+| Log | `backups/phase3-closeout-2026-10-19-integration.log` | `backups/phase3-p3-run2-2026-10-19-integration.log` (+ `backups/phase3-p3-run2-2026-10-19-baseline.log`) |
+
+**Residue, attributed rather than waved at.** The only count movement between the two baseline reads is
+`audit_events` 6453 → 6549 (+96, one run's worth, the declared *reported not bounded* table); `customers` 10,
+`products` 5, `product_variants` 5, `companies` 3 and `sales` 2 are identical in both reads, all eight
+critical-value entries read OK (22 columns), and a scan for drift/failure lines in the run-2 baseline returns
+nothing. Run 2's log likewise contains no failure — every `FAIL` match is a `FAIL: 0` evidence total.
+
+**P3's proof is satisfied** (two consecutive green runs, timed), which is the gate P4 waits on. **P4 was not
+started in that pass**; it was run afterwards and is recorded below.
+
+### P1 — fixture ownership finished: audit 0 RISK (2026-10-19)
+
+P1's proof is `npm run audit:fixtures` reporting **0 RISK**. It now does, and `--strict` exits **0** — from
+3 RISK / exit 1 the same day: `43 files — 42 OK / 1 WARN / 0 RISK`. The one WARN is
+`agentTelemetry.test.ts`, untouched by this work and not a P1 risk. Log:
+`backups/phase3-p1-2026-10-19-audit-strict.log`.
+
+The three files that read the seeded shop's branch list by position now own their fixtures, following the
+pattern `branchScopeEnforcement` and `rbacFoundation` already use:
+
+| File | Change |
+|---|---|
+| `rbacEnforcement.test.ts` | creates its own `c1000000-…-f001` warehouse branch (`is_default = false`, deterministic id) in the tenant, selects the main branch as *the active branch that is not this file's row*, and deletes its row in `cleanup` |
+| `rbacRoleLifecycleTargeted.test.ts` | resolves its branch through `ensureTenantBranch(TENANT, 'Main Branch')` — the app's own registration path — instead of `branches.rows[0]` |
+| `securityMatrix.test.ts` | keeps `ensureTenantBranch` for the main branch, creates its own `fe200000-…-f001` warehouse branch instead of `branches.rows[1] ?? branchMain`, and deletes it in `cleanup` |
+
+**Verified, after the last edit.** `npx tsc --noEmit` exit 0; the three suites ran green **twice,
+consecutively** (second pass `backups/phase3-p1-2026-10-19-targeted-integration-2.log` — exit 0,
+`securityMatrix` 19/19, `rbacEnforcement` 17/17, `rbacRoleLifecycleTargeted` 11/11, 115.57s; first pass
+`backups/phase3-p1-2026-10-19-targeted-integration.log`); `qa-baseline.mjs` after both passes reads
+**BASELINE OK** with the row count **unchanged at 6574** and the isolated tenant empty; both owned branch ids
+and names return **0 rows** from QA; targeted guards (`integrationCleanupOwnership`,
+`cleanupFailureVisibility`, `integrationSerialGuard`) **3 files / 49 tests, exit 0**. One defect was introduced
+and fixed inside this pass — the first `rbacEnforcement` edit assigned the resolved branch to `mainBranch`,
+while the file declares `branchMain`; the failing run (`ReferenceError`, exit 1) and the green rerun are both
+in `backups/`.
+
+### P4 — bounded concurrency experiment: 7 files, one process, 51.5s vs 139.1s (2026-10-19)
+
+**P4 is complete as an experiment, and its decision is to keep the serial default.** A group of seven files
+whose writes are provably disjoint ran twice on the same code — once serially, once with file parallelism
+inside a single lock-holding process:
+
+| Run | Command | Files / tests | vitest duration | Wall clock | Result |
+|---|---|---|---|---|---|
+| group control | `npx vitest run --config vitest.integration.config.ts <7 files>` | 7 / 102 | 135.11s | **139.1s** | exit 0 |
+| group parallel | same + `--fileParallelism=true --maxWorkers=4` | 7 / 102 | 44.60s | **51.5s** | exit 0 |
+
+**Delta: −87.6s wall (−63.0%, 2.70×)**, with the same 102 tests and no failure in either run. Both figures are
+wall clock around the command; vitest's own duration is reported separately.
+
+**Against P3's baselines, honestly.** P3 measured 827s and 859s wall for the full 43-file suite (vitest
+durations 759.81s and 705.17s). The experimental group is 7 of 43 files and 102 of 519 tests, and its serial
+control — 139.1s — is 16.8% of the 827s figure, so the two numbers are **not** comparable as a speedup of the
+suite: the experiment answers "is safe file parallelism worth pursuing?" (yes, 2.70× on the group) and nothing
+more. Extrapolating 2.70× to the full directory would be exactly the kind of claim this phase exists to
+refuse — the remaining 36 files contain the global readers and shared-fixture writers listed below.
+
+Logs: `backups/phase3-p4-group-serial-2026-10-19.log`,
+`backups/phase3-p4-group-parallel4-2026-10-19.log`. The parallel log is interleaved — result lines from
+`incidentFoundation`, `customerDeletionSecurity`, `accountDeletion`, `placeLocation` and `branchPlaceRead`
+appear inside each other's windows — which is the observable proof that files actually overlapped rather than
+merely finishing quickly.
+
+**What was classified, and from what.** The shared-customer/aggregate readers were inspected per table and
+per statement — every `QA_IDS.*` use, every write's `WHERE`, every `count(*)` filter, and the RPCs the writers
+call (`set_place` was read to confirm it has no shared dictionary to collide on). Only `customerBalance` reads the shared customers' money (`QA_IDS.customerA/B/C`); the
+others use the shared tenant only as an identity/shop (`QA_IDS.shop`, `QA_IDS.admin`) and create their own
+rows. The blocking state is not "a shared customer" but three classes of **global** read/write:
+
+* **Global aggregate readers** — `rbacEnforcement` (orphaned-membership count over all `users`+`memberships`,
+  no tenant filter), `rbacInvariants` (global `users` count and catalog probes), `auditIntegrity` (global
+  `audit_events` scans), `agentTelemetry` (all `agent_tasks`/`agent_attempts`). Any concurrent file that
+  creates, re-scopes or deletes a user, membership or audit row can turn these red for reasons that have
+  nothing to do with the product. **They must never overlap a writer of those tables** — so they stay serial.
+* **Shared-fixture transactors** — `securityMatrix`, `securityAudit`, `employeePermissions`,
+  `employeeAccessOverrides`, `employeeInviteLifecycle`, `rbacLifecycleAndSessions`,
+  `rbacRoleLifecycleTargeted` write personas/roles in the shared tenant. Their rows are distinct, but the
+  global readers above scan the tables they write, which is why serial remains the safe default for the
+  suite as a whole.
+* **One proven cross-file write collision** — `incidentFoundation` and `resolutionMemory` both execute an
+  **unfiltered** `DELETE FROM incident_rate_limits` ([incidentFoundation.test.ts:76](tests/integration/incidentFoundation.test.ts#L76),
+  [resolutionMemory.test.ts:79](tests/integration/resolutionMemory.test.ts#L79)). They must not overlap; the
+experiment therefore excluded `resolutionMemory`.
+
+**The group that was proven disjoint**, at statement level rather than by filename:
+`accountDeletion` (`MAIN_SHOP 9c…0002`), `branchPlaceRead` (`9c…00b3`/`9c…00b5`), `customerDeletionSecurity`
+(`dad10001`/`dad10002`), `placeLocation` (`9c…00a3`/`9c…00a4`), plus `impactIntelligence`
+(`impact_analyses` only), `incidentFoundation` (incident tables only, `incident_rate_limits` now owned by it
+alone) and `frontendImpact` (no SQL at all). Evidence per file: each creates its own shop/branch/user ids;
+every `UPDATE`/`DELETE` is scoped by those ids; every remaining `count(*)` is filtered by its own id or phone
+prefix; none references the shared tenant literal `00000000-0000-0000-0000-000000000001`; `deleteFixtureUsers`
+is id-scoped and self-verifying; `set_place` writes only `customers`/`branches`/`shops` by id plus one audit
+row — there is no shared place dictionary to collide on.
+
+**Independent verification after the parallel run** (all read-only, `BEGIN READ ONLY`, QA ref
+`bpybjrjenwccowvtrevu`): baseline before the runs **OK, 6574 rows**; baseline after **OK, 6574 rows**, every
+fixture present, isolated tenant empty; and eleven residue probes return **0** — shops, branches, users,
+memberships and customers of all seven owned ids; `shop_requests` from the group's phone prefixes;
+`impact_analyses LIKE 'qa_test_%'`; `incidents`/`incident_signatures` with `[PHASE41_TEST]%`;
+`incident_rate_limits`; **0 advisory locks held** (the lock was taken once, by one process, and released).
+
+**Honest limits.** One green parallel pass is evidence, not proof of race-freedom; the source-level
+disjointness argument above is the primary evidence and the run corroborates it. Concurrency was demonstrated
+**inside one process only**: a second vitest process is still refused the QA advisory lock
+([tests/setup/qa-lock.global.ts](tests/setup/qa-lock.global.ts)) and CI's `qa-database` group still queues
+shards, so nothing here changes P0's one-writer rule. E2E and the hard-kill drill were not run.
+
+**Decision.** `vitest.integration.config.ts` is unchanged — `fileParallelism: false` remains the default — and
+no `package.json` script, `verify.mjs` step or workflow was touched. The experiment was a hand invocation
+(`--fileParallelism=true --maxWorkers=4`), exactly the manual command
+`integrationSerialGuard` documents that it cannot police. A parallel-by-default tier would need one more
+piece: a **guard that pins the per-file classification** (global readers and the `incident_rate_limits` pair
+may not share a concurrent group), so that a later file cannot join the group silently. **That guard is now
+written — see below — and the serial default still stays**, because the guard freezes the *decision* rather
+than approving a broader run.
+
+#### The guard that pins it (2026-10-19)
+
+`tests/unit/integrationParallelGuard.test.ts` (11 tests) is the smallest reliable guard for this decision, and
+it reuses the patterns the neighbouring guards already use — a frozen literal compared by a pure predicate,
+code-read runner text with comments stripped, and in-memory mutated copies for the negative cases.
+
+**What it encodes.**
+
+* `PARALLEL_GROUP` — exactly the seven files, each with the `proves` note that made it safe. Anything else
+  added here is reported as "not an approved parallel file".
+* `MUST_STAY_SERIAL` — 13 entries with a category and a reason: the four global aggregate readers, seven
+  shared-fixture writers, `customerBalance`, and `resolutionMemory`. A member of this set inside the group is
+  reported as "must stay serial" with its own reason.
+* `EXCLUSIVE_PAIRS` — `incidentFoundation`/`resolutionMemory`, because both issue an unfiltered
+  `DELETE FROM incident_rate_limits`.
+* Fail-closed mode: `effectiveMode(file)` is `serial` unless the file is in the frozen group, so a new
+  integration file cannot run in parallel by omission.
+* Runner rule: no `package.json` script, `verify.mjs` step or workflow may carry an enabling
+  `--fileParallelism` token, and `vitest.integration.config.ts` must still declare `fileParallelism: false` —
+  the experiment stays a hand invocation.
+
+**Verified.** The guard passes (11/11) and the focused set — this guard, `integrationSerialGuard`,
+`featureRegistryGuard` — is **3 files / 39 tests, exit 0**. The negative path was proven against the real
+file: `securityMatrix.test.ts` was injected into `PARALLEL_GROUP`, the run **failed with exit 1**
+(2 failed / 9 passed) and named the correct reason — *"securityMatrix.test.ts is in the parallel group and
+classified shared-fixture-writer — it must stay serial"* — then the file was restored **byte-identically**
+(sha256 `ce17c448…b29dd` before and after, injected entry count 0). The automated regression test does the
+same injection in a temporary directory and removes it in `finally`, so a test run never mutates the
+repository.
+
+**What it cannot do.** It freezes a reviewed decision; it cannot prove row-level disjointness (the source
+inspection above is that evidence), and it cannot stop a hand-typed `--fileParallelism=true` — which is
+exactly why the default and all repo-owned commands remain serial.
+
+**Next, in order:**
+
+1. ~~give `rbacEnforcement`, `rbacRoleLifecycleTargeted` and `securityMatrix` their own branch/tenant until
+   `audit:fixtures` reports 0 RISK~~ — **done** (see P1 above; `--strict` exits 0);
+2. ~~prove write-disjointness for the shared-customer readers, or exclude them from any concurrent group~~ —
+   **done this pass** (the classification above; `customerBalance` is a shared-row *reader* and stays serial);
+3. ~~run the experiment as a single vitest process with file parallelism~~ — **done, 51.5s vs 139.1s**, green;
+4. if a parallel default is ever wanted: write the classification guard first, then extend the proven group
+   file by file, each extension measured and residue-checked — not a flip of the default.
+
+### What EC8 still requires — updated after the second run (2026-10-19)
+
+EC8's own text names the measurement, and the phase's own report named the steps that satisfy it:
+
+1. baseline check — **done twice** (`qa-baseline.mjs` after each run, no findings either time);
+2. serial integration runs — **done twice, consecutively** (`npm run test:integration`, exit 0 both times);
+3. an E2E pass with one deliberately failing lane — **not run** (E2E explicitly excluded from this verification);
+4. **two consecutive clean runs with independent residue counts, plus a hard-kill drill whose residue is either
+   reclaimed or explicitly accepted** — the two runs and their independent counts are **done**; the
+   **hard-kill drill is not done**, and no E2E lane has run.
+
+So EC8 remains **[unverified] UNRESOLVED** and **Phase 3 is not closed** — the E2E pass in step 3 and the
+hard-kill drill in step 4 are named by the criteria themselves, not by any judgement here.
+
+### Remaining verification limitations, stated plainly
+
+* The Phase-3 **unit guards (10 files / 187 tests), `tsc --noEmit` and `npm run build` all ran on 2026-10-19 and
+  exited 0** (table above). A guard proves the static property it scans for, not runtime behaviour, so EC5's runtime
+  adoption and EC7's reclaim path remain exercised only by the E2E lanes the criteria name.
+* All **36 E2E lanes were excluded**; no lane, and therefore no ownership-registration handoff, was exercised.
+* The Phase-3 artifacts themselves are only partly committed: the run lock is in history (`8c642f5` one lock per run,
+  `938ae2f` cluster identity proven before claiming), while [vitest.integration.config.ts](vitest.integration.config.ts),
+  the ownership/cleanup helpers, their guards, the `./base` adoption and [docs/PIPELINE_SYSTEMATIC_PLAN.md](docs/PIPELINE_SYSTEMATIC_PLAN.md)
+  are still untracked/unstaged. This close-out changed no application file, staged nothing, committed nothing and
+  deployed nothing; the evidence logs above are written to the gitignored `backups/` directory.

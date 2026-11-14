@@ -14,7 +14,8 @@
  *
  * It is deliberately scoped to one tab — a new tab must start clean.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from './base';
+import type { Page } from '@playwright/test';
 
 const BASE = process.env.QA_APP_URL || 'http://localhost:5173';
 const OWNER_PHONE = '03001234567';

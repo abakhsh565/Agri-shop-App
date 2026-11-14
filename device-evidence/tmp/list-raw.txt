@@ -1,0 +1,153 @@
+[EnvGuard] Environment verified: bpybjrjenwccowvtrevu
+[EnvGuard] Environment verified: bpybjrjenwccowvtrevu
+Listing tests:
+  [e2e] › accessibility.spec.ts:168:3 › accessibility floor › the shared chrome is labelled and the document follows the language
+  [e2e] › accessibility.spec.ts:202:3 › accessibility floor › the named shared controls stay named
+  [e2e] › accessibility.spec.ts:238:3 › accessibility floor › known gaps are frozen and may only shrink
+  [e2e] › accessUx.spec.ts:191:3 › Employee job & access — simple for the owner, exact underneath › 1. Adding an employee asks only who / what job / where, with no RBAC jargon
+  [e2e] › accessUx.spec.ts:261:3 › Employee job & access — simple for the owner, exact underneath › 2. Creating from the simplified screen writes the right membership, then the list shows it
+  [e2e] › accessUx.spec.ts:432:3 › Employee job & access — simple for the owner, exact underneath › 3. The same flow in Urdu: RTL, translated, no English copy leaking
+  [e2e] › accessUx.spec.ts:494:3 › Employee job & access — simple for the owner, exact underneath › 4. Employee detail explains role, place and access without RBAC vocabulary
+  [e2e] › accessUx.spec.ts:518:3 › Employee job & access — simple for the owner, exact underneath › 5. Customize access saves an override in the DB, and "use role access only" removes it
+  [e2e] › accessUx.spec.ts:569:3 › Employee job & access — simple for the owner, exact underneath › 6. Access can be customized while inviting, and a role change keeps those exceptions
+  [e2e] › accessUx.spec.ts:658:3 › Employee job & access — simple for the owner, exact underneath › 7. A partly typed code says so instead of waiting in silence
+  [e2e] › actionCenter.spec.ts:49:1 › 1. Application loads successfully
+  [e2e] › actionCenter.spec.ts:70:1 › 2. Admin auth injection navigates to dashboard
+  [e2e] › actionCenter.spec.ts:91:1 › 3. Action Center page loads with tabs
+  [e2e] › actionCenter.spec.ts:125:1 › 4. Sub-tabs Critical, Warning, Info are visible
+  [e2e] › actionCenter.spec.ts:158:1 › 5. Critical tab shows signals from real QA data
+  [e2e] › actionCenter.spec.ts:190:1 › 6. Tab switching between Critical/Warning/Info works
+  [e2e] › actionCenter.spec.ts:252:1 › 7. DB state matches what Signal Engine computes
+  [e2e] › actionCenter.spec.ts:307:1 › 8. Signal suppression state persists via localStorage
+  [e2e] › actionCenter.spec.ts:346:1 › 9. Page reload preserves Action Center state
+  [e2e] › actionCenter.spec.ts:377:1 › 10. Credit request E2E: create → critical signal → approve → signal disappears
+  [e2e] › actionCenter.spec.ts:502:1 › 11. Follow-ups tab loads with Ready/Upcoming/Recently Sent sections
+  [e2e] › actionCenter.spec.ts:526:1 › 12. Action Center renders correctly in both themes
+  [e2e] › adminFullAccess.spec.ts:60:3 › admin full access + the account-deletion gate › an admin can create a company through the real form
+  [e2e] › adminFullAccess.spec.ts:93:3 › admin full access + the account-deletion gate › deleting the account runs the four-step sheet, and no unverified path deletes it
+  [e2e] › adminFullAccess.spec.ts:147:3 › admin full access + the account-deletion gate › a profile edit is written to the database and survives a reload
+  [e2e] › adminFullAccess.spec.ts:182:3 › admin full access + the account-deletion gate › the same gate speaks Urdu, in RTL
+  [e2e] › adminMicrocopy.spec.ts:97:3 › Admin microcopy — English and Urdu › validation and success messages are plain, translated, and fit the screen
+  [e2e] › adminMicrocopy.spec.ts:154:3 › Admin microcopy — English and Urdu › the first screens a shop owner sees — phone, then code — read in both languages
+  [e2e] › adminMicrocopy.spec.ts:213:3 › Admin microcopy — English and Urdu › the screens whose wording was replaced now read Urdu only
+  [e2e] › adminMicrocopy.spec.ts:264:3 › Admin microcopy — English and Urdu › the admin dashboard and settings show no raw or technical wording in Urdu
+  [e2e] › branchFlowCorrections.spec.ts:14:3 › existing employee Add and Move are explicit, confirmed, and carry branch not tenant (en; mocked transport)
+  [e2e] › branchFlowCorrections.spec.ts:14:3 › existing employee Add and Move are explicit, confirmed, and carry branch not tenant (ur; mocked transport)
+  [e2e] › branchResponsibility.spec.ts:17:3 › branch responsibility is handed over, transferred and taken back (en; mocked transport)
+  [e2e] › branchResponsibility.spec.ts:17:3 › branch responsibility is handed over, transferred and taken back (ur; mocked transport)
+  [e2e] › crossScreenSync.spec.ts:75:3 › Cross-Screen Synchronization › Customer: name change propagates from profile to list
+  [e2e] › crossScreenSync.spec.ts:110:3 › Cross-Screen Synchronization › Customer: credit limit change propagates
+  [e2e] › crossScreenSync.spec.ts:132:3 › Cross-Screen Synchronization › Customer: phone change propagates from profile to list
+  [e2e] › crossScreenSync.spec.ts:152:3 › Cross-Screen Synchronization › Customer: image change propagates across screens
+  [e2e] › crossScreenSync.spec.ts:175:3 › Cross-Screen Synchronization › Product: name change propagates from detail to list
+  [e2e] › crossScreenSync.spec.ts:208:3 › Cross-Screen Synchronization › Product: price change propagates
+  [e2e] › crossScreenSync.spec.ts:230:3 › Cross-Screen Synchronization › Product: stock change propagates
+  [e2e] › crossScreenSync.spec.ts:252:3 › Cross-Screen Synchronization › Company: name change propagates from detail to list
+  [e2e] › crossScreenSync.spec.ts:285:3 › Cross-Screen Synchronization › Company: payable change propagates
+  [e2e] › crossScreenSync.spec.ts:307:3 › Cross-Screen Synchronization › Employee: name change propagates from detail to list
+  [e2e] › crossScreenSync.spec.ts:340:3 › Cross-Screen Synchronization › Employee: active status change propagates
+  [e2e] › crossScreenSync.spec.ts:364:3 › Cross-Screen Synchronization › Navigation: each screen mount loads fresh data from store
+  [e2e] › crossScreenSync.spec.ts:397:3 › Cross-Screen Synchronization › No stale state: dashboard and list screens show consistent data
+  [e2e] › dashboardScope.spec.ts:111:3 › Locked dashboard scope: figures reconcile with the database › 1. ADM-DASH-HOME shows every spec metric and its money figures equal the DB
+  [e2e] › dashboardScope.spec.ts:202:3 › Locked dashboard scope: figures reconcile with the database › 2. EMP-DASH-HOME shows transactions + customers served and no profit/supplier data
+  [e2e] › dashboardScope.spec.ts:215:3 › Locked dashboard scope: figures reconcile with the database › 3. ADM-DASH-HOME renders in Urdu with RTL and translated metrics
+  [e2e] › dashboardScope.spec.ts:236:3 › Locked dashboard scope: figures reconcile with the database › 6. the Observation Board is gone from the app, not merely hidden
+  [e2e] › dashboardScope.spec.ts:257:3 › Locked dashboard scope: figures reconcile with the database › 4. EMP-DASH-HOME renders in Urdu with RTL and translated metrics
+  [e2e] › dashboardScope.spec.ts:270:3 › Locked dashboard scope: figures reconcile with the database › 5. No horizontal overflow on either dashboard in RTL
+  [e2e] › dependencyContinuity.spec.ts:138:3 › Missing dependencies never dead-end a workflow › sale with no products → create the supplier and the product in place → sell it
+  [e2e] › dependencyContinuity.spec.ts:249:3 › Missing dependencies never dead-end a workflow › a search with no matches offers no create action — nothing is missing
+  [e2e] › dependencyContinuity.spec.ts:294:3 › Missing dependencies never dead-end a workflow › the same states in Urdu/RTL and in dark, with no empty-state clutter on Home
+  [e2e] › dependencyContinuity.spec.ts:396:3 › Missing dependencies never dead-end a workflow › an employee cannot create stock, so they are told who can instead of given a dead link
+  [e2e] › designLanguage.spec.ts:151:3 › grouped-list design language › cards, rows and hairlines measure inside the reference bands
+  [e2e] › doubleTapSafety.spec.ts:86:3 › Double tap safety › customer payment: double-tapping confirm records one payment
+  [e2e] › doubleTapSafety.spec.ts:124:3 › Double tap safety › sale: double-tapping Complete Sale creates one sale and deducts stock once
+  [e2e] › doubleTapSafety.spec.ts:182:3 › Double tap safety › supplier payment: double-tapping confirm records one payment
+  [e2e] › education.spec.ts:155:3 › education — welcome, guided tour, app guide › a new owner is welcomed once, and the tour it launches rings the real blocks
+  [e2e] › education.spec.ts:204:3 › education — welcome, guided tour, app guide › App guide reopens the tour, and closing it mid-way writes nothing
+  [e2e] › education.spec.ts:273:3 › education — welcome, guided tour, app guide › Urdu + RTL + dark: the tour speaks Urdu and stays inside the screen
+  [e2e] › education.spec.ts:326:3 › education — welcome, guided tour, app guide › an employee gets the shorter, permission-aware tour and the employee guide
+  [e2e] › education.spec.ts:368:3 › education — welcome, guided tour, app guide › a target that is not there is skipped rather than pointed at
+  [e2e] › education.spec.ts:403:3 › education — welcome, guided tour, app guide › the feature list explains the app and only offers what this person can open
+  [e2e] › education.spec.ts:432:3 › education — welcome, guided tour, app guide › the guide teaches the work as a sequence, not only as a list of features
+  [e2e] › education.spec.ts:477:3 › education — welcome, guided tour, app guide › an employee reads the whole product but is offered only what they can open
+  [e2e] › education.spec.ts:535:3 › education — welcome, guided tour, app guide › the pre-login introduction shows once per device and never traps the user
+  [e2e] › educationHelp.spec.ts:47:5 › education — help, tutorials, questions › contextual help, video, FAQ and questions — en/light
+  [e2e] › educationHelp.spec.ts:47:5 › education — help, tutorials, questions › contextual help, video, FAQ and questions — ur/dark
+  [e2e] › educationHelp.spec.ts:136:3 › education — help, tutorials, questions › the pre-login introduction shows real screens of this app
+  [e2e] › educationHelp.spec.ts:157:3 › education — help, tutorials, questions › a customer account offers the collection walkthrough that belongs to it
+  [e2e] › educationHelp.spec.ts:171:3 › education — help, tutorials, questions › education writes nothing to the business database
+  [e2e] › employeeStatusSafety.spec.ts:171:3 › Employee status safety › deactivating: a double tap revokes access once and reports success, not failure
+  [e2e] › employeeStatusSafety.spec.ts:241:3 › Employee status safety › reactivating: a double tap restores access once and keeps the history intact
+  [e2e] › employeeStatusSafety.spec.ts:310:3 › Employee status safety › cancel closes the confirmation and sends absolutely nothing
+  [e2e] › fingerprintUnlock.spec.ts:62:3 › fingerprint unlock › the browser ceremony the app performs is one a real authenticator answers
+  [e2e] › fingerprintUnlock.spec.ts:110:3 › fingerprint unlock › a tampered public key is refused rather than trusted
+  [e2e] › fingerprintUnlock.spec.ts:147:3 › fingerprint unlock › an address that cannot host a fingerprint says so, instead of blaming the phone
+  [e2e] › fingerprintUnlock.spec.ts:173:3 › fingerprint unlock › the mark on the PIN screen asks the real authenticator for the enrolled credential
+  [e2e] › fingerprintUnlock.spec.ts:267:3 › fingerprint unlock › an account with no finger enrolled is never offered one
+  [e2e] › imageSync.spec.ts:65:3 › Image Synchronization — All Entities › Customer: upload → save → reload → view → replace → reload → remove
+  [e2e] › imageSync.spec.ts:136:3 › Image Synchronization — All Entities › Product: upload → save → reload → view → replace → reload → remove via DB
+  [e2e] › imageSync.spec.ts:190:3 › Image Synchronization — All Entities › Company: upload → save → reload → view → replace → reload → remove via DB
+  [e2e] › imageSync.spec.ts:242:3 › Image Synchronization — All Entities › Employee: upload → save → reload → view → replace → reload → remove via DB
+  [e2e] › imageSync.spec.ts:295:3 › Image Synchronization — All Entities › DB reference is authoritative for all entities
+  [e2e] › imageSync.spec.ts:317:3 › Image Synchronization — All Entities › Storage: all 4 buckets exist and are public
+  [e2e] › imageSync.spec.ts:323:3 › Image Synchronization — All Entities › Storage: RLS policies exist for all CRUD operations
+  [e2e] › imageSync.spec.ts:332:3 › Image Synchronization — All Entities › Storage: no per-user ownership restriction — any authenticated user can modify any image
+  [e2e] › imageSync.spec.ts:357:3 › Image Synchronization — All Entities › Orphan: replace clears DB reference — old storage object not auto-deleted
+  [e2e] › imageSync.spec.ts:409:3 › Image Synchronization — All Entities › Image compression: compressImage function exists in storage.ts
+  [e2e] › interactionLayer.spec.ts:122:3 › Interaction layer: motion, feedback, skeletons, toasts, date chrome › 1. a sheet animates IN and OUT, and a dying overlay never swallows a tap
+  [e2e] › interactionLayer.spec.ts:158:3 › Interaction layer: motion, feedback, skeletons, toasts, date chrome › 2. a row and a button both answer a real press, in light and dark
+  [e2e] › interactionLayer.spec.ts:192:3 › Interaction layer: motion, feedback, skeletons, toasts, date chrome › 3. a fetching list shows its own shape, not a blank screen
+  [e2e] › interactionLayer.spec.ts:240:3 › Interaction layer: motion, feedback, skeletons, toasts, date chrome › 4. a toast animates in, plays out, and carries an icon
+  [e2e] › interactionLayer.spec.ts:275:3 › Interaction layer: motion, feedback, skeletons, toasts, date chrome › 5. date fields read as our field, in both themes, with no native chrome
+  [e2e] › interactionLayer.spec.ts:327:3 › Interaction layer: motion, feedback, skeletons, toasts, date chrome › 5b. the sign-in field shows where to type, in both themes
+  [e2e] › interactionLayer.spec.ts:393:3 › Interaction layer: motion, feedback, skeletons, toasts, date chrome › 5c. the OTP boxes show where to type, in both themes
+  [e2e] › interactionLayer.spec.ts:453:3 › Interaction layer: motion, feedback, skeletons, toasts, date chrome › 6. nothing overflows and the console stays clean on a converted screen
+  [e2e] › logicalDirection.spec.ts:104:1 › a leading control sits on the inline start in both directions
+  [e2e] › logicalDirection.spec.ts:146:1 › the theme switch knob travels along the inline axis, in both languages
+  [e2e] › logicalDirection.spec.ts:188:1 › the migrated token colours render exactly what the removed shims produced
+  [e2e] › marketplaceListing.spec.ts:127:3 › Farmer marketplace listing — the owner switches › 1. the product switch saves, reads back on the form, and only unlists when unticked
+  [e2e] › marketplaceListing.spec.ts:206:3 › Farmer marketplace listing — the owner switches › 3. both new controls read in Urdu, with nothing English left behind
+  [e2e] › marketplaceListing.spec.ts:257:3 › Farmer marketplace listing — the owner switches › 2. the branch switch saves and decides what a farmer can collect
+  [e2e] › notificationsBranchTabs.spec.ts:28:3 › branch tabs read branch ids, name the branch, and never claim an unattributed row (en; mocked transport)
+  [e2e] › notificationsBranchTabs.spec.ts:28:3 › branch tabs read branch ids, name the branch, and never claim an unattributed row (ur; mocked transport)
+  [e2e] › otpResume.spec.ts:30:1 › a reload on the code screen keeps the sign-in in progress
+  [e2e] › otpResume.spec.ts:42:1 › a new tab does not inherit a half-finished sign-in
+  [e2e] › overlayAboveNav.spec.ts:70:5 › overlays paint above the bottom tab bar › light: the sheet, not the nav, is on top where they overlap
+  [e2e] › overlayAboveNav.spec.ts:70:5 › overlays paint above the bottom tab bar › dark: the sheet, not the nav, is on top where they overlap
+  [e2e] › overlayAboveNav.spec.ts:113:3 › overlays paint above the bottom tab bar › Urdu / RTL: the same sheet still wins
+  [e2e] › overlayRtl.spec.ts:137:3 › Overlays — dialogs and sheets in EN/LTR and UR/RTL › the deactivate confirmation is centred, translated, and mirrors its buttons
+  [e2e] › overlayRtl.spec.ts:221:3 › Overlays — dialogs and sheets in EN/LTR and UR/RTL › the supplier sheet anchors to the bottom and reads correctly in both directions
+  [e2e] › productOpeningStock.spec.ts:40:3 › Product opening stock › the stock typed on the form is what the variant is created with
+  [e2e] › retryAfterTimeout.spec.ts:53:3 › Browser retry after a timed-out write › one sale — the timed-out attempt is reused on retry, never repeated
+  [e2e] › roleDeleteSafety.spec.ts:73:3 › Role delete safety › a double tap deletes the role once and does not report a failure
+  [e2e] › roleInUseDeletion.spec.ts:124:3 › Role deletion — assigned role revokes its access › the confirmation names the employees who lose the access, and confirming revokes it
+  [e2e] › roleInUseDeletion.spec.ts:182:3 › Role deletion — assigned role revokes its access › a repeated deletion from a signed-in client cannot revive the role
+  [e2e] › rtlLtr.spec.ts:81:3 › RTL/LTR + Urdu Support › 1. Language switch sets document.dir correctly
+  [e2e] › rtlLtr.spec.ts:125:3 › RTL/LTR + Urdu Support › 2. Dashboard LTR: English content, left-aligned elements
+  [e2e] › rtlLtr.spec.ts:145:3 › RTL/LTR + Urdu Support › 3. Dashboard RTL: Urdu content, right-aligned elements
+  [e2e] › rtlLtr.spec.ts:165:3 › RTL/LTR + Urdu Support › 4. Customer list: LTR and RTL rendering
+  [e2e] › rtlLtr.spec.ts:186:3 › RTL/LTR + Urdu Support › 5. NavHeader: renders with correct direction
+  [e2e] › rtlLtr.spec.ts:203:3 › RTL/LTR + Urdu Support › 6. SearchBar: renders in RTL mode
+  [e2e] › rtlLtr.spec.ts:224:3 › RTL/LTR + Urdu Support › 7. Product list: LTR and RTL rendering
+  [e2e] › rtlLtr.spec.ts:243:3 › RTL/LTR + Urdu Support › 8. Admin dashboard: LTR and RTL rendering
+  [e2e] › rtlLtr.spec.ts:262:3 › RTL/LTR + Urdu Support › 9. Settings page: language toggle works
+  [e2e] › rtlLtr.spec.ts:283:3 › RTL/LTR + Urdu Support › 10. No horizontal overflow in RTL mode
+  [e2e] › rtlLtr.spec.ts:311:3 › RTL/LTR + Urdu Support › 11. CSS: Tailwind logical padding (ps-4/pe-4) works in RTL
+  [e2e] › rtlLtr.spec.ts:330:3 › RTL/LTR + Urdu Support › 12. ConfirmDialog: centered in both LTR and RTL
+  [e2e] › rtlLtr.spec.ts:349:3 › RTL/LTR + Urdu Support › 13. Text alignment: text-start works in both directions
+  [e2e] › rtlLtr.spec.ts:372:3 › RTL/LTR + Urdu Support › 14. Padding: ps-* and pe-* work in RTL
+  [e2e] › rtlLtr.spec.ts:388:3 › RTL/LTR + Urdu Support › 15. FlexRow: direction attribute flips in RTL
+  [e2e] › rtlLtr.spec.ts:413:3 › RTL/LTR + Urdu Support › 16. Multiple pages render in RTL
+  [e2e] › setupCompletion.spec.ts:267:3 › Business setup status is derived and self-retiring › 1. empty shop: nothing done, three missing steps each with its action
+  [e2e] › setupCompletion.spec.ts:306:3 › Business setup status is derived and self-retiring › 2. adding a supplier moves the status, from the real data
+  [e2e] › setupCompletion.spec.ts:337:3 › Business setup status is derived and self-retiring › 3. complete setup: the guidance disappears by itself
+  [e2e] › setupCompletion.spec.ts:362:3 › Business setup status is derived and self-retiring › 4. the block carries the Settings page's own section style, not a new one
+  [e2e] › setupCompletion.spec.ts:418:3 › Business setup status is derived and self-retiring › 6. Home gives a new shop the three steps, in dependency order, and retires them
+  [e2e] › setupCompletion.spec.ts:499:3 › Business setup status is derived and self-retiring › 5. Urdu / RTL renders the same block in Urdu
+  [e2e] › skeletonCoverage.spec.ts:64:3 › skeleton coverage: a waiting list shows its own shape › every fetching screen waits in shape and never claims to be empty
+  [e2e] › skeletonCoverage.spec.ts:159:3 › skeleton coverage: a waiting list shows its own shape › the customer picker inside the group-reminder sheet waits too
+  [e2e] › splitPayment.spec.ts:82:3 › Split Payment Recording › Split payment: full lifecycle from UI to DB
+  [e2e] › splitPayment.spec.ts:157:3 › Split Payment Recording › Authorization: employee cannot record payment via RPC
+  [e2e] › systemDrive.spec.ts:104:3 › one central token drives many screens › changing --text-row and --icon moves three screens without touching them
+  [e2e] › voidSaleSafety.spec.ts:63:3 › Void sale safety › the confirmation names the sale, explains the consequence, and double-tapping it voids once
+Total: 149 tests in 34 files

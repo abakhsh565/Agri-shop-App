@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useCustomersStore } from "@/stores/customersStore";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import Photo from "@/components/ui/Photo";
 import { useThemeStore } from "@/stores/themeStore";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
@@ -60,8 +61,8 @@ export default function CustomerSelector({ selectedIds, onChange, filterFn, maxS
         <Search size={16} className="absolute start-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-secondary)" }} />
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder={t("inline.search_customers")}
-          className="w-full h-10 rounded-[var(--radius-tile)] ps-10 pe-10 text-13 outline-none"
-          style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--border-control)" }} />
+          className="w-full h-12 rounded-[var(--radius-tile)] ps-10 pe-10 text-13 outline-none"
+          style={{ background: "var(--field-bg)", color: "var(--text-primary)" }} />
         {search && <button onClick={() => setSearch("")} className="absolute end-3 top-1/2 -translate-y-1/2"><X size={14} style={{ color: "var(--text-secondary)" }} /></button>}
       </div>
       <div className="flex items-center justify-between px-1">
@@ -94,7 +95,11 @@ export default function CustomerSelector({ selectedIds, onChange, filterFn, maxS
               <button key={c.id} onClick={() => toggle(c.id)}
                 className="flex items-center gap-3 p-3 rounded-[var(--radius-tile)] text-start transition-colors"
                 style={{ background: isSelected ? "var(--brand-light, #d9f99d)" : "transparent", border: isSelected ? "1px solid var(--brand-dark, #65a30d)" : "1px solid transparent" }}>
-                {c.imageUrl ? (<img src={c.imageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />) : (<div className="w-9 h-9 rounded-full flex items-center justify-center text-11 font-bold shrink-0" style={{ background: getAvatarColor(c.name), color: "#fff" }}>{getInitials(c.name)}</div>)}
+                <Photo
+                  src={c.imageUrl}
+                  className="w-9 h-9 rounded-full object-cover shrink-0"
+                  fallback={<div className="w-9 h-9 rounded-full flex items-center justify-center text-11 font-bold shrink-0" style={{ background: getAvatarColor(c.name), color: "#fff" }}>{getInitials(c.name)}</div>}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-13 font-semibold truncate" style={{ color: "var(--text-primary)" }}>{c.name}</p>

@@ -26,7 +26,13 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { STAGING_PROJECT_ID } from '../../src/lib/environmentContract';
 import { SHARED_E2E_GLOBS } from '../../scripts/dev/lib.mjs';
-import { assertReusedServerIsOurs, IDENTITY_MODULE_PATH } from '../e2e/global-setup';
+import {
+  assertReusedServerIsOurs,
+  claimE2eQaRunLock,
+  e2eGlobalSetup,
+  IDENTITY_MODULE_PATH,
+} from '../e2e/global-setup';
+import type { LockClient } from '../setup/qa-lock';
 
 const openServers: Server[] = [];
 
@@ -165,6 +171,204 @@ describe('the guard is wired into the runs it protects', () => {
     // If the path ever stops existing, every run would fail closed for the wrong reason.
     expect(IDENTITY_MODULE_PATH).toBe('/src/lib/envGuard.ts');
     expect(readFileSync(join(process.cwd(), 'src/lib/envGuard.ts'), 'utf8').length).toBeGreaterThan(0);
+  });
+
+  test('both configs inherit the QA run lock from that same setup, not from a second teardown', () => {
+    for (const file of configs) {
+      const text = readFileSync(join(process.cwd(), file), 'utf8');
+      // A separate `globalTeardown` module cannot see the client the setup opened, so it could not
+      // release the session-scoped lock. The release closure returned by the setup is the only
+      // wiring that keeps the claim and the release in one process.
+      expect(text, `${file} must not wire a separate global teardown`).not.toMatch(/globalTeardown:/);
+    }
+  });
+});
+
+/**
+ * The claim itself, proved through a fake client: no connection is opened, no query reaches QA.
+ *
+ * What a fake cannot prove is that the lock really holds for the life of a Playwright run — that is
+ * the same measurement `qaRunLock.test.ts` records for the session, and it is not asserted here.
+ */
+const ENROLLED_CLUSTER_ID = '9000000000000000001';
+
+function fakeLockClient(options: { held?: boolean; connectFails?: string } = {}) {
+  const calls: string[] = [];
+  let ended = false;
+  const client: LockClient = {
+    async connect() {
+      calls.push('connect');
+      if (options.connectFails) throw new Error(options.connectFails);
+    },
+    async query(sql: string) {
+      calls.push(sql);
+      if (/pg_control_system/.test(sql)) return { rows: [{ id: ENROLLED_CLUSTER_ID }] };
+      if (/pg_try_advisory_lock/.test(sql)) return { rows: [{ ok: !options.held }] };
+      return { rows: [{ pg_advisory_unlock: true }] };
+    },
+    async end() {
+      ended = true;
+    },
+  };
+  return { client, calls, ended: () => ended };
+}
+
+const PLAYWRIGHT_ARGV = ['node', 'playwright', 'test'] as const;
+
+function claimDeps(client: LockClient | null, overrides: Record<string, unknown> = {}) {
+  return {
+    argv: PLAYWRIGHT_ARGV,
+    loadEnv: () => undefined,
+    targetProblem: () => null,
+    createClient: () => client,
+    enrolled: ENROLLED_CLUSTER_ID,
+    rehearsal: false,
+    ...overrides,
+  };
+}
+
+describe('an E2E run claims the same lock an integration run uses', () => {
+  test('claims after the identity read and releases the session it held', async () => {
+    const { client, calls, ended } = fakeLockClient();
+
+    const claim = await claimE2eQaRunLock(claimDeps(client));
+
+    expect(claim, 'a run that executes tests must hold the lock').not.toBeNull();
+    expect(calls[0]).toBe('connect');
+    expect(calls[1], 'identity is proven on this session before the lock is asked for').toMatch(
+      /pg_control_system/,
+    );
+    expect(calls[2]).toMatch(/pg_try_advisory_lock/);
+
+    await claim!.release();
+    expect(calls.some((c) => /pg_advisory_unlock/.test(c)), 'teardown must unlock, not only close').toBe(true);
+    expect(ended(), 'the session must be closed — the lock is session-scoped').toBe(true);
+  });
+
+  test('refuses while another run holds it, closes the session, and says what that costs', async () => {
+    const { client, ended } = fakeLockClient({ held: true });
+
+    const error = await claimE2eQaRunLock(claimDeps(client)).then(
+      () => null,
+      (thrown: Error) => thrown,
+    );
+
+    expect(error, 'a second run must not start beside the first').not.toBeNull();
+    expect(error!.message).toMatch(/another QA run is in flight/);
+    expect(error!.message).toContain('918273645');
+    expect(error!.message).toMatch(/delete each other's fixtures/);
+    expect(ended(), 'a refused claim must not leave a session open').toBe(true);
+  });
+
+  test('fails closed when the session cannot be opened, and closes it anyway', async () => {
+    const { client, ended } = fakeLockClient({ connectFails: 'ENOTFOUND qa.example' });
+
+    const error = await claimE2eQaRunLock(claimDeps(client)).then(
+      () => null,
+      (thrown: Error) => thrown,
+    );
+
+    expect(error!.message).toMatch(/could not be reached to take the run lock/);
+    expect(error!.message).toContain('ENOTFOUND qa.example');
+    expect(ended(), 'a half-open client must be closed before the run stops').toBe(true);
+  });
+
+  test('fails closed when the credentials are missing — a browser run is still a QA writer', async () => {
+    let asked = false;
+    const error = await claimE2eQaRunLock(
+      claimDeps(null, {
+        createClient: () => {
+          asked = true;
+          return null;
+        },
+      }),
+    ).then(
+      () => null,
+      (thrown: Error) => thrown,
+    );
+
+    expect(asked).toBe(true);
+    expect(error!.message).toMatch(/QA credentials are missing/);
+    expect(error!.message).toMatch(/\.env\.qa/);
+  });
+
+  test('refuses a wrong QA target before it opens a connection at all', async () => {
+    let created = false;
+    const error = await claimE2eQaRunLock(
+      claimDeps(null, {
+        targetProblem: () => 'the lock would be taken on the PRODUCTION project, not QA',
+        createClient: () => {
+          created = true;
+          return null;
+        },
+      }),
+    ).then(
+      () => null,
+      (thrown: Error) => thrown,
+    );
+
+    expect(error!.message).toMatch(/PRODUCTION project/);
+    expect(created, 'a mis-pointed target must not reach the database').toBe(false);
+  });
+
+  test('a listing run claims nothing and opens nothing', async () => {
+    let created = false;
+    const claim = await claimE2eQaRunLock(
+      claimDeps(null, {
+        argv: ['node', 'playwright', 'test', '--list'],
+        createClient: () => {
+          created = true;
+          return null;
+        },
+      }),
+    );
+
+    expect(claim).toBeNull();
+    expect(created, 'npx playwright test --list must not hold the QA lock').toBe(false);
+  });
+});
+
+describe('the setup hands its release to Playwright as the global teardown', () => {
+  const configWith = (baseURL: string) =>
+    ({ projects: [{ use: { baseURL } }] }) as unknown as Parameters<typeof e2eGlobalSetup>[0];
+
+  test('returns exactly the release closure the claim produced', async () => {
+    let released = false;
+    const release = async () => {
+      released = true;
+    };
+
+    const returned = await e2eGlobalSetup(configWith('http://127.0.0.1:1'), {
+      claim: async () => ({ release }),
+    });
+
+    expect(returned, 'a held lock must give Playwright something to run on the way out').toBe(release);
+    await returned!();
+    expect(released).toBe(true);
+  });
+
+  test('a run that holds nothing returns nothing, so there is no teardown to run', async () => {
+    const returned = await e2eGlobalSetup(configWith('http://127.0.0.1:1'), { claim: async () => null });
+    expect(returned).toBeUndefined();
+  });
+
+  test('a foreign server is refused before the lock is ever claimed', async () => {
+    const origin = await serve('<html><head><title>Farmer App</title></head><body>other product</body></html>');
+    let claimed = false;
+
+    const error = await e2eGlobalSetup(configWith(origin), {
+      claim: async () => {
+        claimed = true;
+        return null;
+      },
+    }).then(
+      () => null,
+      (thrown: Error) => thrown,
+    );
+
+    expect(error, 'a foreign server must fail the run').not.toBeNull();
+    expect(error!.message).toMatch(/E2E refused to reuse the server/);
+    expect(claimed, 'a foreign server must never be accompanied by a held QA lock').toBe(false);
   });
 });
 

@@ -1,21 +1,27 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
+import Photo from "@/components/ui/Photo";
 import { useNotificationStore, type AppNotification } from "@/stores/notificationStore";
 import { useSalesStore } from "@/stores/salesStore";
+import { useShopStore } from "@/stores/shopStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
+import { branchKind } from "@/lib/branchKind";
+import { canSeeDashboard, hasPermission } from "@/lib/tenantContext";
 import { generateReminders } from "@/lib/reminderEngine";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
-import { ShoppingCart, CreditCard, ChevronRight, Bell, Search, ArrowRight, ClipboardList } from "lucide-react";
+import { ShoppingCart, CreditCard, ChevronRight, ChevronDown, Bell, Search, ArrowRight, ClipboardList, MapPin } from "lucide-react";
 import { pkToday, pkDateFromISO } from "@/lib/pkDate";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import EmployeePersonaWidgets from "@/components/employee/dashboard/PersonaWidgets";
+import RecordPaymentTargetSheet from "@/components/payments/RecordPaymentTargetSheet";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -56,8 +62,17 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const t = useT();
   const [showNotifs, setShowNotifs] = useState(false);
+  // Record Payment asks which side the money is on before it opens a screen: a customer paying
+  // off udhaar and a supplier being paid are two different books, not one screen with two names.
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
   const allSales = useSalesStore((s) => s.sales);
   const customers = useCustomersStore((s) => s.customers);
+  // The branch this person is working in. A person enrolled in one branch has nothing to
+  // switch to, so the control only exists when the server returned more than one.
+  const branches = useShopStore((s) => s.branches);
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
+  const activeBranchName = useShopStore((s) => s.activeBranchName);
+  const openSwitcher = useShopStore((s) => s.openSwitcher);
   // Read both stores unconditionally: short-circuiting a hook call is what
   // crashed this screen, since React must see the same hooks every render.
   const salesReady = useSalesStore((s) => s.ready);
@@ -81,16 +96,15 @@ export default function DashboardPage() {
   const isUrdu = language === "ur";
   const firstName = user?.name?.split(" ")[0] ?? "Ahmed";
   const now = useCurrentTime();
-  const today = now;
-  const hour = today.getHours();
-  const greetingKey =
-    hour < 12 ? "dashboard.greeting.morning"
-    : hour < 17 ? "dashboard.greeting.afternoon"
-    : "dashboard.greeting.evening";
-
-  const dateStr = today.toLocaleDateString(isUrdu ? "ur-PK" : "en-PK", {
-    weekday: "long", day: "numeric", month: "long",
-  });
+  // The header states where this person is working, not who they are or what time it is:
+  // the branch is the one fact that changes what every number below means.
+  const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
+  const branchPlace = activeBranch?.place ?? null;
+  // A branch with coordinates but no map label falls back to its own name in `place`. Showing
+  // that would print the branch twice, so in that case the address is the useful second line.
+  const branchLocation = branchPlace
+    ? (branchPlace.label && branchPlace.label !== activeBranchName ? branchPlace.label : branchPlace.address)
+    : null;
 
   // Live metrics
   const todayStr = pkToday();
@@ -106,6 +120,11 @@ export default function DashboardPage() {
   const badgeCount   = unread();
   // Spec EMP-DASH-HOME: today's sales, transactions, customers served, paid/credit.
   const customersServed = new Set(salesToUse.map((s) => s.customerId).filter(Boolean)).size;
+  // Dashboard visibility is a per-role decision, not a side effect of holding a
+  // permission. Both answers must be true: the owner selected the block for the role,
+  // and the employee holds the permission the block needs. The database filters the
+  // same list again, so this is the rendering half of the rule, not the enforcement.
+  const showSales = canSeeDashboard("sales_overview") && hasPermission("sales.view");
 
   async function handleRefresh() {
     await useSalesStore.getState().load();
@@ -190,18 +209,53 @@ export default function DashboardPage() {
           className="flex items-center justify-center rounded-full shrink-0 size-[44px] font-bold text-15 transition-transform active:scale-95 overflow-hidden"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
         >
-          {user?.photoUrl ? (
-            <img src={user.photoUrl} alt="" className="w-full h-full object-cover" />
-          ) : (
-            firstName.charAt(0).toUpperCase()
-          )}
+          <Photo
+            src={user?.photoUrl}
+            className="w-full h-full object-cover"
+            fallback={firstName.charAt(0).toUpperCase()}
+          />
         </button>
 
         <div className="flex flex-col flex-1 min-w-0">
-          <p className="font-bold text-17 truncate" style={{ color: "var(--text-primary)" }}>
-            {t(greetingKey)}, {firstName}
-          </p>
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>{dateStr}</p>
+          {branches.length > 1 ? (
+            <button
+              type="button"
+              data-testid="employee-branch-switch"
+              onClick={() => openSwitcher()}
+              className="flex items-center gap-1.5 self-start max-w-full active:opacity-60"
+            >
+              <span className="font-bold text-17 truncate" style={{ color: "var(--text-primary)" }}>
+                {activeBranchName ?? t("audit.noBranch")}
+              </span>
+              {branchKind(t, activeBranch?.isMain) && (
+                <span className="text-10 font-bold h-5 px-1.5 rounded-full flex items-center shrink-0"
+                  style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>
+                  {branchKind(t, activeBranch?.isMain)}
+                </span>
+              )}
+              <ChevronDown size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
+            </button>
+          ) : (
+            <p className="font-bold text-17 truncate flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
+              <span className="truncate">{activeBranchName ?? t("audit.noBranch")}</span>
+              {branchKind(t, activeBranch?.isMain) && (
+                <span className="text-10 font-bold h-5 px-1.5 rounded-full flex items-center shrink-0"
+                  style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>
+                  {branchKind(t, activeBranch?.isMain)}
+                </span>
+              )}
+            </p>
+          )}
+          {branchLocation && (
+            <p
+              data-testid="employee-branch-location"
+              className="text-12 mt-0.5 flex items-center gap-1 min-w-0"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              <MapPin size={11} className="shrink-0" />
+              <span className="truncate">{branchLocation}</span>
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -230,7 +284,7 @@ export default function DashboardPage() {
       {/* ── Metric card — brand lime ── */}
       {/* `data-tour` anchors for the employee's own tour: the two blocks it teaches.
           Additive attributes only. */}
-      <div className="px-4 animate-fade-in-up" data-tour="home:kpis">
+      {showSales && (<div className="px-4 animate-fade-in-up" data-tour="home:kpis">
         <div
           className="rounded-[var(--radius-card)] p-5 cursor-pointer transition-transform active:scale-[0.98]"
           style={{ background: "var(--brand)" }}
@@ -294,11 +348,11 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-      </div>
+      </div>)}
 
 
       {/* ── Today's activity: Transactions · Customers served ── */}
-      <div className="px-4 pt-3 flex gap-2.5 animate-fade-in-up delay-75">
+      {showSales && (<div className="px-4 pt-3 flex gap-2.5 animate-fade-in-up delay-75">
         <div className="flex-1 rounded-[var(--radius-tile)] px-4 py-3" style={{ background: "var(--surface-2)" }}>
           <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
             {t("admin.transactions")}
@@ -311,35 +365,39 @@ export default function DashboardPage() {
           </p>
           <p className="text-18 font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>{customersServed}</p>
         </div>
-      </div>
+      </div>)}
+
+      {/* The persona blocks come before the quick actions for a non-sales workspace, so a
+          finance or stock role opens on its own numbers instead of on a sales-shaped page. */}
+      {!showSales && <EmployeePersonaWidgets salesOverviewVisible={false} />}
 
       {/* ── Quick Actions ── */}
-      <div className="px-4 pt-4 animate-fade-in-up delay-75" data-tour="home:actions">
+      {(hasPermission("sales.create") || hasPermission("customers.payments")) && (<div className="px-4 pt-4 animate-fade-in-up delay-75" data-tour="home:actions">
         <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.quickActions")}
         </p>
         <div className="flex gap-3">
-          <button
+          {hasPermission("sales.create") && (<button
             onClick={() => navigate("/employee/sale")}
             className="flex-1 h-12 rounded-full font-bold text-14 flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
             <ShoppingCart size={15} strokeWidth={2.5} />
             {t("dashboard.newSale")}
-          </button>
-          <button
-            onClick={() => navigate("/employee/customers")}
+          </button>)}
+          {hasPermission("customers.payments") && (<button
+            onClick={() => setRecordPaymentOpen(true)}
             className="flex-1 h-12 rounded-full font-bold text-14 flex items-center justify-center gap-2 transition-transform active:scale-[0.97]"
             style={{ border: "1.5px solid var(--divider)", color: "var(--text-primary)", background: "transparent" }}
           >
             <CreditCard size={15} strokeWidth={2} />
             {t("dashboard.recordPayment")}
-          </button>
+          </button>)}
         </div>
-      </div>
+      </div>)}
 
       {/* ── Recent Sales ── */}
-      <div className="px-4 pt-5 pb-4 animate-fade-in-up delay-150">
+      {showSales && (<div className="px-4 pt-5 pb-4 animate-fade-in-up delay-150">
         <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
           {t("dashboard.recentSales")}
         </p>
@@ -358,13 +416,18 @@ export default function DashboardPage() {
             <ListRow
               key={sale.id}
               onClick={() => navigate(`/employee/sales/${sale.id}`)}
-              tile={cImg ? (
-                <img src={cImg} alt={sale.customerName} className="size-9 rounded-full object-cover shrink-0" />
-              ) : (
-                <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
-                  {sale.customerName.charAt(0).toUpperCase()}
-                </div>
-              )}
+              tile={
+                <Photo
+                  src={cImg}
+                  alt={sale.customerName}
+                  className="size-9 rounded-full object-cover shrink-0"
+                  fallback={
+                    <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
+                      {sale.customerName.charAt(0).toUpperCase()}
+                    </div>
+                  }
+                />
+              }
               trailing={
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
@@ -390,7 +453,24 @@ export default function DashboardPage() {
             );
           })}
         </ListCard>
-      </div>
+      </div>)}
+
+      {showSales && <EmployeePersonaWidgets salesOverviewVisible />}
+
+      {/* Which side is this payment on? The customer book and the supplier book are one tap
+          apart from Home, so neither side has to be found through another module. */}
+      <RecordPaymentTargetSheet
+        open={recordPaymentOpen}
+        onClose={() => setRecordPaymentOpen(false)}
+        onCustomers={() => {
+          setRecordPaymentOpen(false);
+          navigate("/employee/customers");
+        }}
+        onSuppliers={() => {
+          setRecordPaymentOpen(false);
+          navigate("/employee/companies");
+        }}
+      />
     </div>
     </PullToRefresh>
   );

@@ -118,8 +118,7 @@ export default function ScanButton({ onScan, label, size = "md" }: ScanButtonPro
               placeholder={t("common.barcodePlaceholder")}
               className="w-full h-12 rounded-full px-4 text-sm outline-none font-mono"
               style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--divider)",
+                background: "var(--field-bg)",
                 color: "var(--text-primary)",
               }}
             />

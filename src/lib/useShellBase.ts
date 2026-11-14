@@ -8,7 +8,9 @@ import { useLocation } from "react-router-dom";
  * in — otherwise an admin tapping a customer would be thrown into the employee
  * side. Build every internal link as `${base}/...` instead of hardcoding a shell.
  */
-export function useShellBase(): "/admin" | "/employee" {
+export function useShellBase(): "/admin" | "/employee" | "/co-owner" {
   const { pathname } = useLocation();
-  return pathname.startsWith("/admin") ? "/admin" : "/employee";
+  if (pathname.startsWith("/admin")) return "/admin";
+  if (pathname.startsWith("/co-owner")) return "/co-owner";
+  return "/employee";
 }

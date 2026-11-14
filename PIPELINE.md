@@ -284,3 +284,13 @@ environment check and the payload allow list.
 Known gap, recorded rather than hidden: `service_role` has SELECT but no DELETE grant on the table, so
 pruning (retention) requires SQL. The self-test row used for this proof was removed that way; the
 pruned count is 0 and the table has 0 client SELECT policies.
+
+**Superseded in part, 2026-10-19 — the record is not an alert.** The table above proves the *destination*
+works; it cannot tell a person that a release broke, because nothing reads it on a schedule and this
+repository deliberately holds no production read path (`docs/PRODUCTION_DATA_POLICY.md` §2). The
+notification half is therefore a vendor the browser sends to — `src/lib/errorReporting.ts` +
+Sentry — with the same allow-list rules, plus a release timeline (`release-timeline.yml`,
+`scripts/deploy/mark-release.mjs`) so an error can be read against the deploy that caused it. The
+record in `client_error_events` is unchanged. What is proven and what is still blocked (it needs a
+DSN and three CI values from the owner) is stated in `docs/MONITORING.md` §3 and
+`device-evidence/monitoring-error-reporting-2026-10-19.md`.

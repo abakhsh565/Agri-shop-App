@@ -7,9 +7,10 @@
  *   Tier 0  documentation-only changes        → tsc + build
  *   Tier 1  UI / copy / component / settings  → tsc + unit guards + affected E2E lanes + build
  *   Tier 2  money, RBAC, migrations, destructive actions, integration tests,
- *           release workflow                   → tsc + full vitest + canonical E2E lanes
- *                                                 (forced, never skipped) + affected lanes + build
- *                                                 + independent QA row count
+ *           release workflow                   → tsc + unit vitest + measured integration runner
+ *                                                 (one QA lock, reviewed 7-file shard + serial
+ *                                                 remainder) + canonical E2E lanes (forced, never
+ *                                                 skipped) + affected lanes + build + QA baseline
  *
  * LANE CACHING (locked decision)
  *   A lane is skipped only when (a) it was GREEN, and (b) every file its
@@ -179,7 +180,7 @@ const plan = {
   why: computed.why,
   changed: changed.length,
   files: changed.slice(0, 12),
-  vitest: tier >= 2 ? 'full (unit + integration)' : tier === 1 ? 'unit guards' : 'none',
+  vitest: tier >= 2 ? 'unit + integration (serial)' : tier === 1 ? 'unit guards' : 'none',
   lanes: toRun.map((r) => `${r.lane}${r.forced ? ' (tier-2 coverage)' : ''}`),
   skipped,
   build: true,
@@ -206,7 +207,21 @@ for (const { lane } of toRun) laneHashes[lane] = hashOf(hashMap(laneFiles(lane))
 const started = Date.now();
 
 if (!step('tsc --noEmit', 'npx', ['tsc', '--noEmit'])) { /* fail-fast */ }
-if (!failure && tier >= 2 && !step('vitest (full)', 'npx', ['vitest', 'run'])) { /* fail-fast */ }
+// UNIT AND INTEGRATION ARE SEPARATE; ONE SHARED RUNNER OWNS THE QA LOCK.
+//
+// Integration files share one QA database, so running them with parallel FILES lets one file's
+// ownership cleanup delete the rows a sibling is mid-assertion on — a red that says nothing about
+// the product. `ci.yml` has always passed `--fileParallelism=false`; this gate used to run a single
+// unfiltered `vitest run`, which was the same suite under different execution semantics. The serial
+// contract now lives in `vitest.integration.config.ts`, which also carries the QA run lock and the
+// declared staging environment from the base config. Serialising everything instead would also
+// serialise the whole unit tree, none of which opens a database, so the split is the narrow fix: the unit run
+// keeps its parallelism (and `tests/unit/` filters the QA lock out, per `qaDatabaseIsInScope`), and
+// the integration run is the only one that can reach QA.
+// `tests/unit/integrationSerialGuard.test.ts` fails if this step, `package.json`, either config or
+// the workflows drift apart again.
+if (!failure && tier >= 2 && !step('vitest (unit guards)', 'npx', ['vitest', 'run', 'tests/unit/'])) { /* fail-fast */ }
+if (!failure && tier >= 2 && !step('vitest (integration measured shard + serial remainder)', 'node', ['scripts/dev/run-integration.mjs', '--reporter=dot'])) { /* fail-fast */ }
 if (!failure && tier === 1 && !step('vitest (unit guards)', 'npx', ['vitest', 'run', 'tests/unit/'])) { /* fail-fast */ }
 
 if (!failure && toRun.length) {

@@ -12,10 +12,14 @@ partial artifact.
 
 ```bash
 npx tsc --noEmit                 # types
-npx vitest run                   # full unit + integration suite, includes every guard
+npm test                         # unit + integration; integration runs ONE FILE AT A TIME
 npx playwright test              # or: npm run test:e2e:lanes
 npm run build                    # production build
 ```
+
+`npm test` is two runs on purpose: the unit suite keeps its parallel files, and the integration
+suite goes through `vitest.integration.config.ts` (`fileParallelism: false`) because its files share
+one QA database. A bare `npx vitest run` is unit-only — it can no longer be called "the full suite".
 
 Then, independently:
 

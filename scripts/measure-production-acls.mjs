@@ -78,6 +78,10 @@ const TABLES = [
   'customer_payments', 'supplier_payments', 'inventory_movements', 'stock_adjustments',
   'products', 'product_variants', 'customers', 'companies', 'users', 'audit_events',
   'branches', 'memberships', 'roles', 'role_permissions', 'permissions', 'user_permissions',
+  // The one relation `anon` is meant to reach. It is here because a measurement that leaves the
+  // public door out of scope reports `anon: SELECT 0` while the door is open — the exact kind of
+  // reassuring number this script exists to replace with a fact.
+  'marketplace_listings',
 ];
 
 const FUNCTIONS_OF_INTEREST = [
