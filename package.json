@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:qa": "vite --host 0.0.0.0 --mode qa",
+    "dev:login-bridge": "node scripts/dev/login-bridge.mjs",
     "assistant:dev": "node ai-assistant/server/dev.mjs",
     "build": "vite build",
     "preview": "vite preview",
