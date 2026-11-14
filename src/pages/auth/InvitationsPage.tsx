@@ -14,6 +14,7 @@ import {
 import type { PendingInvitation, User } from "@/types";
 import { hasPin } from "@/lib/pinLock";
 import { homePathForUser } from "@/lib/experience";
+import { openWorkspace } from "@/lib/workspace";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 
@@ -47,13 +48,13 @@ export default function InvitationsPage() {
 
   async function continueAfterDecision(updatedUser: User) {
     if (!hasPin(updatedUser.id)) {
-      navigate("/login/pin-set", {
-        replace: true,
-        state: { returnTo: "/login/business", celebrate: true },
-      });
+      navigate("/login/pin-set", { replace: true });
       return;
     }
-    navigate("/login/business", { replace: true });
+    const opened = await openWorkspace(updatedUser);
+    const next = opened.ok ? opened.user : updatedUser;
+    setUser(next);
+    navigate(homePathForUser(next), { replace: true });
   }
 
   async function handleAccept(invitation: PendingInvitation) {

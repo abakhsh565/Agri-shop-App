@@ -9,6 +9,8 @@ import { hasPin } from "@/lib/pinLock";
 import { markPhoneVerified, rememberLastProfile } from "@/lib/loginWindow";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
+import { openWorkspace } from "@/lib/workspace";
+import { homePathForUser } from "@/lib/experience";
 import { OTP_RESEND_DELAY_SECONDS, OTP_VALIDITY_SECONDS } from "@/lib/otpPolicy";
 
 // There is deliberately NO cap on tries and NO lockout. A shop owner or their
@@ -147,17 +149,19 @@ export default function OTPVerifyPage() {
       //   • **known account with a PIN here** — go through the workspace chooser. A single
       //     active Shop auto-opens there; multiple Shops are a real decision, not a guess.
       const isBrandNewAccount = !result.user.firstLoginAt;
-      const dest = "/login/business";
       if (!hasPin(result.user.id)) {
-        // `returnTo` is what tells PINSetPage this is a like-for-like swap rather than a first
-        // PIN: without it a returning user on a new phone was congratulated for creating nothing.
-        navigate(isBrandNewAccount ? "/login/account-ready" : "/login/pin-set", {
-          replace: true,
-          state: isBrandNewAccount ? undefined : { returnTo: dest },
-        });
-      } else {
-        navigate(dest, { replace: true });
+        navigate(isBrandNewAccount ? "/login/account-ready" : "/login/pin-set", { replace: true });
+        return;
       }
+
+      // Straight into the account's own shop: there is no workspace to choose from.
+      const opened = await openWorkspace(result.user);
+      if (!opened.ok) {
+        setError(t("auth.businessOpenFailed"));
+        return;
+      }
+      setUser(opened.user);
+      navigate(homePathForUser(opened.user), { replace: true });
     } finally {
       setLoading(false);
     }

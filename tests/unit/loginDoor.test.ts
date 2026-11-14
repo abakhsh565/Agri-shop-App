@@ -30,10 +30,13 @@ describe("One sign-in door", () => {
     expect(check).toBeLessThan(send);
   });
 
-  it("keeps only the phone and forgot-number exits", () => {
+  it("keeps only the phone exit, and no recovery door", () => {
     expect(source).toContain("/login/not-registered");
-    expect(source).toContain("auth.forgotNumber");
     expect(source).not.toContain("/login/request-access");
     expect(source).not.toContain("auth.forgotPin");
+    // The Agri-ID / recovery-key door is gone (owner's instruction, 2026-11-14): a forgotten
+    // number is handled by registering again, not by proving ownership of a second identifier.
+    expect(source).not.toContain("/login/recover");
+    expect(source).not.toContain("auth.forgotNumber");
   });
 });
