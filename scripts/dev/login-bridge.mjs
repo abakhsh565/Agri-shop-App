@@ -12,6 +12,12 @@
  *   node scripts/dev/login-bridge.mjs            # switch it on and repair existing accounts
  *   node scripts/dev/login-bridge.mjs status     # what the switch says, and coverage
  *   node scripts/dev/login-bridge.mjs repair     # repair without touching the switch
+ *   node scripts/dev/login-bridge.mjs enable --remote staging
+ *
+ * WHERE IT RUNS. Everywhere the app signs in with the demo code rather than a delivered SMS —
+ * development, and staging (`deploy-staging.yml` builds with `VITE_OTP_DELIVERY: demo`). Production
+ * is a real SMS build: its sign-in already creates `auth.users`, so nothing there may run this, and
+ * no migration switches the bridge on.
  *
  * Usage in development:
  *   npm run dev:login-bridge
@@ -21,19 +27,48 @@ import pg from 'pg';
 
 const LOCAL_DB = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres';
 
-function localConnection() {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
-  if (existsSync('.env.local')) {
-    for (const line of readFileSync('.env.local', 'utf8').split(/\r?\n/)) {
-      const m = /^DATABASE_URL=(.*)$/.exec(line.trim());
-      if (m) return m[1].replace(/^['"]|['"]$/g, '');
-    }
+function envFile(name) {
+  const out = {};
+  if (!existsSync(name)) return out;
+  for (const line of readFileSync(name, 'utf8').split(/\r?\n/)) {
+    const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
+    if (m) out[m[1]] = m[2].replace(/^['"]|['"]$/g, '');
   }
-  return LOCAL_DB;
+  return out;
+}
+
+function connection() {
+  const remoteFlag = process.argv.indexOf('--remote');
+  const target = remoteFlag === -1 ? null : (process.argv[remoteFlag + 1] ?? '');
+
+  if (target) {
+    if (target !== 'staging' && target !== 'qa') {
+      throw new Error(`--remote accepts staging (got "${target}")`);
+    }
+    // CI supplies these as repository secrets; locally they live in .env.qa.
+    const env = { ...envFile('.env.qa'), ...process.env };
+    for (const key of ['QA_DB_HOST', 'QA_DB_USER', 'QA_DB_PASS']) {
+      if (!env[key]) throw new Error(`--remote ${target} needs ${key}`);
+    }
+    return {
+      host: env.QA_DB_HOST,
+      port: Number(env.QA_DB_PORT || 5432),
+      user: env.QA_DB_USER,
+      password: env.QA_DB_PASS,
+      database: env.QA_DB_NAME || 'postgres',
+      ssl: { rejectUnauthorized: false },
+    };
+  }
+
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  const local = envFile('.env.local').DATABASE_URL;
+  return local || LOCAL_DB;
 }
 
 const command = process.argv[2] ?? 'enable';
-const client = new pg.Client({ connectionString: localConnection() });
+const client = new pg.Client(typeof connection() === 'string'
+  ? { connectionString: connection() }
+  : connection());
 await client.connect();
 
 try {

@@ -9,12 +9,14 @@
  * safe are asserted here, because a later migration could silently take any of them away:
  *
  *   1. The switch arrives OFF — the migration itself never enables it.
- *   2. No migration turns it on — only `scripts/dev/login-bridge.mjs` does, and that script is not
- *      part of any deploy path.
+ *   2. No migration turns it on. A workflow may, and only the one that builds a demo-OTP bundle:
+ *      `deploy-staging.yml` (VITE_OTP_DELIVERY: demo) has to, because that build signs in with the
+ *      derived credentials and nothing else creates `auth.users` there; `deploy-production.yml`
+ *      signs in with a delivered SMS and must never mention it.
  *   3. The functions stay server-only: SECURITY DEFINER, and EXECUTE revoked from every client role.
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, test } from 'vitest';
@@ -25,6 +27,10 @@ const BRIDGE_FILE = '0315_a_demo_login_gets_the_identity_an_sms_login_would.sql'
 
 const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort();
 const bridge = readFileSync(join(MIGRATIONS, BRIDGE_FILE), 'utf8');
+const workflow = (name: string) => {
+  const file = join(ROOT, '.github/workflows', name);
+  return existsSync(file) ? readFileSync(file, 'utf8') : '';
+};
 
 describe('login bridge (0315)', () => {
   test('the switch is created switched off', () => {
@@ -48,6 +54,12 @@ describe('login bridge (0315)', () => {
     expect(bridge).toMatch(
       /revoke execute on function public\.dev_login_identity\(text, uuid\) from public, anon, authenticated/i,
     );
+  });
+
+  test('only the demo-OTP workflow switches it on, and production never mentions it', () => {
+    expect(workflow('deploy-staging.yml')).toMatch(/scripts\/dev\/login-bridge\.mjs enable --remote staging/);
+    expect(workflow('deploy-staging.yml')).toMatch(/VITE_OTP_DELIVERY: demo/);
+    expect(workflow('deploy-production.yml')).not.toMatch(/login-bridge/i);
   });
 
   test('a new account gets its login on insert, and a failed bridge cannot break the approval', () => {

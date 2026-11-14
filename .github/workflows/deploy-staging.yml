@@ -77,6 +77,15 @@ jobs:
       - name: The staging ledger must now show nothing pending
         run: node scripts/migrate.mjs verify --env staging
 
+      # The staging bundle is built with VITE_OTP_DELIVERY: demo (two steps below), so this database
+      # signs people in with the derived credentials exactly like development does — and a real SMS
+      # build is the only environment where the sign-in itself creates `auth.users`. Without this,
+      # every approved request on staging left a profile with no login behind it and the next sign-in
+      # answered LOGIN_NOT_READY (measured 2026-11-14 on 923004444444). Production never runs this:
+      # `tests/unit/loginBridgeGuard.test.ts` fails if it appears in deploy-production.yml.
+      - name: The demo-OTP bundle gets the login bridge its sign-in depends on
+        run: node scripts/dev/login-bridge.mjs enable --remote staging
+
       - name: Build the staging bundle (VITE_APP_ENV=staging)
         env:
           VITE_APP_ENV: staging
