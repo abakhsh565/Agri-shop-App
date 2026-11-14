@@ -108,7 +108,7 @@ try {
        from public.users u
        left join auth.users a on a.id = u.id
       where a.id is null
-        and u.phone is not null
+        and u.phone ~ '^[0-9]+$'
       order by u.created_at`,
   );
 
@@ -122,10 +122,17 @@ try {
 
   console.log(`Backfill: ${repaired} login(s) created, ${refused} account(s) still without one.`);
 
+  // Only a real phone number can sign in at all. Synthetic fixture rows carry identifiers like
+  // `92300DST0001` in the phone column; they have no derivation and no screen, so counting them
+  // would fail a deploy over a row nobody can log in with.
   const { rows: left } = await client.query(
-    `select count(*)::int as n from public.users u left join auth.users a on a.id = u.id where a.id is null`,
+    `select count(*)::int as n
+       from public.users u
+       left join auth.users a on a.id = u.id
+      where a.id is null
+        and u.phone ~ '^[0-9]+$'`,
   );
-  console.log(`Accounts without a login now: ${left[0].n}`);
+  console.log(`Phone accounts without a login now: ${left[0].n}`);
   if (left[0].n > 0) {
     console.warn('Those accounts cannot sign in on a demo-OTP build until they have an identity.');
     process.exitCode = 2;
