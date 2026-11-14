@@ -33,7 +33,10 @@ for (const language of ['en', 'ur'] as const) {
           lifecycleCalls.push({ rpc: name, ...body }); createdBranch = body.p_branch_id;
           data = { success: true, branch_id: createdBranch, tenant_id: tenant, branch_name: 'New Branch' };
         }
-        if (name === 'get_branch_activity') data = [{ id: 'audit-fixture', action: 'sale_created', entity_type: 'sale', entity_id: 'sale-fixture',
+        // The activity feed is one RPC behind two screens: the branch/employee activity screens call
+        // `get_branch_activity`, and the Activity log screen calls `get_activity_feed` (measured
+        // 2026-11-14). Both answer the same row shape here.
+        if (name === 'get_branch_activity' || name === 'get_activity_feed') data = [{ id: 'audit-fixture', action: 'sale_created', entity_type: 'sale', entity_id: 'sale-fixture',
           actor_id: owner, actor_name: 'Fixture Owner', actor_role: 'owner', branch_id: activeBranch, branch_name: activeBranch === createdBranch ? 'New Branch' : 'Warehouse',
           details: { result: 'succeeded' }, created_at: '2026-10-05T00:00:00Z' }];
         if (name === 'archive_operating_branch') {
@@ -63,17 +66,24 @@ for (const language of ['en', 'ur'] as const) {
         membershipStatus: 'active', firstLoginAt: '2026-10-04T00:00:00Z',
       } }, version: 0 }));
       localStorage.setItem('agrishop-theme', JSON.stringify({ state: { language, theme: 'light' }, version: 0 }));
+      // The workspace shells are gated on this device having a PIN (`ProtectedRoute requirePin`),
+      // which redirects to /login/pin-set. This lane mocks the transport and never signs in, so the
+      // device marker is what it must carry — the same thing `coOwner.local.spec.ts` seeds. Without
+      // it every route lands on "Set a 4-digit PIN" and no screen under test is ever rendered.
+      localStorage.setItem(`agri_pin_set_${owner}`, "1");
     }, { language, tenant, owner });
     await page.setViewportSize({ width: 390, height: 844 });
     // The add/move-existing-employee mode left this screen with its "Existing employee" CTA on
     // 2026-10-25; the branch lifecycle below is what this spec still owns.
-    await page.goto('/admin/settings/profile');
+    // The branch rows live on their own hub screen (`settings/hub/branches` → `AdminBranchesSectionPage`
+    // → `components/shop/BranchesSection`); they moved off `/admin/settings/profile`, which no longer
+    // renders them (measured 2026-11-14 — neither `profile-details-card` nor the branch list is on it).
+    await page.goto('/admin/settings/hub/branches');
     await expect(page.getByTestId(`branch-row-${warehouse}`)).toBeVisible();
     await expect(page.getByTestId(`branch-row-${main}`)).toBeVisible();
     await page.reload();
     await expect(page.getByTestId(`branch-row-${warehouse}`)).toBeVisible();
-    await expect(page.getByTestId('profile-details-card')).toContainText('Fixture Owner');
-    await expect(page.getByTestId('profile-working-branch')).toContainText('Warehouse');
+    await expect(page.getByTestId(`branch-row-${warehouse}`)).toContainText('Warehouse');
     await page.getByTestId('branches-create').click();
     await expect(page.getByTestId('setup-step-1')).toBeVisible();
     await page.getByTestId('shop-name-input').fill('New Branch');
