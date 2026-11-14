@@ -373,14 +373,6 @@ export default function SettingsPage() {
               title={user && hasPin(user.id) ? (t("settings.changePin") || "Change PIN") : (t("settings.setupPin") || "Setup PIN")}
               trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
             />
-            <ListRow
-              onClick={() => navigate("/identity")}
-              icon={ShieldCheck}
-              title={t("identity.title")}
-              meta={t("identity.settingsMeta")}
-              testId="settings-identity"
-              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-            />
             {/* The same row the owner's Settings carries, with the same words — an employee
                 should not meet a differently-named feature depending on who they are. */}
             <ListRow

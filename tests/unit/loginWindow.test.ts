@@ -144,14 +144,16 @@ describe("every door asks the same question", () => {
     expect(read("src/pages/auth/PINLoginPage.tsx")).toMatch(/pinAllowedOnThisDevice/);
   });
 
-  it("only a verified code starts the clock, at sign-in or recovery", () => {
-    // The recovery door confirms a replacement number with a new code before it writes the
-    // phone, so it is a legitimate second anchor. Nothing else may start the window.
+  it("only a verified code starts the clock", () => {
+    // One anchor only. The recovery door used to be the second, and it was removed with the
+    // Agri-ID / recovery-key feature (owner's instruction, 2026-11-14): the sign-in code is the
+    // only thing that proves this phone belongs to this person, so nothing else may start the
+    // window. A new door that writes the phone has to add itself here and say why.
     const callers = fs
       .readdirSync(path.join(process.cwd(), "src/pages/auth"))
       .filter((f) => f.endsWith(".tsx"))
       .filter((f) => /markPhoneVerified/.test(read(`src/pages/auth/${f}`)));
-    expect(callers.sort()).toEqual(["AccountRecoveryPage.tsx", "OTPVerifyPage.tsx"]);
+    expect(callers.sort()).toEqual(["OTPVerifyPage.tsx"]);
   });
 
   it("the launch knows the account it last served, so a PIN door can be drawn", () => {

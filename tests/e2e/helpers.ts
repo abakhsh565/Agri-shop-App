@@ -528,8 +528,8 @@ export async function loginViaUi(
       }
       await page.getByRole('button', { name: PIN[PIN.length - 1], exact: true }).first().click();
     };
-    const pinDoneVisible = async () => (await page.getByTestId('pin-done-open').count()) > 0;
-    const leftPinSet = async () => !page.url().includes('pin-set') || (await pinDoneVisible());
+    // Setting a PIN navigates straight into the shop: leaving /pin-set IS the finish line.
+    const leftPinSet = async () => !page.url().includes('pin-set');
 
     // SET: the 4th digit flips to the confirm step, which empties the dots.
     await clearPin();
@@ -556,7 +556,7 @@ export async function loginViaUi(
         } catch (retryErr) {
           // A slow save from the first attempt may have finished while
           // retrying; only fail if the page is still on the pin-set form.
-          if (page.url().includes('pin-set') && !(await pinDoneVisible())) throw retryErr;
+          if (page.url().includes('pin-set')) throw retryErr;
         }
       } else {
         throw new Error('PIN entry did not reach the dashboard or success screen');
@@ -564,10 +564,7 @@ export async function loginViaUi(
     }
 
     await page.waitForTimeout(600);
-    // Standing a PIN up for the first time ends on a success screen; a like-for-like swap from
-    // Settings goes straight back. Both are real, so follow whichever one appeared.
-    const open = page.getByTestId('pin-done-open');
-    if (await open.count()) await open.click();
+    // Both onboarding and a Settings swap navigate on their own; just wait for the landing.
     await page.waitForURL(/\/(admin|employee)\/dashboard/, { timeout: 30000 });
   }
   await page.waitForTimeout(1200); // let stores hydrate from Supabase
