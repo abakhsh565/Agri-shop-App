@@ -80,11 +80,15 @@ export default function SplashPage() {
     <div className="flex flex-col bg-background min-h-full w-full justify-between">
       <StatusBar />
       <div className="flex flex-col items-center justify-center gap-6 py-[120px] flex-1">
-        {/* The badge is the launcher icon's own artwork — brand-lime circle, mark in ink — so
-            the first screen and the phone's home screen show one identity. It is an image
-            rather than themed shapes because `--ink` becomes the brand colour in dark mode,
-            which drew a lime glyph on a lime tile. */}
-        <img src="/icon-192.png" alt="" className="w-20 h-20" />
+        {/* The mark is the launcher icon's own artwork — a brand-lime disc with the glyph in
+            white on a transparent canvas, so nothing draws a tile behind it — and the first
+            screen and the phone's home screen show one identity. It is an image rather than
+            themed shapes because `--ink` becomes the brand colour in dark mode, which drew a
+            lime glyph on a lime tile. */}
+        <span className="ds-splash-mark">
+          <img src="/icon-512.png" alt="" className="ds-splash-logo w-28 h-28" />
+          <span className="ds-splash-halo" aria-hidden="true" />
+        </span>
         <div className="flex flex-col items-center gap-2 text-center">
           <p className="text-32 font-bold text-foreground">{APP_NAME}</p>
           <p className="text-sm text-caption">{t("auth.tagline")}</p>

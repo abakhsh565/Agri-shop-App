@@ -96,17 +96,14 @@ function toolName(t: (key: string) => string, tool: { name: string; title: strin
 
 /** The reference's talking mark, drawn from the app's own green rather than its orange. */
 function AssistantOrb({ compact = false }: { compact?: boolean }) {
-  const bars = compact ? 5 : 7;
   return (
     <span
       className={`ds-assistant-orb${compact ? " ds-assistant-orb--compact" : ""}`}
       aria-hidden="true"
     >
-      <span className="ds-assistant-orb-bars">
-        {Array.from({ length: bars }, (_, index) => (
-          <span key={index} style={{ animationDelay: `${index * 0.11}s` }} />
-        ))}
-      </span>
+      {/* The shop's own mark, not a second invented identity: the same disc the launcher icon
+          and the splash draw, breathing so a live conversation has a pulse. */}
+      <img src="/icon-512.png" alt="" className="ds-assistant-orb-logo" />
     </span>
   );
 }
@@ -490,12 +487,7 @@ export default function AssistantPage() {
         </button>
 
         <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
-          <span
-            className="flex size-7 shrink-0 items-center justify-center rounded-[9px]"
-            style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}
-          >
-            <Sparkles size={14} strokeWidth={1.6} />
-          </span>
+          <img src="/icon-512.png" alt="" className="size-7 shrink-0" aria-hidden="true" />
           <p className="truncate text-15 font-semibold" style={{ color: "var(--text-primary)" }}>
             {t("assistant.title")}
           </p>
