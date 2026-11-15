@@ -170,8 +170,9 @@ describe('the tool and the workflow carry the declaration through', () => {
       'utf8',
     )
       .split('\n')
-      .map((line) => line.replace(/#.*$/, '').trim())
-      .filter(Boolean);
+      .map((line) => line.trim())
+      .map((line) => line.replace(/\r$/, ''))
+      .filter((line) => line && !line.startsWith('#'));
     expect(declared).toEqual(['public.users.agri_id']);
     expect(parseVolatileColumns(declared.join(',')).unknown).toEqual([]);
   });
