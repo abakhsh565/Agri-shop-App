@@ -4,7 +4,6 @@ import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
 import FirstRunGate from "@/components/education/FirstRunGate";
-import ContextHelp from "@/components/education/ContextHelp";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { isTopLevel } from "@/lib/navDepth";
 import { Suspense, useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
@@ -355,7 +354,6 @@ export default function AdminLayout() {
           shell, so a tour step can move between the screens it teaches without the
           overlay ever having to exist outside a signed-in app. */}
       <FirstRunGate />
-      <ContextHelp />
 
       {/* The shop selector, mounted once for the whole shell. Screens open it through
           `useShopStore.openSwitcher()` rather than each mounting their own copy — one

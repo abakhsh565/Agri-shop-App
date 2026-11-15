@@ -29,6 +29,9 @@ interface BrandLogoProps {
    * surfaces that already carry their own shape (the first screen).
    */
   variant?: "badge" | "mark";
+  /** Glyph colour for the `mark` variant: the brand token by default, ink where the mark sits on
+   *  light glass, white on a dark field. */
+  tone?: "brand" | "ink" | "white";
   className?: string;
 }
 
@@ -36,9 +39,11 @@ export default function BrandLogo({
   size = 112,
   animated = true,
   variant = "badge",
+  tone = "brand",
   className = "",
 }: BrandLogoProps) {
   const isMark = variant === "mark";
+  const markColour = tone === "ink" ? "#0A0A0A" : tone === "white" ? "#FFFFFF" : "var(--brand)";
   // Two logos on one screen would otherwise share gradient and clip ids, and the second would
   // borrow the first one's defs.
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
@@ -70,8 +75,8 @@ export default function BrandLogo({
         <path
           className="ds-brand-glyph"
           d={GLYPH}
-          fill="var(--brand)"
-          stroke="var(--brand)"
+          fill={markColour}
+          stroke={markColour}
           strokeWidth={10}
           strokeLinejoin="round"
           pathLength={1}
