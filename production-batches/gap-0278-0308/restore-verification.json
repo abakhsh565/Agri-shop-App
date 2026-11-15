@@ -1,0 +1,1020 @@
+{
+  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-15T09-21-33.sql",
+  "manifest": {
+    "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-15T09-21-33.sql",
+    "environment": "production",
+    "projectRef": "gkswcfljxlutkfdvvqng",
+    "generatedAt": "2026-11-15T09:21:33.259Z",
+    "serverVersion": "17.6",
+    "identity": {
+      "configuredUser": "postgres.gkswcfljxlutkfdvvqng",
+      "serverUser": "postgres",
+      "clusterId": "7666007964130682852",
+      "note": "Session role is rewritten by the Supabase pooler, so the project ref comes from the credential."
+    },
+    "migrationLedger": {
+      "count": 97,
+      "latest": "0315"
+    },
+    "schemas": [
+      "public",
+      "auth"
+    ],
+    "tableCounts": {
+      "public.app_settings": 5,
+      "public.audit_events": 0,
+      "public.barcode_history": 0,
+      "public.barcode_registry": 0,
+      "public.branch_responsibility": 0,
+      "public.branches": 4,
+      "public.business_settings": 0,
+      "public.cash_reconciliations": 0,
+      "public.client_error_events": 0,
+      "public.co_owner_approval_requests": 0,
+      "public.co_owner_assignable_roles": 0,
+      "public.co_owner_authorities": 0,
+      "public.co_owner_authority_catalog": 14,
+      "public.co_owner_branch_scopes": 0,
+      "public.co_owner_brand_scopes": 0,
+      "public.co_owner_dashboards": 0,
+      "public.co_owner_department_scopes": 0,
+      "public.co_owner_grants": 0,
+      "public.co_owner_permissions": 0,
+      "public.co_owner_record_scopes": 0,
+      "public.co_owner_scope_settings": 0,
+      "public.co_owner_supplier_scopes": 0,
+      "public.companies": 0,
+      "public.company_branches": 0,
+      "public.credit_limit_requests": 0,
+      "public.customer_branches": 0,
+      "public.customer_crops": 0,
+      "public.customer_payments": 0,
+      "public.customers": 0,
+      "public.dashboard_widgets": 10,
+      "public.departments": 20,
+      "public.employee_access_requests": 0,
+      "public.finance_attachments": 0,
+      "public.finance_entries": 0,
+      "public.finance_entry_history": 0,
+      "public.finance_recurrences": 0,
+      "public.incident_rate_limits": 0,
+      "public.incident_signatures": 0,
+      "public.incidents": 0,
+      "public.inventory_movements": 0,
+      "public.login_bridge": 1,
+      "public.membership_branch_roles": 0,
+      "public.memberships": 3,
+      "public.notifications": 0,
+      "public.payment_reminders": 0,
+      "public.permissions": 33,
+      "public.product_barcodes": 0,
+      "public.product_branches": 0,
+      "public.product_categories": 28,
+      "public.product_units": 12,
+      "public.product_variants": 0,
+      "public.products": 0,
+      "public.purchase_items": 0,
+      "public.purchases": 0,
+      "public.reminder_configs": 0,
+      "public.reminder_logs": 0,
+      "public.reminder_occurrences": 0,
+      "public.return_items": 0,
+      "public.returns": 0,
+      "public.role_dashboards": 22,
+      "public.role_permissions": 244,
+      "public.roles": 16,
+      "public.sale_items": 0,
+      "public.sale_submissions": 0,
+      "public.sales": 0,
+      "public.shop_requests": 3,
+      "public.shops": 4,
+      "public.stock_adjustments": 0,
+      "public.supplier_payments": 0,
+      "public.user_active_shops": 1,
+      "public.user_permissions": 0,
+      "public.users": 3,
+      "public.voids": 0,
+      "auth.users": 3,
+      "auth.identities": 3
+    },
+    "structure": {
+      "functions": 230,
+      "views": [
+        "marketplace_listings",
+        "product_variants_public",
+        "users_public"
+      ],
+      "indexes": 99,
+      "foreignKeys": 166,
+      "checks": 78,
+      "uniques": 19,
+      "triggers": 59,
+      "rlsEnabled": 72,
+      "rlsDisabled": 1,
+      "rlsDisabledTables": [
+        "login_bridge"
+      ],
+      "policies": 212,
+      "tables": 73,
+      "enums": 10
+    },
+    "phaseOrder": [
+      "pre-data",
+      "data",
+      "post-data"
+    ],
+    "limitations": [
+      "Logical dump, not a physical backup; not interchangeable with pg_dump output.",
+      "Storage objects are not included (Supabase database backups exclude them too).",
+      "Grants, ownership, extensions and custom role passwords are not included.",
+      "supabase_migrations bookkeeping is not included."
+    ],
+    "bytes": 1617611,
+    "sha256": "125ca1f01a7e9e6728df38726de0ad17076ea8ea315e6280fa14babb14f7fed0",
+    "totalRows": 429,
+    "tablesDumped": 75
+  },
+  "target": "pglite",
+  "checks": {
+    "integrity": {
+      "sha256Matches": true,
+      "bytesMatch": true,
+      "sha256": "125ca1f01a7e9e6728df38726de0ad17076ea8ea315e6280fa14babb14f7fed0",
+      "bytes": 1617611
+    },
+    "replay": {
+      "statements": 2129,
+      "failures": 0,
+      "expectedFailures": 6,
+      "durationMs": 1153,
+      "authShimTables": 2,
+      "pgcrypto": "not available (extension \"pgcrypto\" is not available) — plpgsql bodies referencing extensions.crypt are not resolved at DDL time, so this only affects execution of those functions",
+      "failureDetails": [],
+      "expectedFailureDetails": [
+        {
+          "index": 42,
+          "phase": "functions-pre-tables",
+          "statement": "CREATE OR REPLACE FUNCTION public.co_owner_assert_original_owner() RETURNS memberships LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public' AS $",
+          "error": "type \"memberships\" does not exist"
+        },
+        {
+          "index": 45,
+          "phase": "functions-pre-tables",
+          "statement": "CREATE OR REPLACE FUNCTION public.co_owner_current_grant() RETURNS co_owner_grants LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function",
+          "error": "type \"co_owner_grants\" does not exist"
+        },
+        {
+          "index": 50,
+          "phase": "functions-pre-tables",
+          "statement": "CREATE OR REPLACE FUNCTION public.co_owner_grant_for(p_user_id uuid DEFAULT NULL::uuid, p_tenant_id uuid DEFAULT NULL::uuid) RETURNS co_owner_grants LANGUAGE sq",
+          "error": "type \"co_owner_grants\" does not exist"
+        },
+        {
+          "index": 57,
+          "phase": "functions-pre-tables",
+          "statement": "CREATE OR REPLACE FUNCTION public.company_in_branch(p_company uuid, p_branch uuid DEFAULT current_branch_id()) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFI",
+          "error": "function current_branch_id() does not exist"
+        },
+        {
+          "index": 93,
+          "phase": "functions-pre-tables",
+          "statement": "CREATE OR REPLACE FUNCTION public.finance_entry_snapshot(p_row finance_entries) RETURNS jsonb LANGUAGE sql IMMUTABLE AS $function$ SELECT jsonb_build_object( 'k",
+          "error": "type finance_entries does not exist"
+        },
+        {
+          "index": 148,
+          "phase": "functions-pre-tables",
+          "statement": "CREATE OR REPLACE FUNCTION public.membership_in_active_shop(p_user_id uuid DEFAULT NULL::uuid) RETURNS memberships LANGUAGE sql STABLE SECURITY DEFINER SET sear",
+          "error": "type \"memberships\" does not exist"
+        }
+      ],
+      "bootstrapFailures": []
+    },
+    "liveIdentity": {
+      "configuredUser": "postgres.gkswcfljxlutkfdvvqng",
+      "serverUser": "postgres",
+      "clusterId": "7666007964130682852",
+      "clusterIdError": null
+    },
+    "structure": {
+      "tables": {
+        "live": 73,
+        "restored": 73,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "columns": {
+        "live": 779,
+        "restored": 779,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "constraints": {
+        "live": 336,
+        "restored": 336,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 4,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": [
+            {
+              "key": "barcode_history.barcode_history_action_check",
+              "field": "def",
+              "source": "CHECK (((action)::text = ANY ((ARRAY['added'::character varying, 'replaced'::character varying, 'deleted'::character varying])::text[])))",
+              "restored": "CHECK (((action)::text = ANY (ARRAY[('added'::character varying)::text, ('replaced'::character varying)::text, ('deleted'::character varying)::text])))"
+            },
+            {
+              "key": "barcode_registry.barcode_registry_status_check",
+              "field": "def",
+              "source": "CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'retired'::character varying])::text[])))",
+              "restored": "CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('retired'::character varying)::text])))"
+            },
+            {
+              "key": "client_error_events.client_error_events_environment_check",
+              "field": "def",
+              "source": "CHECK (((environment)::text = ANY ((ARRAY['development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])))",
+              "restored": "CHECK (((environment)::text = ANY (ARRAY[('development'::character varying)::text, ('staging'::character varying)::text, ('production'::character varying)::text])))"
+            },
+            {
+              "key": "shops.shops_type_shape",
+              "field": "def",
+              "source": "CHECK (((shop_type IS NULL) OR ((shop_type)::text = ANY ((ARRAY['retail'::character varying, 'wholesale'::character varying, 'both'::character varying])::text[]))))",
+              "restored": "CHECK (((shop_type IS NULL) OR ((shop_type)::text = ANY (ARRAY[('retail'::character varying)::text, ('wholesale'::character varying)::text, ('both'::character varying)::text]))))"
+            }
+          ]
+        }
+      },
+      "indexes": {
+        "live": 191,
+        "restored": 191,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "policies": {
+        "live": 212,
+        "restored": 212,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 1,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": [
+            {
+              "key": "client_error_events.client_error_events_insert_only",
+              "field": "check_expr",
+              "source": "(((environment)::text = ANY ((ARRAY['development'::character varying, 'staging'::character varying, 'production'::character varying])::text[])) AND (message IS NOT NULL) AND ((char_length(message) >= 1) AND (char_length(message) <= 500)))",
+              "restored": "(((environment)::text = ANY (ARRAY[('development'::character varying)::text, ('staging'::character varying)::text, ('production'::character varying)::text])) AND (message IS NOT NULL) AND ((char_length(message) >= 1) AND (char_length(message) <= 500)))"
+            }
+          ]
+        }
+      },
+      "triggers": {
+        "live": 59,
+        "restored": 59,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "functions": {
+        "live": 230,
+        "restored": 230,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "views": {
+        "live": 3,
+        "restored": 3,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      },
+      "enums": {
+        "live": 10,
+        "restored": 10,
+        "missing": 0,
+        "extra": 0,
+        "changed": 0,
+        "rendered": 0,
+        "details": {
+          "missing": [],
+          "extra": [],
+          "changed": [],
+          "renderOnly": []
+        }
+      }
+    },
+    "renderOnlyTotal": 5,
+    "counts": {
+      "tables": 73,
+      "restoredMismatches": 0,
+      "driftedSinceBackup": 0,
+      "details": [
+        {
+          "table": "app_settings",
+          "atBackup": 5,
+          "restored": 5,
+          "liveNow": 5
+        },
+        {
+          "table": "audit_events",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "barcode_history",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "barcode_registry",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "branch_responsibility",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "branches",
+          "atBackup": 4,
+          "restored": 4,
+          "liveNow": 4
+        },
+        {
+          "table": "business_settings",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "cash_reconciliations",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "client_error_events",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_approval_requests",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_assignable_roles",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_authorities",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_authority_catalog",
+          "atBackup": 14,
+          "restored": 14,
+          "liveNow": 14
+        },
+        {
+          "table": "co_owner_branch_scopes",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_brand_scopes",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_dashboards",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_department_scopes",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_grants",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_permissions",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_record_scopes",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_scope_settings",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "co_owner_supplier_scopes",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "companies",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "company_branches",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "credit_limit_requests",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "customer_branches",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "customer_crops",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "customer_payments",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "customers",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "dashboard_widgets",
+          "atBackup": 10,
+          "restored": 10,
+          "liveNow": 10
+        },
+        {
+          "table": "departments",
+          "atBackup": 20,
+          "restored": 20,
+          "liveNow": 20
+        },
+        {
+          "table": "employee_access_requests",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "finance_attachments",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "finance_entries",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "finance_entry_history",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "finance_recurrences",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "incident_rate_limits",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "incident_signatures",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "incidents",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "inventory_movements",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "login_bridge",
+          "atBackup": 1,
+          "restored": 1,
+          "liveNow": 1
+        },
+        {
+          "table": "membership_branch_roles",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "memberships",
+          "atBackup": 3,
+          "restored": 3,
+          "liveNow": 3
+        },
+        {
+          "table": "notifications",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "payment_reminders",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "permissions",
+          "atBackup": 33,
+          "restored": 33,
+          "liveNow": 33
+        },
+        {
+          "table": "product_barcodes",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "product_branches",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "product_categories",
+          "atBackup": 28,
+          "restored": 28,
+          "liveNow": 28
+        },
+        {
+          "table": "product_units",
+          "atBackup": 12,
+          "restored": 12,
+          "liveNow": 12
+        },
+        {
+          "table": "product_variants",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "products",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "purchase_items",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "purchases",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "reminder_configs",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "reminder_logs",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "reminder_occurrences",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "return_items",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "returns",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "role_dashboards",
+          "atBackup": 22,
+          "restored": 22,
+          "liveNow": 22
+        },
+        {
+          "table": "role_permissions",
+          "atBackup": 244,
+          "restored": 244,
+          "liveNow": 244
+        },
+        {
+          "table": "roles",
+          "atBackup": 16,
+          "restored": 16,
+          "liveNow": 16
+        },
+        {
+          "table": "sale_items",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "sale_submissions",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "sales",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "shop_requests",
+          "atBackup": 3,
+          "restored": 3,
+          "liveNow": 3
+        },
+        {
+          "table": "shops",
+          "atBackup": 4,
+          "restored": 4,
+          "liveNow": 4
+        },
+        {
+          "table": "stock_adjustments",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "supplier_payments",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "user_active_shops",
+          "atBackup": 1,
+          "restored": 1,
+          "liveNow": 1
+        },
+        {
+          "table": "user_permissions",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        },
+        {
+          "table": "users",
+          "atBackup": 3,
+          "restored": 3,
+          "liveNow": 3
+        },
+        {
+          "table": "voids",
+          "atBackup": 0,
+          "restored": 0,
+          "liveNow": 0
+        }
+      ]
+    },
+    "digests": {
+      "compared": 73,
+      "matched": 73,
+      "mismatched": [],
+      "skipped": 0
+    },
+    "columnDiagnosis": [],
+    "critical": [
+      {
+        "table": "shops",
+        "present": true,
+        "atBackup": 4,
+        "restored": 4,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "users",
+        "present": true,
+        "atBackup": 3,
+        "restored": 3,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "customers",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "products",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "product_variants",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "sales",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "sale_items",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "customer_payments",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "supplier_payments",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "purchases",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "purchase_items",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "payments",
+        "present": false,
+        "reason": "not in this environment"
+      },
+      {
+        "table": "inventory_movements",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "stock_adjustments",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "returns",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "return_items",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "voids",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "audit_events",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "notifications",
+        "present": true,
+        "atBackup": 0,
+        "restored": 0,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "memberships",
+        "present": true,
+        "atBackup": 3,
+        "restored": 3,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "roles",
+        "present": true,
+        "atBackup": 16,
+        "restored": 16,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "permissions",
+        "present": true,
+        "atBackup": 33,
+        "restored": 33,
+        "rowsEqual": true,
+        "digest": "identical"
+      },
+      {
+        "table": "role_permissions",
+        "present": true,
+        "atBackup": 244,
+        "restored": 244,
+        "rowsEqual": true,
+        "digest": "identical"
+      }
+    ],
+    "auth": {
+      "counts": {
+        "auth.users": {
+          "atBackup": 3,
+          "restored": 3,
+          "equal": true
+        },
+        "auth.identities": {
+          "atBackup": 3,
+          "restored": 3,
+          "equal": true
+        }
+      },
+      "fidelityNote": "auth tables are a shim; counts are exact, semantics are not Supabase auth"
+    }
+  },
+  "failures": [],
+  "verdict": {
+    "integrity": true,
+    "replay": true,
+    "counts": true,
+    "structure": true,
+    "digests": true,
+    "auth": true
+  }
+}
