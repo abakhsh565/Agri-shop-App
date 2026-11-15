@@ -1768,9 +1768,12 @@ svg.lucide {
   inset: 0;
   z-index: 95;
   pointer-events: none;
-  background: var(--brand);
+  /* The page tone, not the brand: the mark has already dissolved by the time this takes over, and a
+     full green frame under a dissolving logo reads as a flash. This only has to bridge the gap
+     between the splash and the screen behind it. */
+  background: var(--background);
   opacity: 0;
-  transition: opacity 140ms linear;
+  transition: opacity 120ms linear;
 }
 .ds-splash-handover.is-on { opacity: 1; }
 .ds-splash-handover.is-off {
@@ -1783,8 +1786,10 @@ svg.lucide {
 }
 @keyframes ds-splash-fly {
   from { transform: scale(1); opacity: 1; }
-  55% { opacity: 0.94; }
-  to { transform: scale(var(--fly-scale, 24)); opacity: 0.32; }
+  25% { transform: scale(calc(1 + (var(--fly-scale, 24) - 1) * 0.18)); opacity: 0.95; }
+  55% { transform: scale(calc(1 + (var(--fly-scale, 24) - 1) * 0.45)); opacity: 0.62; }
+  85% { transform: scale(calc(1 + (var(--fly-scale, 24) - 1) * 0.78)); opacity: 0.14; }
+  to { transform: scale(var(--fly-scale, 24)); opacity: 0; }
 }
 
 @keyframes ds-brand-disc {
