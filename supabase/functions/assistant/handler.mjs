@@ -177,6 +177,7 @@ export async function handle(req, env) {
         fallbackModel: geminiFallbackModel || "gemini-flash-lite-latest",
         baseUrl: modelBaseUrl,
         groqKey,
+        groqModel,
         groqSpeechModel: env.groqSpeechModel ?? "",
         groqBaseUrl,
       });

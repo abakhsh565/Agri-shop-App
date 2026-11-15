@@ -298,6 +298,8 @@ export async function urduSpeech({
   fallbackModel,
   baseUrl,
   groqKey = "",
+  // The Groq provider has its own model names; the Gemini text model must never be sent to it.
+  groqModel = "",
   groqSpeechModel = "",
   groqBaseUrl = "",
 } = {}) {
@@ -317,7 +319,7 @@ export async function urduSpeech({
   let urdu = "";
   if (groqKey) {
     try {
-      urdu = await translateWithGroq({ text: source, groqKey, model, baseUrl: groqBaseUrl });
+      urdu = await translateWithGroq({ text: source, groqKey, model: groqModel, baseUrl: groqBaseUrl });
     } catch (error) {
       console.warn("[assistant speech] Groq translation failed:", error?.message);
     }
