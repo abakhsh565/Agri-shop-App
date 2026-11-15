@@ -214,11 +214,27 @@ function main() {
   console.log(`  git add ${batchFiles} && git commit -m "Batch ${batch}: verified against the production baseline"`);
   console.log('  #   dev → PR → staging → PR → main\n');
   console.log('Then dispatch the gated apply from main (dry run first, then apply):\n');
+  // A batch that fills a column with random()/now() cannot have that value reproduced twice. The
+  // columns are declared beside the batch, so the dispatch carries the exclusion instead of the
+  // operator remembering it after an alarm.
+  const volatilePath = path.join(batchDir, 'volatile.txt');
+  const volatileColumns = fs.existsSync(volatilePath)
+    ? fs
+        .readFileSync(volatilePath, 'utf8')
+        .split(/[\n,]/)
+        .map((line) => line.replace(/#.*$/, '').trim())
+        .filter(Boolean)
+        .join(',')
+    : '';
+  if (volatileColumns) console.log(`  volatile columns (outside the data digest): ${volatileColumns}`);
+
   const dispatch =
     `gh workflow run apply-production-migrations.yml -f files="${files.join(',')}" ` +
     `-f verification="${batchFiles}/verification.json" ` +
     `-f backup="${batchFiles}/backup.manifest.json" ` +
-    `-f restored="${batchFiles}/restore-verification.json" -f apply=false`;
+    `-f restored="${batchFiles}/restore-verification.json"` +
+    (volatileColumns ? ` -f volatile_columns="${volatileColumns}"` : '') +
+    ' -f apply=false';
   console.log(`  ${dispatch}`);
   console.log(`  ${dispatch.replace('-f apply=false', '-f apply=true')}\n`);
 }

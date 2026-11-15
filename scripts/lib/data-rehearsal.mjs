@@ -29,6 +29,7 @@ export async function rehearseBatchData({
   entries,
   readFile,
   approvedTables = [],
+  excludeByTable = {},
   fingerprint = fingerprintDatabase,
   diff = diffFingerprints,
 }) {
@@ -40,7 +41,7 @@ export async function rehearseBatchData({
 
   await target.exec('begin');
   try {
-    before = await fingerprint(query);
+    before = await fingerprint(query, { excludeByTable });
     for (const entry of entries) await target.exec(readFile(entry));
     after = await fingerprint(query, { previous: before });
     comparison = diff(before, after, approvedTables);
@@ -54,5 +55,5 @@ export async function rehearseBatchData({
     }
   }
 
-  return { before, after, diff: comparison, error, approvedTables };
+  return { before, after, diff: comparison, error, approvedTables, excludeByTable };
 }

@@ -59,6 +59,11 @@ on:
         required: false
         default: ''
         type: string
+      volatile_columns:
+        description: 'Columns this batch fills with a value that cannot be produced twice (random(), now()), comma-separated as table.column (e.g. public.users.agri_id). Excluded from the data digest; counts and primary-key sets are still compared.'
+        required: false
+        default: ''
+        type: string
       apply:
         description: 'Actually write to production. False = dry run (gate + ledger read only, nothing written).'
         required: false
@@ -130,6 +135,7 @@ jobs:
           set -euo pipefail
           ARGS=(--env production --files "${{ inputs.files }}" --verification "${{ inputs.verification }}" --backup "${{ inputs.backup }}" --restored "${{ inputs.restored }}")
           if [ -n "${{ inputs.data_change }}" ]; then ARGS+=(--data-change "${{ inputs.data_change }}"); fi
+          if [ -n "${{ inputs.volatile_columns }}" ]; then ARGS+=(--volatile-columns "${{ inputs.volatile_columns }}"); fi
           if [ "${{ inputs.apply }}" = "true" ]; then
             echo "APPLY MODE — writing to production."
             ARGS+=(--apply)
@@ -170,5 +176,6 @@ jobs:
             echo ""
             echo "- batch: \`${{ inputs.files }}\`"
             echo "- mode: ${{ inputs.apply == true && 'APPLY (wrote to production)' || 'DRY RUN (nothing written)' }}"
+            echo "- volatile columns (outside the data digest): ${{ inputs.volatile_columns || '(none)' }}"
             echo "- requested by: ${{ github.actor }} (run ${{ github.run_number }})"
           } >> "$GITHUB_STEP_SUMMARY"
