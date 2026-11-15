@@ -110,6 +110,8 @@ describe('the SQL the fingerprint asks for', () => {
     seen.push(sql);
     if (sql.includes('to_regclass')) return { rows: [{ present: true }] };
     if (sql.includes('information_schema.columns')) return { rows: columns.map((c) => ({ column_name: c })) };
+    if (sql.includes('pg_index')) return { rows: [{ name: 'id' }] };
+    if (sql.includes('string_agg(k::text')) return { rows: [{ h: `key-${digest}` }] };
     if (sql.startsWith('select count(*)')) return { rows: [{ n: count }] };
     return { rows: [{ h: digest }] };
   };
@@ -117,8 +119,18 @@ describe('the SQL the fingerprint asks for', () => {
   it('hashes every column, quoted, and orders by the row text so the digest is stable', async () => {
     const seen: string[] = [];
     const result = await fingerprintTable(stub(['id', 'total_paid'], '2', 'hash1', seen), 'public.customers');
-    expect(result).toEqual({ table: 'public.customers', count: 2, columns: ['id', 'total_paid'], digest: 'hash1' });
-    const hashSql = seen[seen.length - 1];
+    expect(result).toMatchObject({
+      table: 'public.customers',
+      count: 2,
+      columns: ['id', 'total_paid'],
+      digest: 'hash1',
+    });
+    // The row digest covers both columns; the key digest is carried separately so a swap of rows is
+    // visible even when the digest of the rest would collide.
+    expect(result.hashColumns).toEqual(['id', 'total_paid']);
+    expect(result.primaryKey).toEqual(['id']);
+    expect(result.keyDigest).toBe('key-hash1');
+    const hashSql = seen.find((sql) => sql.includes('row_to_json')) ?? '';
     expect(hashSql).toContain('"id", "total_paid"');
     expect(hashSql).toContain('order by row_to_json(s)::text');
     expect(hashSql).toContain('md5(');

@@ -1,0 +1,8 @@
+# Columns this batch fills with a value that cannot be produced twice.
+#
+# 0286 backfills public.users.agri_id with public.generate_agri_id(), which draws from random().
+# A rehearsal inside a rolled-back transaction therefore cannot predict the value the committed
+# apply will write, and comparing the two digests reported the intended backfill as data damage on
+# 2026-11-15. The column is excluded from the digest; row counts and primary-key sets are still
+# compared, so no row can move unnoticed.
+public.users.agri_id
