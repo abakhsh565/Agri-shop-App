@@ -62,6 +62,7 @@ import {
   requireEnvironmentOrExit,
 } from './lib/environments.mjs';
 import { constraintSection } from './lib/backup-constraint-order.mjs';
+import { rlsStatement, rlsTotals } from './lib/rls-state.mjs';
 
 // ── Exact value fidelity ─────────────────────────────────────────────────────────────────────
 // node-postgres parses timestamptz/timestamp/date into a JS Date, which holds MILLISECONDS while
@@ -224,7 +225,7 @@ async function main() {
   };
 
   const tables = await client.query(`
-    select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    select c.relname, c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r' order by c.relname`);
 
   const columnCatalog = await client.query(`
@@ -514,9 +515,16 @@ async function main() {
 
   push('');
   push('-- ─── Row level security ──────────────────────────────────');
-  for (const { relname } of tables.rows) {
-    push(`alter table public.${ident(relname)} enable row level security;`);
+  // The state the database actually has, never an assumption. A table like login_bridge carries no
+  // policies and no client grants, so RLS is off there on purpose; forcing it on in the artifact
+  // made the restored copy disagree with production and failed restore verification.
+  for (const { relname, relrowsecurity } of tables.rows) {
+    push(rlsStatement(relname, relrowsecurity));
   }
+  const rls = rlsTotals(tables.rows);
+  manifest.structure.rlsEnabled = rls.enabled;
+  manifest.structure.rlsDisabled = rls.disabled;
+  manifest.structure.rlsDisabledTables = rls.disabledTables;
   const policies = await client.query(`
     select tablename, policyname, cmd, qual, with_check, roles::text as roles
     from pg_policies where schemaname = 'public' order by tablename, policyname`);
