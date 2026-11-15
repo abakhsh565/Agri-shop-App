@@ -1,8 +1,8 @@
 {
-  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-15T00-11-33.sql",
+  "artifact": "backup-production-gkswcfljxlutkfdvvqng-2026-11-15T08-31-50.sql",
   "environment": "production",
   "projectRef": "gkswcfljxlutkfdvvqng",
-  "generatedAt": "2026-11-15T00:11:33.720Z",
+  "generatedAt": "2026-11-15T08:31:50.333Z",
   "serverVersion": "17.6",
   "identity": {
     "configuredUser": "postgres.gkswcfljxlutkfdvvqng",
@@ -121,8 +121,8 @@
     "Grants, ownership, extensions and custom role passwords are not included.",
     "supabase_migrations bookkeeping is not included."
   ],
-  "bytes": 1573224,
-  "sha256": "c412e494b66395f82ecbe2ebfed07f416c71dfcbf2dc36c8dd9a12b52701eabe",
+  "bytes": 1573203,
+  "sha256": "f2d82ac68e816f5cbc17879c24ba1c6d3a6cece77d8298c5dd8aac052bc976ab",
   "totalRows": 343,
   "tablesDumped": 74
 }
