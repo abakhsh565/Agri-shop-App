@@ -7,6 +7,7 @@ import { hasPin as hasPinMarker } from "@/lib/pinLock";
 import { pinAllowedOnThisDevice, rememberLastProfile } from "@/lib/loginWindow";
 import { entryDoor } from "@/lib/entryDoor";
 import StatusBar from "@/components/ui/StatusBar";
+import BrandLogo from "@/components/brand/BrandLogo";
 import { APP_NAME } from "@/lib/brand";
 import { useT } from "@/lib/i18n";
 import { hasSeenIntro } from "@/education/introSeen";
@@ -72,21 +73,23 @@ export default function SplashPage() {
         // again.
         navigate(hasSeenIntro() ? "/login" : "/welcome", { replace: true });
       }
-    }, 1500);
+      // Long enough for the mark to finish drawing itself: the disc, the stroke, the fill and the
+      // sheen take ~1.6s, and a splash that leaves before that is a flash, not a first screen.
+    }, 1800);
     return () => clearTimeout(t);
   }, []);
 
   return (
     <div className="flex flex-col bg-background min-h-full w-full justify-between">
       <StatusBar />
-      <div className="flex flex-col items-center justify-center gap-6 py-[120px] flex-1">
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 py-10">
         {/* The mark is the launcher icon's own artwork — a brand-lime disc with the glyph in
             white on a transparent canvas, so nothing draws a tile behind it — and the first
             screen and the phone's home screen show one identity. It is an image rather than
             themed shapes because `--ink` becomes the brand colour in dark mode, which drew a
             lime glyph on a lime tile. */}
-        <span className="ds-splash-mark">
-          <img src="/icon-512.png" alt="" className="ds-splash-logo w-28 h-28" />
+        <span className="ds-splash-mark" style={{ width: 112, height: 112 }}>
+          <BrandLogo size={112} />
           <span className="ds-splash-halo" aria-hidden="true" />
         </span>
         <div className="flex flex-col items-center gap-2 text-center">

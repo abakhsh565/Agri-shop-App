@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import BrandLogo from "@/components/brand/BrandLogo";
 import { useT } from "@/lib/i18n";
 import { clearNav } from "@/lib/navContext";
 
@@ -52,8 +53,8 @@ export default function AssistantFab({ path }: { path: string }) {
             boxShadow: "0 8px 24px rgba(0, 0, 0, 0.22)",
           }}
         >
-          {/* The shop's mark carries the launcher: the same disc the splash and the chat show. */}
-          <img src="/icon-512.png" alt="" style={{ width: 32, height: 32 }} className="rounded-full" />
+          {/* The shop's mark carries the launcher: the same disc the splash and the chat draw. */}
+          <BrandLogo size={32} animated={false} />
         </button>
       </div>
     </div>
