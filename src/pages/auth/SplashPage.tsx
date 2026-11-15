@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { canOpenWithPin } from "@/lib/pinLock";
@@ -17,32 +17,21 @@ export default function SplashPage() {
   const t = useT();
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const stageRef = useRef<HTMLDivElement>(null);
-  const markRef = useRef<HTMLSpanElement>(null);
   const [leaving, setLeaving] = useState(false);
 
   /**
-   * Hands the screen over by flying INTO the mark: the stage grows from the glyph's own centre and
-   * fades, so the next screen arrives out of the logo rather than cutting in behind it. The
-   * navigation still happens on a timer, so a reduced-motion device (or a browser that never runs
-   * the transition) lands on the same screen at the same moment.
+   * Hands the screen over by flying INTO the mark: the words fade back, the glyph spins up and
+   * grows through the screen, and only then does the next screen arrive — 600ms of an 800ms move,
+   * so the turn is three quarters done when the page changes instead of being cut off by it.
    */
   const leave = useCallback(
     (to: string, options?: { replace?: boolean; state?: unknown }) => {
-      const stage = stageRef.current;
-      const mark = markRef.current;
-      const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (!stage || !mark || calm) {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         navigate(to, options);
         return;
       }
-      const box = stage.getBoundingClientRect();
-      const glyph = mark.getBoundingClientRect();
-      stage.style.transformOrigin = `${glyph.left + glyph.width / 2 - box.left}px ${
-        glyph.top + glyph.height / 2 - box.top
-      }px`;
       setLeaving(true);
-      window.setTimeout(() => navigate(to, options), 260);
+      window.setTimeout(() => navigate(to, options), 600);
     },
     [navigate],
   );
@@ -111,7 +100,6 @@ export default function SplashPage() {
 
   return (
     <div
-      ref={stageRef}
       className={`ds-splash-stage flex flex-col bg-background min-h-full w-full justify-between${
         leaving ? " is-leaving" : ""
       }`}
@@ -125,7 +113,7 @@ export default function SplashPage() {
             lime glyph on a lime tile. */}
         {/* The mark alone, in the brand colour: no disc behind it and nothing drawn around it.
             The glyph is written first, then the name, then the line under it. */}
-        <span ref={markRef} className="ds-splash-mark" style={{ width: 112, height: 112 }}>
+        <span className="ds-splash-mark" style={{ width: 112, height: 112 }}>
           <BrandLogo variant="mark" size={112} />
         </span>
         <div className="flex flex-col items-center gap-2 text-center">

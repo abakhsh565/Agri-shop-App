@@ -1749,16 +1749,25 @@ svg.lucide {
 .ds-splash-tagline {
   animation: ds-splash-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) 1.3s both;
 }
-/* Handing over: the stage grows out of the glyph's own centre and fades, so the next screen
-   arrives through the logo instead of replacing it. The origin is set in code from the mark's
-   measured box, because the mark is not in the middle of the layout (the words sit under it). */
-.ds-splash-stage { transform-origin: 50% 50%; }
-.ds-splash-stage.is-leaving {
-  transform: scale(2.6);
-  opacity: 0;
-  transition:
-    transform 320ms cubic-bezier(0.5, 0, 0.9, 0.6),
-    opacity 300ms ease-in;
+/* Handing over: the words step back, then the glyph spins up and grows through the screen. The
+   turn is what carries the eye into the next screen — 800ms of motion, and the route changes at
+   600ms, when the turn is three quarters done, so the next screen arrives out of a logo that is
+   still turning rather than out of a cut. */
+.ds-splash-stage.is-leaving .ds-splash-name,
+.ds-splash-stage.is-leaving .ds-splash-tagline {
+  animation: ds-splash-out 180ms ease-in both;
+}
+.ds-splash-stage.is-leaving .ds-splash-mark {
+  animation: ds-splash-fly 800ms cubic-bezier(0.33, 0, 0.15, 1) both;
+}
+
+@keyframes ds-splash-out {
+  to { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes ds-splash-fly {
+  0% { transform: rotate(0deg) scale(1); opacity: 1; }
+  40% { opacity: 1; }
+  100% { transform: rotate(220deg) scale(3.6); opacity: 0; }
 }
 
 @keyframes ds-brand-disc {
