@@ -53,8 +53,8 @@ const JARGON = /permission|inherit|override|effective|branch scope|scope|matrix|
 
 async function login(page: Page, phone: string) {
   await page.goto(`${BASE}/login`);
-  await page.getByPlaceholder('e.g. 03001234567').fill(phone);
-  await page.getByRole('button', { name: 'Send Code' }).click();
+  await page.getByPlaceholder('Enter your mobile number').fill(phone);
+  await page.getByRole('button', { name: 'Continue' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 
   const boxes = page.locator('[data-testid^="otp-digit-"]');
@@ -628,13 +628,13 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
       page.getByText(/invitation link filled in the number/i).first(),
       'the invitation link did not explain that it filled in the number',
     ).toBeVisible({ timeout: 30000 });
-    const invitedPhoneField = page.getByPlaceholder('e.g. 03001234567');
+    const invitedPhoneField = page.getByPlaceholder('Enter your mobile number');
     await expect(invitedPhoneField, 'the invitation screen no longer offers the phone field').toBeVisible();
     await expect(
       invitedPhoneField,
       'the invitation link did not fill in the invited number',
     ).toHaveValue(new RegExp(`${NEW_PHONE_DB.slice(-4)}$`));
-    await expect(page.getByRole('button', { name: 'Send Code' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
     await expect(page.getByTestId('auth-tab-employee')).toHaveCount(0);
   });
 
@@ -997,8 +997,8 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     // submit — indistinguishable from a frozen screen, and easy to misread as the
     // app ignoring a correct code. Entering a code one box off is the same shape.
     await page.goto(`${BASE}/login`);
-    await page.getByPlaceholder('e.g. 03001234567').fill(OWNER_PHONE);
-    await page.getByRole('button', { name: 'Send Code' }).click();
+    await page.getByPlaceholder('Enter your mobile number').fill(OWNER_PHONE);
+    await page.getByRole('button', { name: 'Continue' }).click();
     await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 
     const boxes = page.locator('[data-testid^="otp-digit-"]');

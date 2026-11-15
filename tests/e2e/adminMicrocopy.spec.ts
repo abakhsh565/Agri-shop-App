@@ -161,8 +161,8 @@ test.describe('Admin microcopy — English and Urdu', () => {
     await setLanguage(page, 'en');
     await page.goto(`${BASE_URL}/login`);
     await settle(page);
-    await expect(page.getByText('Welcome back').first()).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText('Enter your phone number to sign in').first()).toBeVisible();
+    await expect(page.getByText('Welcome Back!').first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("Manage your shop's stock, sales and daily hisaab all in one place.").first()).toBeVisible();
 
     // ── Urdu: the same screen, and the code screen an owner reaches from it ─
     await setLanguage(page, 'ur');
@@ -170,7 +170,7 @@ test.describe('Admin microcopy — English and Urdu', () => {
     await settle(page);
     await expect(page.getByText('خوش آمدید').first()).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('سائن ان کرنے کے لیے اپنا فون نمبر لکھیں').first()).toBeVisible();
-    await expect(page.getByText('Welcome back').first()).toHaveCount(0);
+    await expect(page.getByText('Welcome Back!').first()).toHaveCount(0);
 
     const loginScreen = await page.evaluate(() => ({
       text: document.body.innerText,

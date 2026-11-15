@@ -111,12 +111,12 @@ export default function RegisterPhonePage() {
             loading={loading}
             disabled={!phone}
           >
-            {t("auth.sendVerificationCode")}
+            {t("register.cta")}
           </Button>
           <p className="text-xs text-center text-caption">
-            Already have an account?{" "}
+            {t("auth.haveAccount")}{" "}
             <button onClick={() => navigate("/login")} className="text-foreground font-medium underline">
-              {t("auth.signIn")}
+              {t("auth.logIn")}
             </button>
           </p>
         </div>
