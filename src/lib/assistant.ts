@@ -336,7 +336,13 @@ export function speakUrdu(
       audio.onerror = () => settle(true);
       await audio.play();
     } catch {
-      settle(true);
+      // The shop's own voice could not be prepared (no speech key on this deployment, a spent
+      // quota, a dropped connection). Before telling the person it failed, read the answer with
+      // the voice already on the device: an English reply in a device voice is worth more than an
+      // error, and the speaker button then still does what it looks like it does.
+      if (stopped) return;
+      const fallback = speakOnDevice(value, () => settle(false));
+      if (!fallback) settle(true);
     }
   })();
 
@@ -345,9 +351,44 @@ export function speakUrdu(
       if (stopped) return;
       stopped = true;
       if (audio) audio.pause();
+      if (typeof window !== "undefined") window.speechSynthesis?.cancel();
       cleanup();
     },
   };
+}
+
+/**
+ * The device's own voice, used only when the assistant's Urdu audio is unavailable.
+ *
+ * It prefers a voice that can actually read the answer (Urdu, then Hindi, then the device default)
+ * and returns false when the platform has no speech synthesis at all, so the caller can still show
+ * its error instead of pretending something was said.
+ */
+function speakOnDevice(text: string, onDone: () => void): boolean {
+  if (typeof window === "undefined") return false;
+  const synth = window.speechSynthesis;
+  if (!synth || typeof SpeechSynthesisUtterance === "undefined") return false;
+  try {
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = synth.getVoices();
+    const preferred =
+      voices.find((v) => /^ur/i.test(v.lang)) ??
+      voices.find((v) => /^hi/i.test(v.lang)) ??
+      voices.find((v) => /^en-(pk|in)/i.test(v.lang)) ??
+      null;
+    if (preferred) {
+      utterance.voice = preferred;
+      utterance.lang = preferred.lang;
+    }
+    utterance.rate = 0.98;
+    utterance.onend = onDone;
+    utterance.onerror = onDone;
+    synth.cancel();
+    synth.speak(utterance);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
