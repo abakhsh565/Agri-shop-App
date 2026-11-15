@@ -1,0 +1,129 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-11-15T00:15:12.659Z",
+  "baseline": {
+    "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-15T00-11-55.sql",
+    "environment": "production",
+    "artifactSha256": "4e4668a6f4108f29f194900057c6a66cb139e7e91934c638be5d111ac41f9346",
+    "sha256Verified": true,
+    "capturedAt": "2026-11-15T00:11:55Z",
+    "statements": 1584,
+    "dataStatements": 125,
+    "dataStatementsSkipped": 123,
+    "referenceData": [
+      {
+        "table": "public.permissions",
+        "rows": 33
+      },
+      {
+        "table": "storage.buckets",
+        "rows": 6
+      }
+    ],
+    "loadFailures": [],
+    "skippedStatements": [
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA auth"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA storage"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" WITH SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('r"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('req"
+      },
+      {
+        "reason": "scaffold-publication",
+        "statement": "CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate')"
+      }
+    ]
+  },
+  "selection": {
+    "since": null,
+    "upto": null,
+    "files": "supabase/migrations/0312_the_owner_approves_a_shop_from_the_table_editor.sql,supabase/migrations/0314_a_decision_provisions_with_or_without_the_shop_writer.sql,supabase/migrations/0315_a_demo_login_gets_the_identity_an_sms_login_would.sql",
+    "resolved": [
+      "0312_the_owner_approves_a_shop_from_the_table_editor.sql",
+      "0314_a_decision_provisions_with_or_without_the_shop_writer.sql",
+      "0315_a_demo_login_gets_the_identity_an_sms_login_would.sql"
+    ]
+  },
+  "files": [
+    {
+      "filename": "0312_the_owner_approves_a_shop_from_the_table_editor.sql",
+      "version": "0312",
+      "statements": 11,
+      "sha256": "4939203d0623653158a9c1e986e0bd7d8e6a98615d761ebf04f1105d661be844",
+      "failures": []
+    },
+    {
+      "filename": "0314_a_decision_provisions_with_or_without_the_shop_writer.sql",
+      "version": "0314",
+      "statements": 9,
+      "sha256": "5d8651931570b96f10bffb7fbf10c9b1a832c17fc7a292cf71823f5a7f4dc745",
+      "failures": []
+    },
+    {
+      "filename": "0315_a_demo_login_gets_the_identity_an_sms_login_would.sql",
+      "version": "0315",
+      "statements": 14,
+      "sha256": "dc8a9a37ae0fa780b1e9227b2e0292c1286298bad4602a119c6fb72e1cedc58b",
+      "failures": []
+    }
+  ],
+  "summary": {
+    "status": "PASS",
+    "files": 3,
+    "statements": 34,
+    "failedStatements": 0,
+    "envGapFailures": 0,
+    "sqlFailures": 0,
+    "expectedPhaseFailures": 0,
+    "baselineLoadFailures": 0,
+    "baselineSqlFailures": 0,
+    "baselineEnvGapFailures": 0,
+    "baselineExpectedPhaseFailures": 0,
+    "baselineSkippedStatements": 12,
+    "baselineSkippedByReason": {
+      "scaffold-schema": 3,
+      "extension-unavailable": 4,
+      "scaffold-function": 4,
+      "scaffold-publication": 1
+    }
+  },
+  "exitCode": 0
+}
