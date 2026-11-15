@@ -72,6 +72,7 @@ import {
   diffFingerprints,
   fingerprintDatabase,
   parseApprovals,
+  parseVolatileColumns,
 } from './lib/data-fingerprint.mjs';
 import { FRESHNESS_WINDOW_MINUTES, describeGate, productionBatchGate } from './lib/production-batch-gate.mjs';
 import {
@@ -131,6 +132,11 @@ if (has('help') || args.includes('-h') || args.length === 0) {
       '  --data-change <t>  production apply only: tables this batch is ALLOWED to change (comma',
       '                     separated). Without it, a batch that moves a user-owned row is refused, in a',
       '                     rehearsal that is always rolled back, before production is written.',
+      '  --volatile-columns <table.column,…>  production apply only: columns this batch fills with a',
+      '                     value that cannot be produced twice (random(), now()). They are excluded',
+      '                     from the data digest on both sides and recorded in the report, so an',
+      '                     unpredictable backfill is not reported as damage. Row counts and primary-key',
+      '                     sets are still compared, so no row can move unnoticed.',
     ].join('\n'),
   );
   process.exit(args.length === 0 ? 2 : 0);
@@ -1117,11 +1123,12 @@ async function objectsPresentAfterRollback(target, entry) {
  * digest is taken over the columns that existed before), so a safe schema change is not refused for
  * looking different.
  */
-async function rehearseBatch(entries, approvedTables) {
+async function rehearseBatch(entries, approvedTables, excludeByTable = {}) {
   return rehearseBatchData({
     target,
     entries,
     approvedTables,
+    excludeByTable,
     readFile: (entry) => fs.readFileSync(path.join(dir, entry.filename), 'utf8'),
   });
 }
@@ -1180,11 +1187,32 @@ async function runProductionApply() {
     );
   }
 
+  // A column filled by random() or now() cannot produce the same value twice, so a rehearsal and the
+  // committed apply would disagree on its digest while the rows are exactly as intended. The operator
+  // names such columns; they leave the digest on both sides and the exclusion is recorded, while row
+  // counts and primary-key sets keep every row movement visible.
+  const volatile = parseVolatileColumns(flag('volatile-columns'));
+  if (volatile.unknown.length) {
+    return fail(
+      `--volatile-columns must name protected tables and a column, e.g. public.users.agri_id; these do ` +
+        `not: ${volatile.unknown.join(', ')}. Nothing was written.`,
+    );
+  }
+  if (Object.keys(volatile.excludeByTable).length) {
+    console.log(
+      '  Volatile columns excluded from the data digest (recorded in the report): ' +
+        Object.entries(volatile.excludeByTable)
+          .map(([table, columns]) => `${table}(${columns.join(', ')})`)
+          .join(', '),
+    );
+  }
+
   console.log('\n  Rehearsing the batch against production inside a transaction that will be rolled back…');
-  const rehearsal = await rehearseBatch(gate.toApply, approvals.names);
+  const rehearsal = await rehearseBatch(gate.toApply, approvals.names, volatile.excludeByTable);
   result.rehearsal = {
     ok: false,
     approvedTables: approvals.names,
+    volatileColumns: volatile.excludeByTable,
     error: rehearsal.error,
     changed: rehearsal.diff?.changed ?? [],
     allowedChanges: rehearsal.diff?.allowedChanges ?? [],
@@ -1289,9 +1317,16 @@ async function runProductionApply() {
   // sequence that advanced, an ON CONFLICT path taken differently).
   const appliedFingerprints = await fingerprintDatabase((sql, params = []) => target.query(sql, params), {
     previous: rehearsal.before,
+    excludeByTable: volatile.excludeByTable,
   });
   const drift = diffFingerprints(rehearsal.after, appliedFingerprints, []);
-  result.dataAfterApply = { matchesRehearsal: drift.ok, changed: drift.changed, missing: drift.missing };
+  result.dataAfterApply = {
+    matchesRehearsal: drift.ok,
+    changed: drift.changed,
+    missing: drift.missing,
+    reasons: drift.reasons,
+    volatileColumns: volatile.excludeByTable,
+  };
   if (!drift.ok) {
     console.log(describeFingerprints(rehearsal.after, appliedFingerprints));
     return fail(
