@@ -1782,8 +1782,9 @@ svg.lucide {
   to { opacity: 0; transform: translateY(-6px); }
 }
 @keyframes ds-splash-fly {
-  from { transform: scale(1); }
-  to { transform: scale(var(--fly-scale, 24)); }
+  from { transform: scale(1); opacity: 1; }
+  55% { opacity: 0.94; }
+  to { transform: scale(var(--fly-scale, 24)); opacity: 0.32; }
 }
 
 @keyframes ds-brand-disc {
