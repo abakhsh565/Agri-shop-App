@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   pcmToWav,
+  splitForSpeech,
   urduSpeech,
 } from "../../supabase/functions/assistant/speech.mjs";
 
@@ -12,6 +13,21 @@ afterEach(() => {
 });
 
 describe("Urdu speech", () => {
+  it("splits a reply into whole sentences and loses none of them", () => {
+    const reply =
+      "Today's sales total 0 rupees. No sales were recorded today. You can open it from Sales.";
+    const segments = splitForSpeech(reply);
+
+    expect(segments.length).toBe(3);
+    expect(segments.join(" ")).toBe(reply);
+  });
+
+  it("keeps a clipped sentence with the one after it, so a short thought is not its own wait", () => {
+    expect(splitForSpeech("Yes. You can record a walk-in sale without a customer.")).toEqual([
+      "Yes. You can record a walk-in sale without a customer.",
+    ]);
+  });
+
   it("wraps model PCM in a browser-playable WAV header", () => {
     const wav = pcmToWav(pcm, { sampleRate: 24000, channels: 1 });
     const view = new DataView(wav.buffer);

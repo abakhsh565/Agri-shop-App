@@ -33,6 +33,7 @@ import {
   askAssistant,
   assistantAbilities,
   listen,
+  prefetchSpeech,
   speakUrdu,
   stopSpeaking,
   toolTitleKey,
@@ -79,6 +80,9 @@ type Entry =
 const MAX_ASSISTANT_PHOTO_BYTES = HARD_MAX_IMAGE_BYTES;
 const SPEECH_LANG_EN = "en-US";
 const SPEECH_LANG_UR = "ur-PK";
+
+/** Whether this device has ever used the speaker, so a reply's first sentence can be warmed. */
+const VOICE_WARMED_KEY = "agrishop.assistant.voiceWarmed";
 
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -208,6 +212,17 @@ export default function AssistantPage() {
   // A new spoken reply or a manual stop increments this. Late callbacks from a cancelled
   // utterance cannot then update the speaking state or start a second utterance.
   const speakRun = useRef(0);
+  // Only a person who has actually used the speaker gets replies warmed in advance: preparing a
+  // voice nobody asks for would spend the shop's speech quota on silence. Remembered across
+  // reloads, because otherwise the first tap of every session is the slow one again.
+  const voiceWarmed = useRef(false);
+  useEffect(() => {
+    try {
+      voiceWarmed.current = window.localStorage.getItem(VOICE_WARMED_KEY) === "1";
+    } catch {
+      voiceWarmed.current = false;
+    }
+  }, []);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const galleryInput = useRef<HTMLInputElement | null>(null);
@@ -363,6 +378,12 @@ export default function AssistantPage() {
   function readAloud(text: string, index: number) {
     const value = text.trim();
     if (!value) return;
+    voiceWarmed.current = true;
+    try {
+      window.localStorage.setItem(VOICE_WARMED_KEY, "1");
+    } catch {
+      // Private mode or a full store: warming is a convenience, never a requirement.
+    }
     speakRun.current += 1;
     const run = speakRun.current;
     stopAudioRef.current?.();
@@ -530,6 +551,9 @@ export default function AssistantPage() {
         history,
       });
       setEntries((prev) => [...prev, { kind: "reply", reply }]);
+      // The reply is already on screen; the first sentence of its voice is prepared in the
+      // background so pressing the speaker is not another wait.
+      if (voiceWarmed.current) prefetchSpeech(reply.answer);
       const turns: AssistantTurn[] = [
         { role: "user", text: question },
         { role: "assistant", text: reply.answer },

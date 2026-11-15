@@ -19,7 +19,7 @@
  */
 import { makeClient, TOOLS_BY_NAME, toolsFor } from "./tools.mjs";
 import { ask } from "./providers.mjs";
-import { urduSpeech } from "./speech.mjs";
+import { urduSpeech, urduSpeechPart } from "./speech.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -170,7 +170,7 @@ export async function handle(req, env) {
   if (body.action === "speak") {
     if (!geminiKey && !groqKey) return json({ error: "Speech is not switched on for this shop." }, 503);
     try {
-      const speech = await urduSpeech({
+      const voice = {
         text: body.text,
         apiKey: geminiKey,
         model: geminiModel,
@@ -180,7 +180,13 @@ export async function handle(req, env) {
         groqModel,
         groqSpeechModel: env.groqSpeechModel ?? "",
         groqBaseUrl,
-      });
+      };
+      // A numbered piece is what the screen asks for: the first sentence is played while the rest
+      // is being prepared. The whole reply is still supported for a caller that asks for it.
+      const speech =
+        body.part === undefined || body.part === null
+          ? await urduSpeech(voice)
+          : await urduSpeechPart({ ...voice, index: body.part });
       return json(speech);
     } catch (error) {
       console.error("[assistant speech] failed:", error?.message);

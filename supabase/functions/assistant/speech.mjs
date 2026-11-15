@@ -285,14 +285,57 @@ async function synthesizeWithGroq({ text, groqKey, model, voice, baseUrl }) {
 }
 
 /**
- * Translate one reply to Urdu and return a playable WAV.
+ * Split a reply into speakable pieces.
  *
- * `model` is the assistant's configured text model, with its existing smaller fallback for a
- * spent quota. The speech model is separate: a text quota must not make the speaker silently
- * fall back to an English voice.
+ * The reason this exists: the voice used to be prepared as one request — translate the whole
+ * reply, synthesize the whole reply, then start — and a shopkeeper waited five to seven seconds
+ * for the first word. One sentence is a fraction of that work, so the first sentence is fetched
+ * alone and played while the rest is prepared behind it.
+ *
+ * Splitting is done on sentence ends, then grouped so no piece is so short that a round trip
+ * costs more than the sentence (a "Yes." alone is not worth its own request) and no piece is so
+ * long that it is a wait again.
  */
-export async function urduSpeech({
-  text,
+/** A sentence this short is not worth its own round trip; it rides with the one before it. */
+const MIN_SEGMENT_CHARS = 24;
+
+export function splitForSpeech(text) {
+  const clean = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+  const sentences = (clean.match(/[^.!?۔]+[.!?۔]+|[^.!?۔]+$/g) ?? [clean])
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const segments = [];
+  for (const sentence of sentences) {
+    const previous = segments[segments.length - 1];
+    // A clipped answer ("Yes.") and its example belong to the same breath, so they share a part
+    // instead of paying two request latencies for one short thought.
+    if (previous && previous.length < MIN_SEGMENT_CHARS) {
+      segments[segments.length - 1] = `${previous} ${sentence}`;
+    } else {
+      segments.push(sentence);
+    }
+  }
+  return segments;
+}
+
+function assertVoiceAvailable(apiKey, groqKey) {
+  if (!apiKey && !groqKey) {
+    const error = new Error("Urdu speech is not switched on for this shop.");
+    error.status = 503;
+    throw error;
+  }
+}
+
+/**
+ * One piece of a reply, translated and spoken, with both stages timed.
+ *
+ * The two stages are logged separately because they have different fixes: translation is a text
+ * round trip, the voice is an audio generation, and a change aimed at the wrong one measures as
+ * "no improvement".
+ */
+async function speakOne({
+  source,
   apiKey,
   model,
   fallbackModel,
@@ -302,22 +345,15 @@ export async function urduSpeech({
   groqModel = "",
   groqSpeechModel = "",
   groqBaseUrl = "",
-} = {}) {
-  if (!apiKey && !groqKey) {
-    const error = new Error("Urdu speech is not switched on for this shop.");
-    error.status = 503;
-    throw error;
-  }
-  const source = String(text ?? "").trim();
-  if (!source) {
-    const error = new Error("There is nothing to read.");
-    error.status = 400;
-    throw error;
-  }
+}) {
+  const startedAt = Date.now();
+  let urdu = "";
+
+  // Already Urdu: nothing to translate, so the one text round trip is skipped outright.
+  if (URDU_SCRIPT.test(source)) urdu = source;
 
   // Fast path first: Groq writes the Urdu, Gemini speaks it (or Groq speaks it, if configured).
-  let urdu = "";
-  if (groqKey) {
+  if (!urdu && groqKey) {
     try {
       urdu = await translateWithGroq({ text: source, groqKey, model: groqModel, baseUrl: groqBaseUrl });
     } catch (error) {
@@ -332,6 +368,8 @@ export async function urduSpeech({
     error.status = 502;
     throw error;
   }
+
+  const translatedAt = Date.now();
 
   let wav = null;
   if (apiKey) {
@@ -361,9 +399,94 @@ export async function urduSpeech({
     throw error;
   }
 
+  const finishedAt = Date.now();
+  console.log(
+    `[assistant speech] urdu ${translatedAt - startedAt}ms, voice ${finishedAt - translatedAt}ms, total ${finishedAt - startedAt}ms, ${urdu.length} chars, ${wav.length} bytes`,
+  );
+
+  return { urdu, wav };
+}
+
+/**
+ * Translate one reply to Urdu and return a playable WAV.
+ *
+ * `model` is the assistant's configured text model, with its existing smaller fallback for a
+ * spent quota. The speech model is separate: a text quota must not make the speaker silently
+ * fall back to an English voice.
+ */
+export async function urduSpeech({
+  text,
+  apiKey,
+  model,
+  fallbackModel,
+  baseUrl,
+  groqKey = "",
+  groqModel = "",
+  groqSpeechModel = "",
+  groqBaseUrl = "",
+} = {}) {
+  assertVoiceAvailable(apiKey, groqKey);
+  const source = String(text ?? "").trim();
+  if (!source) {
+    const error = new Error("There is nothing to read.");
+    error.status = 400;
+    throw error;
+  }
+  const { urdu, wav } = await speakOne({
+    source,
+    apiKey,
+    model,
+    fallbackModel,
+    baseUrl,
+    groqKey,
+    groqModel,
+    groqSpeechModel,
+    groqBaseUrl,
+  });
+  return { urdu, audio: base64FromBytes(wav), mimeType: "audio/wav" };
+}
+
+/**
+ * One numbered piece of a reply, so the screen can start the first sentence while the rest is
+ * still being prepared. `total` lets the caller stop asking after the last piece.
+ */
+export async function urduSpeechPart({
+  text,
+  index = 0,
+  apiKey,
+  model,
+  fallbackModel,
+  baseUrl,
+  groqKey = "",
+  groqModel = "",
+  groqSpeechModel = "",
+  groqBaseUrl = "",
+} = {}) {
+  assertVoiceAvailable(apiKey, groqKey);
+  const source = String(text ?? "").trim();
+  if (!source) {
+    const error = new Error("There is nothing to read.");
+    error.status = 400;
+    throw error;
+  }
+  const segments = splitForSpeech(source);
+  const part = Math.min(Math.max(Number(index) || 0, 0), Math.max(segments.length - 1, 0));
+  const { urdu, wav } = await speakOne({
+    source: segments[part] ?? source,
+    apiKey,
+    model,
+    fallbackModel,
+    baseUrl,
+    groqKey,
+    groqModel,
+    groqSpeechModel,
+    groqBaseUrl,
+  });
   return {
     urdu,
     audio: base64FromBytes(wav),
     mimeType: "audio/wav",
+    index: part,
+    total: segments.length || 1,
   };
 }
