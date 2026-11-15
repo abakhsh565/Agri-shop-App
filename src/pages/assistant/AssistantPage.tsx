@@ -102,9 +102,15 @@ function AssistantOrb({ compact = false }: { compact?: boolean }) {
       className={`ds-assistant-orb${compact ? " ds-assistant-orb--compact" : ""}`}
       aria-hidden="true"
     >
-      {/* The shop's own mark, not a second invented identity: the same disc the splash draws,
-          written in once at the top of a conversation and still beside every reply. */}
-      <BrandLogo size={compact ? 36 : 64} animated={!compact} />
+      {/* The shop's own mark, not a second invented identity: the same chrome-mesh glyph the
+          launcher wears, at the top of a conversation and beside every reply. */}
+      <BrandLogo
+        variant="mark"
+        tone="mesh"
+        size={compact ? 30 : 80}
+        animated={!compact}
+        className={compact ? "ds-assistant-orb-mark" : "ds-assistant-orb-mark ds-assistant-orb-mark--lg"}
+      />
     </span>
   );
 }
@@ -488,7 +494,6 @@ export default function AssistantPage() {
         </button>
 
         <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
-          <BrandLogo size={28} animated={false} />
           <p className="truncate text-15 font-semibold" style={{ color: "var(--text-primary)" }}>
             {t("assistant.title")}
           </p>
@@ -709,11 +714,15 @@ export default function AssistantPage() {
                 className="flex items-center gap-2 text-11"
                 style={{ color: "var(--text-secondary)" }}
               >
-                <span className="ds-assistant-thinking" aria-hidden="true">
-                  <span />
-                  <span />
-                  <span />
-                </span>
+                {/* The waiting state is the bot itself, working: the same mesh mark turning while
+                    the answer is fetched, instead of three anonymous dots. */}
+                <BrandLogo
+                  variant="mark"
+                  tone="mesh"
+                  size={18}
+                  animated={false}
+                  className="ds-assistant-busy-mark"
+                />
                 {t("assistant.thinking")}
               </div>
             )}

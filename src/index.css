@@ -1694,8 +1694,8 @@ svg.lucide {
    what the screen is, so the motion never carries meaning on its own. */
 .ds-assistant-orb {
   display: inline-flex;
-  width: 64px;
-  height: 64px;
+  width: 88px;
+  height: 88px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
@@ -1708,6 +1708,18 @@ svg.lucide {
 }
 .ds-assistant-orb .ds-brand-logo {
   animation-duration: 2.8s;
+}
+/* The bot's mark where the chat used to draw its own shapes: the hero at the top of an empty
+   conversation, the avatar beside a reply, and the working state while an answer is fetched. */
+.ds-assistant-orb-mark {
+  display: block;
+}
+.ds-assistant-orb-mark--lg {
+  animation: ds-fab-mark-breathe 3.8s ease-in-out infinite;
+}
+.ds-assistant-busy-mark {
+  display: block;
+  animation: ds-fab-mark-breathe 1.4s ease-in-out infinite;
 }
 
 /* The assistant launcher: a liquid-glass sphere, not a coloured puck.
