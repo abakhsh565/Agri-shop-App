@@ -639,7 +639,7 @@ async function main() {
     return r.rows[0];
   };
 
-  const digestResults = { compared: 0, matched: 0, mismatched: [], skipped: [] };
+  const digestResults = { compared: 0, matched: 0, mismatched: [], skipped: [], movedDuringCheck: [] };
   const drifted = new Set(countDiffs.drifted.map((d) => d.table));
   for (const t of manifestTables) {
     const cols = pkByTable.get(t);
@@ -657,8 +657,27 @@ async function main() {
         await digestFor((s) => db.query(s), t, cols),
       ];
       digestResults.compared++;
-      if (liveDigest.digest === restoredDigest.digest) digestResults.matched++;
-      else digestResults.mismatched.push({ table: t, live: liveDigest.digest, restored: restoredDigest.digest });
+      if (liveDigest.digest === restoredDigest.digest) {
+        digestResults.matched++;
+        continue;
+      }
+      // A mismatch is evidence about the RESTORE only while the source stands still. Production
+      // serves a live app: an ordinary session update moves `users.updated_at` while the dump is
+      // taken, and the digest then describes a moment that no longer exists. Re-read the source
+      // after a pause — if it moved, this table cannot be compared, and saying so is honest where
+      // calling it a restore failure is not.
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const recheck = await digestFor((s) => live.query(s), t, cols);
+      if (recheck.digest !== liveDigest.digest) {
+        digestResults.skipped.push({ table: t, reason: 'source changed during verification' });
+        digestResults.movedDuringCheck.push({
+          table: t,
+          before: liveDigest.digest,
+          after: recheck.digest,
+        });
+      } else {
+        digestResults.mismatched.push({ table: t, live: liveDigest.digest, restored: restoredDigest.digest });
+      }
     } catch (error) {
       digestResults.skipped.push({ table: t, reason: error.message.split('\n')[0] });
     }
