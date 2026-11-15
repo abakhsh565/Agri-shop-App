@@ -1,0 +1,177 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-11-15T09:02:18.410Z",
+  "baseline": {
+    "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-15T00-11-55.sql",
+    "environment": "production",
+    "artifactSha256": "4e4668a6f4108f29f194900057c6a66cb139e7e91934c638be5d111ac41f9346",
+    "sha256Verified": true,
+    "capturedAt": "2026-11-15T00:11:55Z",
+    "statements": 1584,
+    "dataStatements": 125,
+    "dataStatementsSkipped": 123,
+    "referenceData": [
+      {
+        "table": "public.permissions",
+        "rows": 33
+      },
+      {
+        "table": "storage.buckets",
+        "rows": 6
+      }
+    ],
+    "loadFailures": [],
+    "skippedStatements": [
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA auth"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA storage"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" WITH SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('r"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('req"
+      },
+      {
+        "reason": "scaffold-publication",
+        "statement": "CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate')"
+      }
+    ]
+  },
+  "selection": {
+    "since": null,
+    "upto": null,
+    "files": "supabase/migrations/0278_salary_is_a_recurring_expense.sql,supabase/migrations/0280_ownership_transfer_and_co_owner_archive.sql,supabase/migrations/0281_branch_co_owner_assignment_and_owner_audit.sql,supabase/migrations/0283_profile_phone_change.sql,supabase/migrations/0284_catalogue_deletion_is_guarded.sql,supabase/migrations/0286_one_identity_agri_id_recovery_and_explicit_invitations.sql,supabase/migrations/0289_a_category_says_what_it_sells.sql,supabase/migrations/0300_policies_and_guards_for_0280_0289.sql,supabase/migrations/0308_the_daily_cash_count_keeps_its_write_path.sql",
+    "resolved": [
+      "0278_salary_is_a_recurring_expense.sql",
+      "0280_ownership_transfer_and_co_owner_archive.sql",
+      "0281_branch_co_owner_assignment_and_owner_audit.sql",
+      "0283_profile_phone_change.sql",
+      "0284_catalogue_deletion_is_guarded.sql",
+      "0286_one_identity_agri_id_recovery_and_explicit_invitations.sql",
+      "0289_a_category_says_what_it_sells.sql",
+      "0300_policies_and_guards_for_0280_0289.sql",
+      "0308_the_daily_cash_count_keeps_its_write_path.sql"
+    ]
+  },
+  "files": [
+    {
+      "filename": "0278_salary_is_a_recurring_expense.sql",
+      "version": "0278",
+      "statements": 31,
+      "sha256": "8197db9bddc0a73d978270fc4d2aaa07ae5dd6ef700228c0dfc8c651b20851fe",
+      "failures": []
+    },
+    {
+      "filename": "0280_ownership_transfer_and_co_owner_archive.sql",
+      "version": "0280",
+      "statements": 46,
+      "sha256": "0aab2d9751ae564759692ae462c14d2a32f35a8c38b6c2e3bfd0fbca2ebf5f75",
+      "failures": []
+    },
+    {
+      "filename": "0281_branch_co_owner_assignment_and_owner_audit.sql",
+      "version": "0281",
+      "statements": 21,
+      "sha256": "1064967f4c4528289b3f82c80cc3f51156a212f02c78d0591fecf59132363902",
+      "failures": []
+    },
+    {
+      "filename": "0283_profile_phone_change.sql",
+      "version": "0283",
+      "statements": 4,
+      "sha256": "8ecfcb6b7e06aef7bc32b95581d27b42a29089d051ec97c17eec5313d0ef452b",
+      "failures": []
+    },
+    {
+      "filename": "0284_catalogue_deletion_is_guarded.sql",
+      "version": "0284",
+      "statements": 8,
+      "sha256": "3fd5fbea01e30812bb73e3bcc29d13aafbcdefffc548b87babbd3c19620db8da",
+      "failures": []
+    },
+    {
+      "filename": "0286_one_identity_agri_id_recovery_and_explicit_invitations.sql",
+      "version": "0286",
+      "statements": 55,
+      "sha256": "f2a4715ff46d6ac1528f24e73c59f507cb7fa3c32e92df04b21700456b670957",
+      "failures": []
+    },
+    {
+      "filename": "0289_a_category_says_what_it_sells.sql",
+      "version": "0289",
+      "statements": 32,
+      "sha256": "af5e30353e827c66daaa8a693dd66c6cffae47159088c761891ed9a8274138a2",
+      "failures": []
+    },
+    {
+      "filename": "0300_policies_and_guards_for_0280_0289.sql",
+      "version": "0300",
+      "statements": 21,
+      "sha256": "06cf7e380612fc7e807b6d20ecd8c80e034d949448000385ba86f9e80898222c",
+      "failures": []
+    },
+    {
+      "filename": "0308_the_daily_cash_count_keeps_its_write_path.sql",
+      "version": "0308",
+      "statements": 4,
+      "sha256": "964f394ae0f0977add4c61f4fc102bd9b0b2c9d67b15e5bb5743509c4bd8bbe1",
+      "failures": []
+    }
+  ],
+  "summary": {
+    "status": "PASS",
+    "files": 9,
+    "statements": 222,
+    "failedStatements": 0,
+    "envGapFailures": 0,
+    "sqlFailures": 0,
+    "expectedPhaseFailures": 0,
+    "baselineLoadFailures": 0,
+    "baselineSqlFailures": 0,
+    "baselineEnvGapFailures": 0,
+    "baselineExpectedPhaseFailures": 0,
+    "baselineSkippedStatements": 12,
+    "baselineSkippedByReason": {
+      "scaffold-schema": 3,
+      "extension-unavailable": 4,
+      "scaffold-function": 4,
+      "scaffold-publication": 1
+    }
+  },
+  "exitCode": 0
+}

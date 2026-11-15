@@ -37,6 +37,8 @@
     "migrate": "node scripts/migrate.mjs",
     "migrate:status": "node scripts/migrate.mjs status --env staging",
     "migrate:verify": "node scripts/migrate.mjs verify --env staging",
+    "prod:gap": "node scripts/dev/production-gap.mjs --env production",
+    "release:prepare": "node scripts/dev/release-prepare.mjs",
     "backup": "node scripts/backup-database.mjs",
     "backup:verify": "node scripts/restore-verify.mjs",
     "audit:production-data": "node scripts/audit-production-data.mjs",
