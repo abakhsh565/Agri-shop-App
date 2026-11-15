@@ -1722,6 +1722,41 @@ svg.lucide {
   animation: ds-fab-mark-breathe 1.4s ease-in-out infinite;
 }
 
+/* The voice being prepared, as sound rather than text: three bars of different heights rising and
+falling out of step, so the speaker button looks like it is listening for its own audio. Decoration
+only — the button is named in aria-label — and it stops under prefers-reduced-motion. */
+.ds-voice-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.ds-voice-bars > span {
+  width: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: ds-voice-bar 900ms ease-in-out infinite;
+}
+.ds-voice-bars > span:nth-child(1) {
+  height: 50%;
+  animation-delay: -600ms;
+}
+.ds-voice-bars > span:nth-child(2) {
+  height: 90%;
+  animation-delay: -300ms;
+}
+.ds-voice-bars > span:nth-child(3) {
+  height: 70%;
+}
+@keyframes ds-voice-bar {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-voice-bars > span { animation: none; transform: none; }
+}
+
 /* The assistant launcher: a liquid-glass sphere, not a coloured puck.
 
 THE SPHERE IS GLASS, so what it looks like is mostly what is behind it: a translucent body blurred

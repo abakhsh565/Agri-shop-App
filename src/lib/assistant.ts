@@ -261,10 +261,14 @@ export function stopSpeaking(): void {
 export interface UrduSpeechOptions {
   onEnd?: () => void;
   onError?: () => void;
+  /** Fires when sound actually starts, so the screen can swap "preparing" for pause. */
+  onStart?: () => void;
 }
 
 export interface UrduSpeechHandle {
   stop: () => void;
+  pause: () => void;
+  resume: () => void;
 }
 
 /** Built once per reply, so pressing the same speaker twice does not pay for speech twice. */
@@ -335,6 +339,11 @@ export function speakUrdu(
       audio.onended = () => settle(false);
       audio.onerror = () => settle(true);
       await audio.play();
+      if (stopped) {
+        audio.pause();
+        return;
+      }
+      options.onStart?.();
     } catch {
       // The shop's own voice could not be prepared (no speech key on this deployment, a spent
       // quota, a dropped connection). Before telling the person it failed, read the answer with
@@ -343,6 +352,7 @@ export function speakUrdu(
       if (stopped) return;
       const fallback = speakOnDevice(value, () => settle(false));
       if (!fallback) settle(true);
+      else options.onStart?.();
     }
   })();
 
@@ -353,6 +363,19 @@ export function speakUrdu(
       if (audio) audio.pause();
       if (typeof window !== "undefined") window.speechSynthesis?.cancel();
       cleanup();
+    },
+    // Pause and resume act on whichever voice is actually reading: the assistant's audio, or the
+    // device voice used as the fallback. While the audio is still being prepared there is nothing
+    // to pause yet, and the caller's state machine knows that.
+    pause: () => {
+      if (stopped) return;
+      if (audio) audio.pause();
+      else if (typeof window !== "undefined") window.speechSynthesis?.pause();
+    },
+    resume: () => {
+      if (stopped) return;
+      if (audio) void audio.play().catch(() => settle(true));
+      else if (typeof window !== "undefined") window.speechSynthesis?.resume();
     },
   };
 }

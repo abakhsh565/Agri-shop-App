@@ -22,7 +22,6 @@ import {
   Sparkles,
   Square,
   Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
@@ -41,6 +40,7 @@ import {
   type AssistantAbilities,
   type AssistantReply,
   type AssistantTurn,
+  type UrduSpeechHandle,
 } from "@/lib/assistant";
 import { financeDraftFromText, type AssistantFinanceDraft } from "@/lib/assistantFinance";
 import { translations, useT } from "@/lib/i18n";
@@ -115,6 +115,57 @@ function AssistantOrb({ compact = false }: { compact?: boolean }) {
   );
 }
 
+/**
+ * The speaker that is reading, with a pause beneath its waves — tap it and the voice stops.
+ *
+ * Drawn here rather than assembled from two icons because the pair has to read as one control: a
+ * speaker, and the thing the next tap does. Same 16px mark as the plain speaker, so the button
+ * does not change size between the idle, reading and paused states.
+ */
+function SpeakerPauseIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={17}
+      height={17}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {/* One wave, not two: at 17px a second wave turns the mark into a smudge and the pause
+          mark stops being readable, which is the one thing the button has to say. */}
+      <path d="M3.4 9.2h3.1L11 5.4v13.2l-4.5-3.8H3.4Z" fill="currentColor" stroke="none" />
+      <path d="M13.6 9.4a4.2 4.2 0 0 1 0 5.2" />
+      <path d="M17.6 15.2v4.4" strokeWidth={2.1} />
+      <path d="M21.2 15.2v4.4" strokeWidth={2.1} />
+    </svg>
+  );
+}
+
+/** The same speaker with a play mark: the voice is paused, and this resumes it. */
+function SpeakerPlayIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={17}
+      height={17}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3.4 9.2h3.1L11 5.4v13.2l-4.5-3.8H3.4Z" fill="currentColor" stroke="none" />
+      <path d="M13.6 9.4a4.2 4.2 0 0 1 0 5.2" />
+      <path d="M17.2 15.2 21.4 17.6 17.2 20Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export default function AssistantPage() {
   const t = useT();
   const navigate = useNavigate();
@@ -137,7 +188,12 @@ export default function AssistantPage() {
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [micError, setMicError] = useState("");
-  const [speaking, setSpeaking] = useState<{ index: number; text: string } | null>(null);
+  // A spoken reply is preparing, playing or paused; the speaker button shows each of the three.
+  const [speaking, setSpeaking] = useState<{
+    index: number;
+    text: string;
+    status: "loading" | "playing" | "paused";
+  } | null>(null);
   const [speechError, setSpeechError] = useState("");
   const [abilities, setAbilities] = useState<AssistantAbilities | null>(null);
   const [showAbilities, setShowAbilities] = useState(false);
@@ -146,6 +202,7 @@ export default function AssistantPage() {
 
   const stopListeningRef = useRef<(() => void) | null>(null);
   const stopAudioRef = useRef<(() => void) | null>(null);
+  const speechHandleRef = useRef<UrduSpeechHandle | null>(null);
   const listeningRef = useRef(false);
   const sendingRef = useRef(false);
   // A new spoken reply or a manual stop increments this. Late callbacks from a cancelled
@@ -267,12 +324,33 @@ export default function AssistantPage() {
       if (error.code === "timeout") return t("assistant.timeout");
     }
     return t("assistant.failed");
-  }  function stopVoice() {
+  }
+
+  function stopVoice() {
     speakRun.current += 1;
     stopAudioRef.current?.();
     stopAudioRef.current = null;
+    speechHandleRef.current = null;
     setSpeaking(null);
     stopSpeaking();
+  }
+
+  /** The speaker doubles as the pause button once the voice has actually started. */
+  function toggleSpeech() {
+    const handle = speechHandleRef.current;
+    if (!handle) return;
+    setSpeaking((current) => {
+      if (!current) return current;
+      if (current.status === "playing") {
+        handle.pause();
+        return { ...current, status: "paused" };
+      }
+      if (current.status === "paused") {
+        handle.resume();
+        return { ...current, status: "playing" };
+      }
+      return current;
+    });
   }
 
   /**
@@ -292,16 +370,24 @@ export default function AssistantPage() {
     stopSpeaking();
     setSpeechError("");
 
-    setSpeaking({ index, text: value });
+    setSpeaking({ index, text: value, status: "loading" });
     const handle = speakUrdu(value, {
+      onStart: () => {
+        if (run !== speakRun.current) return;
+        setSpeaking((current) =>
+          current && current.index === index ? { ...current, status: "playing" } : current,
+        );
+      },
       onEnd: () => {
         if (run !== speakRun.current) return;
         stopAudioRef.current = null;
+        speechHandleRef.current = null;
         setSpeaking(null);
       },
       onError: () => {
         if (run !== speakRun.current) return;
         stopAudioRef.current = null;
+        speechHandleRef.current = null;
         setSpeaking(null);
         setSpeechError(t("assistant.speakFailed"));
       },
@@ -312,6 +398,7 @@ export default function AssistantPage() {
       return;
     }
     stopAudioRef.current = handle.stop;
+    speechHandleRef.current = handle;
   }
 
   function stopMic() {
@@ -652,36 +739,87 @@ export default function AssistantPage() {
                       >
                         {reply.answer}
                       </p>
-                      <div className="mt-1.5 flex items-center">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            isSpeaking ? stopVoice() : readAloud(reply.answer, index)
-                          }
-                          aria-label={
-                            isSpeaking ? t("assistant.stopSpeaking") : t("assistant.readAloud")
-                          }
-                          title={
-                            isSpeaking ? t("assistant.stopSpeaking") : t("assistant.readAloud")
-                          }
-                          aria-pressed={isSpeaking}
-                          className="ds-pressable flex size-8 items-center justify-center rounded-full"
-                          style={{
-                            background: isSpeaking
-                              ? "var(--brand-light)"
-                              : "var(--surface-2)",
-                            color: isSpeaking
-                              ? "var(--brand-dark)"
-                              : "var(--text-secondary)",
-                          }}
-                          data-testid={`assistant-speak-${index}`}
-                        >
-                          {isSpeaking ? (
-                            <VolumeX size={15} strokeWidth={1.6} />
-                          ) : (
-                            <Volume2 size={15} strokeWidth={1.6} />
-                          )}
-                        </button>
+                      <div className="mt-1.5 flex min-h-8 items-center">
+                        {/* Preparing the voice uses the same waiting line the answer itself shows, so
+                            a tap on the speaker never looks like nothing happened. Tapping it stops. */}
+                        {isSpeaking && speaking?.status === "loading" ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={stopVoice}
+                              aria-label={t("assistant.stopSpeaking")}
+                              title={t("assistant.stopSpeaking")}
+                              className="ds-pressable flex size-8 items-center justify-center rounded-full"
+                              style={{
+                                background: "var(--brand-light)",
+                                color: "var(--brand-dark)",
+                              }}
+                              data-testid={`assistant-speak-${index}`}
+                              data-state="loading"
+                            >
+                              <span className="ds-voice-bars" aria-hidden="true">
+                                <span />
+                                <span />
+                                <span />
+                              </span>
+                            </button>
+                            {/* Said in words as well as bars: translation then voice is the wait a
+                                person is actually sitting through, and naming it is kinder than a
+                                silent spinner. Tap the disc to give up. */}
+                            <span
+                              className="text-11"
+                              style={{ color: "var(--text-secondary)" }}
+                              role="status"
+                            >
+                              {t("assistant.preparingVoice")}
+                            </span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              isSpeaking ? toggleSpeech() : readAloud(reply.answer, index)
+                            }
+                            aria-label={
+                              isSpeaking
+                                ? speaking?.status === "paused"
+                                  ? t("assistant.resumeSpeaking")
+                                  : t("assistant.pauseSpeaking")
+                                : t("assistant.readAloud")
+                            }
+                            title={
+                              isSpeaking
+                                ? speaking?.status === "paused"
+                                  ? t("assistant.resumeSpeaking")
+                                  : t("assistant.pauseSpeaking")
+                                : t("assistant.readAloud")
+                            }
+                            aria-pressed={isSpeaking}
+                            className="ds-pressable flex size-8 items-center justify-center rounded-full"
+                            style={{
+                              background: isSpeaking
+                                ? "var(--brand-light)"
+                                : "var(--surface-2)",
+                              color: isSpeaking
+                                ? "var(--brand-dark)"
+                                : "var(--text-secondary)",
+                            }}
+                            data-testid={`assistant-speak-${index}`}
+                            data-state={
+                              isSpeaking ? speaking?.status ?? "playing" : "idle"
+                            }
+                          >
+                            {isSpeaking ? (
+                              speaking?.status === "paused" ? (
+                                <SpeakerPlayIcon />
+                              ) : (
+                                <SpeakerPauseIcon />
+                              )
+                            ) : (
+                              <Volume2 size={16} strokeWidth={1.7} />
+                            )}
+                          </button>
+                        )}
                       </div>
                       {answerNotes.map((text, noteIndex) => (
                         <p
