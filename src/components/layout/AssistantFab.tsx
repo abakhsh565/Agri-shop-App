@@ -51,7 +51,13 @@ export default function AssistantFab({ path }: { path: string }) {
               the button itself (refracted rim and specular sweep are its own pseudo-elements),
               so there is nothing extra to focus or read; the name is in aria-label and every
               loop stops for reduced-motion. */}
-          <BrandLogo variant="mark" tone="white" size={30} animated={false} className="ds-assistant-fab-mark" />
+          <BrandLogo
+            variant="mark"
+            tone="mesh"
+            size={50}
+            animated={false}
+            className="ds-assistant-fab-mark"
+          />
         </button>
       </div>
     </div>

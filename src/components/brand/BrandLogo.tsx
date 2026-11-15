@@ -30,8 +30,12 @@ interface BrandLogoProps {
    */
   variant?: "badge" | "mark";
   /** Glyph colour for the `mark` variant: the brand token by default, ink where the mark sits on
-   *  light glass, white on a dark field. */
-  tone?: "brand" | "ink" | "white";
+   *  light glass, white on a dark field, and `mesh` for a gradient that drifts INSIDE the glyph
+   *  (white, pale green, grey) rather than a flat fill. */
+  tone?: "brand" | "ink" | "white" | "mesh";
+  /** Motion of the mesh inside the glyph. Kept separate from `animated` (the draw-in) so a caller
+   *  can have the gradient flow without the brand's own breathe fighting its own animation. */
+  meshAnimated?: boolean;
   className?: string;
 }
 
@@ -40,15 +44,18 @@ export default function BrandLogo({
   animated = true,
   variant = "badge",
   tone = "brand",
+  meshAnimated = true,
   className = "",
 }: BrandLogoProps) {
   const isMark = variant === "mark";
   const markColour = tone === "ink" ? "#0A0A0A" : tone === "white" ? "#FFFFFF" : "var(--brand)";
+  const isMesh = tone === "mesh";
   // Two logos on one screen would otherwise share gradient and clip ids, and the second would
   // borrow the first one's defs.
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const clipId = `brand-clip-${uid}`;
   const sheenId = `brand-sheen-${uid}`;
+  const meshId = `brand-mesh-${uid}`;
 
   return (
     <svg
@@ -72,15 +79,58 @@ export default function BrandLogo({
         </defs>
       )}
       {isMark ? (
-        <path
-          className="ds-brand-glyph"
-          d={GLYPH}
-          fill={markColour}
-          stroke={markColour}
-          strokeWidth={10}
-          strokeLinejoin="round"
-          pathLength={1}
-        />
+        <>
+          {/* The mesh lives INSIDE the glyph: the gradient is the paint of the mark itself, and it
+              turns slowly, so the colour drifts through the letterforms instead of across the
+              button behind them. */}
+          {isMesh && (
+            <defs>
+              <linearGradient id={meshId} gradientUnits="userSpaceOnUse" x1="120" y1="140" x2="900" y2="880">
+                {/* Chrome-mesh, not a flat wash: white and silver with pale green and a cool grey
+                    crossing it, so the glyph reads as polished metal in the brand's own light. */}
+                <stop offset="0%" stopColor="#FFFFFF" />
+                <stop offset="16%" stopColor="#EAF7DD" />
+                <stop offset="32%" stopColor="#C9C9C2" />
+                <stop offset="48%" stopColor="#FFFFFF" />
+                <stop offset="64%" stopColor="#D9F99D" />
+                <stop offset="80%" stopColor="#BFC7BD" />
+                <stop offset="100%" stopColor="#FFFFFF" />
+                {meshAnimated && (
+                  <>
+                    {/* Two motions on one gradient: it turns, and it slides back and forth a little
+                        faster — the colour drifts through the letterforms instead of sweeping past
+                        them like a bar. */}
+                    <animateTransform
+                      attributeName="gradientTransform"
+                      type="rotate"
+                      from="0 514 514"
+                      to="360 514 514"
+                      dur="14s"
+                      repeatCount="indefinite"
+                    />
+                    <animateTransform
+                      attributeName="gradientTransform"
+                      type="translate"
+                      values="-70 30; 70 -30; -70 30"
+                      dur="7s"
+                      repeatCount="indefinite"
+                      additive="sum"
+                    />
+                  </>
+                )}
+              </linearGradient>
+            </defs>
+          )}
+          <path
+            className="ds-brand-glyph"
+            d={GLYPH}
+            fill={isMesh ? `url(#${meshId})` : markColour}
+            stroke={isMesh ? "none" : markColour}
+            strokeWidth={10}
+            strokeLinejoin="round"
+            pathLength={1}
+          />
+        </>
       ) : (
         <g clipPath={`url(#${clipId})`}>
           <circle className="ds-brand-disc" cx="514" cy="514" r="514" fill="var(--brand)" />

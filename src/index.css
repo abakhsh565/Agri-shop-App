@@ -1734,85 +1734,40 @@ prefers-reduced-motion. */
   border-radius: 999px;
   border: 0;
   isolation: isolate;
-  /* A deep field for the mesh to glow against, so the colour reads as light rather than paint. */
-  background: linear-gradient(155deg, #141a33 0%, #241a52 55%, #0a2c3c 100%);
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  /* Two shadows do the work both themes need: a dark ring makes the edge visible on a white page,
-     a soft drop makes it sit on a dark one. */
+  /* Brand green, and nothing drawn round it: no border, no ring, no hairline. Only the soft drop
+     shadow that lifts it off the page and a green glow, so the mesh inside is all there is to see. */
+  background: var(--brand);
+  border: 0;
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.28),
     0 12px 22px -8px rgba(0, 0, 0, 0.5),
-    0 0 18px rgba(122, 92, 255, 0.28),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
-    inset 0 -12px 18px -12px rgba(0, 0, 0, 0.55);
+    0 0 16px rgba(132, 204, 22, 0.28);
 }
-/* The colour INSIDE the glass: a soft lime-and-cyan wash that drifts round inside the sphere. The
-   sphere itself stays still — only this colour moves, clipped to the ball and softened at the edge
-   so it never touches the rim like a sticker. */
-.ds-assistant-fab::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: 999px;
-  /* The mesh: six light sources in one blurred field — amber, magenta, electric blue, violet, the
-     brand lime and a deep teal behind them. Warm and cool together is what reads as an AI orb
-     rather than another green button. */
-  background:
-    radial-gradient(34% 32% at 30% 16%, #ffc45c 0%, rgba(255, 196, 92, 0) 58%),
-    radial-gradient(46% 44% at 82% 20%, #ff3ea5 0%, rgba(255, 62, 165, 0) 60%),
-    radial-gradient(58% 54% at 80% 78%, #29c8ff 0%, rgba(41, 200, 255, 0) 64%),
-    radial-gradient(56% 52% at 18% 78%, #8b5cf6 0%, rgba(139, 92, 246, 0) 66%),
-    radial-gradient(30% 28% at 54% 56%, #a3e635 0%, rgba(163, 230, 53, 0) 62%),
-    linear-gradient(150deg, #101633 0%, #1d1450 55%, #062636 100%);
-  filter: blur(8px) saturate(185%) brightness(1.1);
-  -webkit-mask: radial-gradient(farthest-side, #000 0 74%, rgba(0, 0, 0, 0.45) 88%, transparent 96%);
-  mask: radial-gradient(farthest-side, #000 0 74%, rgba(0, 0, 0, 0.45) 88%, transparent 96%);
-  animation: ds-bot-orbit 18s linear infinite;
-}
-/* A second mesh turning the other way over the first: the colours cross and re-cross instead of
-   sweeping round as one wheel. Screen-blended, so the field gets brighter where they overlap. */
-.ds-assistant-fab::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: 999px;
-  pointer-events: none;
-  opacity: 0.75;
-  mix-blend-mode: screen;
-  background:
-    radial-gradient(40% 38% at 68% 18%, #ffd166 0%, rgba(255, 209, 102, 0) 62%),
-    radial-gradient(42% 40% at 28% 38%, #00e5ff 0%, rgba(0, 229, 255, 0) 62%),
-    radial-gradient(46% 42% at 76% 74%, #b14bff 0%, rgba(177, 75, 255, 0) 64%),
-    radial-gradient(44% 40% at 40% 88%, #a3e635 0%, rgba(163, 230, 53, 0) 62%);
-  filter: blur(10px) saturate(140%);
-  -webkit-mask: radial-gradient(farthest-side, #000 0 70%, rgba(0, 0, 0, 0.4) 86%, transparent 96%);
-  mask: radial-gradient(farthest-side, #000 0 70%, rgba(0, 0, 0, 0.4) 86%, transparent 96%);
-  animation: ds-bot-orbit-reverse 26s linear infinite;
-}
-
+/* Nothing moves on the button itself: the drifting colour is the FILL OF THE GLYPH (BrandLogo
+   tone="mesh"), so the mesh animates inside the letterforms over a plain brand disc. */
 .ds-assistant-fab-mark {
   position: relative;
   z-index: 1;
-  animation: ds-fab-mark-breathe 3.8s ease-in-out infinite;
+  /* Breathing all the time, and blinking twice every nine seconds — a bot that is awake, not a
+     static badge. The blink is opacity only, so it never fights the drop shadow. */
+  animation:
+    ds-fab-mark-breathe 3.8s ease-in-out infinite,
+    ds-fab-mark-blink 9s ease-in-out infinite;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
 }
 
-@keyframes ds-bot-orbit {
-  to { transform: rotate(360deg); }
-}
-@keyframes ds-bot-orbit-reverse {
-  to { transform: rotate(-360deg); }
-}
 @keyframes ds-fab-mark-breathe {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.07); }
 }
+@keyframes ds-fab-mark-blink {
+  0%, 84%, 100% { opacity: 1; }
+  86% { opacity: 0.22; }
+  88% { opacity: 1; }
+  90% { opacity: 0.4; }
+  92%, 100% { opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .ds-assistant-fab::before,
-  .ds-assistant-fab::after,
-  .ds-assistant-fab-mark { animation: none; }
+  .ds-assistant-fab-mark { animation: none; opacity: 1; }
 }
 
 /* The mark DRAWING ITSELF, which is what the first screen is for:
