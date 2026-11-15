@@ -284,3 +284,31 @@ skips the gate is a release with no evidence.
 production only through `Apply migrations to production (gated batch)`. Data never moves between
 the three databases: dev is the Docker stack on this machine, staging is `bpybjrjenwccowvtrevu`,
 production is `gkswcfljxlutkfdvvqng`, and no tool here copies rows from one to another.
+
+---
+
+## 10. The change flow — dev is the only place work happens (owner's instruction, 2026-11-15)
+
+**dev is the only place work happens.** Every design change, fix, migration and test is made on
+`dev`, against the local stack, with the dev preview open. Staging and production are **never
+edited directly** — not for a quick fix, not for a hotfix, not "just this once". If a change
+cannot reach production through the chain, the chain is what gets fixed, on `dev`.
+
+```
+asked for a change  →  dev  →  PR  →  staging  →  PR  →  main  →  gated production dispatch
+```
+
+A promotion is one word from the owner ("forward it"), and after that word the same commit and the
+same migrations reach the next environment with no hand-assembly. Three tools exist so that is
+true rather than hoped for:
+
+| Command | What it guarantees |
+|---|---|
+| `npm run release:prepare -- --batch <name> --files … [--artifact <dir>]` | Refuses unless the checkout is `dev` with a clean tree; replays the batch against the recorded production baseline; writes `verification.json` and copies the backup manifest and restore report into `production-batches/<name>/`; prints the exact dry-run and apply dispatches. |
+| `npm run prod:gap` | Measures the objects the client actually calls (`supabase.rpc(…)`, `supabase.from(…)` in `src/`) against an environment. A ledger position is not an alignment claim. |
+| gated production apply | Runs `prod:gap --fail-on-gap` after it writes, so a release that leaves one of the app's own RPCs or tables missing fails instead of being reported as complete. |
+
+The rule is guarded: `tests/unit/releaseFlowGuard.test.ts` fails if `release:prepare` stops
+refusing non-dev branches, if this section disappears, or if the workflow stops measuring the
+app's objects after the apply. A batch that leaves a gap is fixed on `dev` and promoted again —
+never patched in place.
