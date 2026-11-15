@@ -23,10 +23,22 @@ interface BrandLogoProps {
   size?: number;
   /** Draw-in animation. Off for repeated, small copies. */
   animated?: boolean;
+  /**
+   * `badge` is the launcher artwork: a brand disc with the glyph in white. `mark` is the glyph on
+   * its own, drawn in the brand colour on the page — no disc behind it and nothing around it, for
+   * surfaces that already carry their own shape (the first screen).
+   */
+  variant?: "badge" | "mark";
   className?: string;
 }
 
-export default function BrandLogo({ size = 112, animated = true, className = "" }: BrandLogoProps) {
+export default function BrandLogo({
+  size = 112,
+  animated = true,
+  variant = "badge",
+  className = "",
+}: BrandLogoProps) {
+  const isMark = variant === "mark";
   // Two logos on one screen would otherwise share gradient and clip ids, and the second would
   // borrow the first one's defs.
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
@@ -42,40 +54,54 @@ export default function BrandLogo({ size = 112, animated = true, className = "" 
       aria-hidden="true"
       className={`ds-brand-logo${animated ? " is-animated" : ""}${className ? ` ${className}` : ""}`}
     >
-      <defs>
-        <clipPath id={clipId}>
-          <circle cx="514" cy="514" r="514" />
-        </clipPath>
-        <linearGradient id={sheenId} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0" />
-          <stop offset="50%" stopColor="#FFFFFF" stopOpacity="0.6" />
-          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <g clipPath={`url(#${clipId})`}>
-        <circle className="ds-brand-disc" cx="514" cy="514" r="514" fill="var(--brand)" />
-        {/* The sheen is a group so the CSS transform can slide it across without overwriting
-            the rect's own rotation. */}
-        <g className="ds-brand-sheen">
-          <rect
-            x="300"
-            y="-260"
-            width="200"
-            height="1620"
-            fill={`url(#${sheenId})`}
-            transform="rotate(24 514 514)"
-          />
-        </g>
+      {!isMark && (
+        <defs>
+          <clipPath id={clipId}>
+            <circle cx="514" cy="514" r="514" />
+          </clipPath>
+          <linearGradient id={sheenId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0" />
+            <stop offset="50%" stopColor="#FFFFFF" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+      )}
+      {isMark ? (
         <path
           className="ds-brand-glyph"
           d={GLYPH}
-          fill="#FFFFFF"
-          stroke="#FFFFFF"
+          fill="var(--brand)"
+          stroke="var(--brand)"
           strokeWidth={10}
           strokeLinejoin="round"
           pathLength={1}
         />
-      </g>
+      ) : (
+        <g clipPath={`url(#${clipId})`}>
+          <circle className="ds-brand-disc" cx="514" cy="514" r="514" fill="var(--brand)" />
+          {/* The sheen is a group so the CSS transform can slide it across without overwriting
+              the rect's own rotation. */}
+          <g className="ds-brand-sheen">
+            <rect
+              x="300"
+              y="-260"
+              width="200"
+              height="1620"
+              fill={`url(#${sheenId})`}
+              transform="rotate(24 514 514)"
+            />
+          </g>
+          <path
+            className="ds-brand-glyph"
+            d={GLYPH}
+            fill="#FFFFFF"
+            stroke="#FFFFFF"
+            strokeWidth={10}
+            strokeLinejoin="round"
+            pathLength={1}
+          />
+        </g>
+      )}
     </svg>
   );
 }

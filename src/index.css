@@ -1741,13 +1741,24 @@ svg.lucide {
   align-items: center;
   justify-content: center;
 }
-.ds-splash-halo {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  border: 1px solid var(--brand);
+/* The name and the line under it arrive after the mark has been written, not with it: the screen
+   builds in reading order instead of appearing complete and then moving. */
+.ds-splash-name {
+  animation: ds-splash-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) 1.05s both;
+}
+.ds-splash-tagline {
+  animation: ds-splash-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) 1.3s both;
+}
+/* Handing over: the stage grows out of the glyph's own centre and fades, so the next screen
+   arrives through the logo instead of replacing it. The origin is set in code from the mark's
+   measured box, because the mark is not in the middle of the layout (the words sit under it). */
+.ds-splash-stage { transform-origin: 50% 50%; }
+.ds-splash-stage.is-leaving {
+  transform: scale(2.6);
   opacity: 0;
-  animation: ds-splash-halo 2.6s ease-out 900ms infinite;
+  transition:
+    transform 320ms cubic-bezier(0.5, 0, 0.9, 0.6),
+    opacity 300ms ease-in;
 }
 
 @keyframes ds-brand-disc {
@@ -1766,9 +1777,9 @@ svg.lucide {
   from { transform: translateX(-320px); }
   to { transform: translateX(320px); }
 }
-@keyframes ds-splash-halo {
-  0% { opacity: 0.55; transform: scale(1); }
-  70%, 100% { opacity: 0; transform: scale(1.45); }
+@keyframes ds-splash-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes ds-logo-breathe {
   0%, 100% { transform: scale(1); }
@@ -1832,6 +1843,7 @@ svg.lucide {
     animation: none;
   }
   .ds-brand-logo .ds-brand-glyph { stroke-dashoffset: 0; fill-opacity: 1; }
-  .ds-brand-logo .ds-brand-sheen,
-  .ds-splash-halo { display: none; }
+  .ds-brand-logo .ds-brand-sheen { display: none; }
+  .ds-splash-name,
+  .ds-splash-tagline { animation: none; opacity: 1; transform: none; }
 }
