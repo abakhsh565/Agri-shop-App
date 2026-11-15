@@ -151,6 +151,17 @@ jobs:
           node scripts/migrate.mjs apply --env production --files "${{ inputs.files }}" --verification "${{ inputs.verification }}" --backup "${{ inputs.backup }}" --restored "${{ inputs.restored }}" | tee /tmp/post_apply_ledger.txt
           grep -q "Nothing to apply: all .* file(s) in the batch are already recorded" /tmp/post_apply_ledger.txt
 
+      - name: The app's own objects must all exist here (measured, not assumed)
+        if: ${{ inputs.apply == true }}
+        run: |
+          set -euo pipefail
+          # A recorded ledger is not an alignment claim. On 2026-11-15 production held the
+          # repository's newest version while 30 RPCs and one table the client calls were absent:
+          # those screens answered 404 and degraded quietly. This measures the claim directly —
+          # every `supabase.rpc('…')` and `supabase.from('…')` in src/ must exist in the database
+          # this batch just wrote to — and fails the release when it does not.
+          node scripts/dev/production-gap.mjs --env production --fail-on-gap
+
       - name: Summary
         if: always()
         run: |
