@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { canOpenWithPin } from "@/lib/pinLock";
@@ -17,21 +17,41 @@ export default function SplashPage() {
   const t = useT();
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const stageRef = useRef<HTMLDivElement>(null);
+  const markRef = useRef<HTMLSpanElement>(null);
   const [leaving, setLeaving] = useState(false);
 
   /**
-   * Hands the screen over by flying INTO the mark: the words fade back, the glyph spins up and
-   * grows through the screen, and only then does the next screen arrive — 600ms of an 800ms move,
-   * so the turn is three quarters done when the page changes instead of being cut off by it.
+   * Hands the screen over THROUGH the mark: the words step back, the glyph grows until it fills the
+   * viewport (scaled in code for the screen it is on, no rotation, no fade), and a brand sheet takes
+   * over at the instant it is covering everything. The next screen is then revealed from under that
+   * sheet by fading it away.
+   *
+   * The sheet is a child of body, not of this page: it has to outlive the route change, otherwise
+   * the covering logo would vanish with the splash and the next screen would appear as a cut.
    */
   const leave = useCallback(
     (to: string, options?: { replace?: boolean; state?: unknown }) => {
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const mark = markRef.current;
+      if (!mark || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         navigate(to, options);
         return;
       }
+      // Enough growth for the mark's own box to cover the longest side, with a little to spare.
+      const side = Math.max(mark.offsetWidth, mark.offsetHeight) || 112;
+      const cover = Math.ceil((Math.max(window.innerWidth, window.innerHeight) / side) * 1.15);
+      stageRef.current?.style.setProperty("--fly-scale", String(cover));
       setLeaving(true);
-      window.setTimeout(() => navigate(to, options), 600);
+
+      window.setTimeout(() => {
+        const sheet = document.createElement("div");
+        sheet.className = "ds-splash-handover";
+        document.body.appendChild(sheet);
+        requestAnimationFrame(() => sheet.classList.add("is-on"));
+        navigate(to, options);
+        window.setTimeout(() => sheet.classList.add("is-off"), 140);
+        window.setTimeout(() => sheet.remove(), 760);
+      }, 620);
     },
     [navigate],
   );
@@ -100,6 +120,7 @@ export default function SplashPage() {
 
   return (
     <div
+      ref={stageRef}
       className={`ds-splash-stage flex flex-col bg-background min-h-full w-full justify-between${
         leaving ? " is-leaving" : ""
       }`}
@@ -113,7 +134,7 @@ export default function SplashPage() {
             lime glyph on a lime tile. */}
         {/* The mark alone, in the brand colour: no disc behind it and nothing drawn around it.
             The glyph is written first, then the name, then the line under it. */}
-        <span className="ds-splash-mark" style={{ width: 112, height: 112 }}>
+        <span ref={markRef} className="ds-splash-mark" style={{ width: 112, height: 112 }}>
           <BrandLogo variant="mark" size={112} />
         </span>
         <div className="flex flex-col items-center gap-2 text-center">

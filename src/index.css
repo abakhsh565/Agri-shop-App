@@ -1749,25 +1749,41 @@ svg.lucide {
 .ds-splash-tagline {
   animation: ds-splash-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) 1.3s both;
 }
-/* Handing over: the words step back, then the glyph spins up and grows through the screen. The
-   turn is what carries the eye into the next screen — 800ms of motion, and the route changes at
-   600ms, when the turn is three quarters done, so the next screen arrives out of a logo that is
-   still turning rather than out of a cut. */
+/* Handing over: the words step back, then the mark grows — steadily, no turn and no fade — until
+   it is bigger than the screen. At that instant a brand sheet takes over and the next screen is
+   revealed from under it, so the page always arrives out of the logo. `--fly-scale` is measured in
+   code from the mark's own box and the viewport. */
 .ds-splash-stage.is-leaving .ds-splash-name,
 .ds-splash-stage.is-leaving .ds-splash-tagline {
   animation: ds-splash-out 180ms ease-in both;
 }
 .ds-splash-stage.is-leaving .ds-splash-mark {
-  animation: ds-splash-fly 800ms cubic-bezier(0.33, 0, 0.15, 1) both;
+  animation: ds-splash-fly 620ms cubic-bezier(0.5, 0, 0.75, 0.4) both;
+}
+
+/* The sheet that carries the hand-over: a body child, so it is still there when this page
+   unmounts. It covers the whole viewport, then fades away over the screen that is already behind. */
+.ds-splash-handover {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  pointer-events: none;
+  background: var(--brand);
+  opacity: 0;
+  transition: opacity 140ms linear;
+}
+.ds-splash-handover.is-on { opacity: 1; }
+.ds-splash-handover.is-off {
+  opacity: 0;
+  transition: opacity 420ms ease-out;
 }
 
 @keyframes ds-splash-out {
   to { opacity: 0; transform: translateY(-6px); }
 }
 @keyframes ds-splash-fly {
-  0% { transform: rotate(0deg) scale(1); opacity: 1; }
-  40% { opacity: 1; }
-  100% { transform: rotate(220deg) scale(3.6); opacity: 0; }
+  from { transform: scale(1); }
+  to { transform: scale(var(--fly-scale, 24)); }
 }
 
 @keyframes ds-brand-disc {
