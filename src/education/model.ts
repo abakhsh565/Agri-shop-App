@@ -11,6 +11,8 @@ import {
   Compass,
   ShieldCheck,
   MoreHorizontal,
+  Building2,
+  Sparkles,
 } from "lucide-react";
 import type { I18nKey } from "@/lib/i18n";
 import { hasPermission } from "@/lib/tenantContext";
@@ -163,19 +165,26 @@ export interface Tutorial {
 }
 
 /**
- * The workflows that get a full visual walkthrough.
+ * The flows that get a full visual walkthrough.
  *
- * Chosen by one rule: a multi-step flow where a new user can get lost and a wrong tap costs
- * money. Everything smaller is a contextual explanation (see `SCREEN_HELP`); anything that is
- * a question rather than a walkthrough is a FAQ. The three flows the guide already narrates
- * plus the reports walkthrough are exactly that set — a sale, a collection, stock coming in,
- * and reading the numbers — so a video always has matching step copy beside it.
+ * Chosen by one rule: a job a new owner does in their first week, where a wrong tap costs money
+ * or access. Each has a recording of the real app in Urdu, with the narration burned into the
+ * frame, and the same steps in words beside it.
+ *
+ * The first four were the shop's day (sell, collect, stock in, read the numbers). The second
+ * four are the jobs a new owner asks about next — recording an expense, adding a worker, giving
+ * that worker a role, and following up on credit and expiry (owner's request, 2026-11-15). The
+ * recordings were refreshed in the same pass because the screens they showed had moved on.
  */
 export const TUTORIALS: Tutorial[] = [
   { id: "sale",    titleKey: "edu.w.sale.title",    workflowId: "sale",    stepKeys: ["edu.w.sale.1", "edu.w.sale.2", "edu.w.sale.3"],          file: "/tutorials/new-sale.webm",       poster: "/tutorials/new-sale.png" },
   { id: "collect", titleKey: "edu.w.collect.title", workflowId: "collect", stepKeys: ["edu.w.collect.1", "edu.w.collect.2", "edu.w.collect.3"], file: "/tutorials/collect-payment.webm", poster: "/tutorials/collect-payment.png" },
   { id: "stock",   titleKey: "edu.w.stock.title",   workflowId: "stock",   stepKeys: ["edu.w.stock.1", "edu.w.stock.2", "edu.w.stock.3"],       file: "/tutorials/stock-in.webm",       poster: "/tutorials/stock-in.png" },
   { id: "reports", titleKey: "edu.w.reports.title", workflowId: "reports", stepKeys: ["edu.w.reports.1", "edu.w.reports.2", "edu.w.reports.3"], file: "/tutorials/reports.webm",       poster: "/tutorials/reports.png" },
+  { id: "expense", titleKey: "edu.w.expense.title", workflowId: "expense", stepKeys: ["edu.w.expense.1", "edu.w.expense.2", "edu.w.expense.3"], file: "/tutorials/record-expense.webm",  poster: "/tutorials/record-expense.png" },
+  { id: "worker",  titleKey: "edu.w.worker.title",  workflowId: "worker",  stepKeys: ["edu.w.worker.1", "edu.w.worker.2", "edu.w.worker.3"],   file: "/tutorials/add-employee.webm",   poster: "/tutorials/add-employee.png" },
+  { id: "roles",   titleKey: "edu.w.roles.title",   workflowId: "roles",   stepKeys: ["edu.w.roles.1", "edu.w.roles.2", "edu.w.roles.3"],       file: "/tutorials/roles-access.webm",   poster: "/tutorials/roles-access.png" },
+  { id: "alerts",  titleKey: "edu.w.alerts.title",  workflowId: "alerts",  stepKeys: ["edu.w.alerts.1", "edu.w.alerts.2", "edu.w.alerts.3"],     file: "/tutorials/alerts-reminders.webm", poster: "/tutorials/alerts-reminders.png" },
 ];
 
 export function tutorialById(id: string | undefined): Tutorial | undefined {
@@ -240,6 +249,12 @@ export interface FaqItem {
   id: string;
   qKey: I18nKey;
   aKey: I18nKey;
+  /**
+   * The capability the question is about. The guide's search turns the answer into a way into
+   * that screen, so reading "how do I collect udhaar?" ends on the customer's account rather
+   * than in a paragraph.
+   */
+  featureId?: string;
 }
 
 /**
@@ -248,16 +263,22 @@ export interface FaqItem {
  * guards as the rest of the copy.
  */
 export const FAQS: FaqItem[] = [
-  { id: "sale",       qKey: "edu.faq.q1",  aKey: "edu.faq.a1" },
-  { id: "udhaar",     qKey: "edu.faq.q2",  aKey: "edu.faq.a2" },
-  { id: "collect",    qKey: "edu.faq.q3",  aKey: "edu.faq.a3" },
-  { id: "owesMe",     qKey: "edu.faq.q4",  aKey: "edu.faq.a4" },
-  { id: "stockIn",    qKey: "edu.faq.q5",  aKey: "edu.faq.a5" },
-  { id: "lowStock",   qKey: "edu.faq.q6",  aKey: "edu.faq.a6" },
-  { id: "reminders",  qKey: "edu.faq.q7",  aKey: "edu.faq.a7" },
-  { id: "reports",    qKey: "edu.faq.q8",  aKey: "edu.faq.a8" },
-  { id: "noAccess",   qKey: "edu.faq.q9",  aKey: "edu.faq.a9" },
-  { id: "employee",   qKey: "edu.faq.q10", aKey: "edu.faq.a10" },
+  { id: "sale",         qKey: "edu.faq.q1",  aKey: "edu.faq.a1",  featureId: "sales" },
+  { id: "udhaar",       qKey: "edu.faq.q2",  aKey: "edu.faq.a2",  featureId: "sales" },
+  { id: "collect",      qKey: "edu.faq.q3",  aKey: "edu.faq.a3",  featureId: "customers" },
+  { id: "owesMe",       qKey: "edu.faq.q4",  aKey: "edu.faq.a4",  featureId: "customers" },
+  { id: "stockIn",      qKey: "edu.faq.q5",  aKey: "edu.faq.a5",  featureId: "purchases" },
+  { id: "lowStock",     qKey: "edu.faq.q6",  aKey: "edu.faq.a6",  featureId: "alerts" },
+  { id: "reminders",    qKey: "edu.faq.q7",  aKey: "edu.faq.a7",  featureId: "finance" },
+  { id: "reports",      qKey: "edu.faq.q8",  aKey: "edu.faq.a8",  featureId: "reports" },
+  { id: "noAccess",     qKey: "edu.faq.q9",  aKey: "edu.faq.a9" },
+  { id: "employee",     qKey: "edu.faq.q10", aKey: "edu.faq.a10", featureId: "staff" },
+  { id: "expense",      qKey: "edu.faq.q11", aKey: "edu.faq.a11", featureId: "finance" },
+  { id: "assistant",    qKey: "edu.faq.q12", aKey: "edu.faq.a12", featureId: "assistant" },
+  { id: "cashVsProfit", qKey: "edu.faq.q13", aKey: "edu.faq.a13", featureId: "reports" },
+  { id: "branches",     qKey: "edu.faq.q14", aKey: "edu.faq.a14", featureId: "branches" },
+  { id: "moneyAccess",  qKey: "edu.faq.q15", aKey: "edu.faq.a15", featureId: "staff" },
+  { id: "roleAccess",   qKey: "edu.faq.q16", aKey: "edu.faq.a16", featureId: "staff" },
 ];
 
 /** True when this role is taught the owner tour. */
@@ -299,8 +320,11 @@ export interface Feature {
   /** Why a shop keeps it — the part that makes it worth learning. */
   whyKey: I18nKey;
   icon: LucideIcon;
-  /** Opening it needs this; without it the feature is explained, not offered. */
-  requires: PermissionCode;
+  /**
+   * Opening it needs this; without it the feature is explained, not offered. Optional for a
+   * screen the shell itself guards (the assistant opens for whoever is signed in).
+   */
+  requires?: PermissionCode;
   /** Routes are shell-relative; an employee shell has fewer of these screens. */
   adminPath: string;
   employeePath?: string;
@@ -320,10 +344,19 @@ export const FEATURES: Feature[] = [
   { id: "stock",     titleKey: "edu.f.stock.title",     whatKey: "edu.f.stock.what",     whyKey: "edu.f.stock.why",     icon: Package,      requires: "products.view",  adminPath: "/products",           employeePath: "/products" },
   { id: "customers", titleKey: "edu.f.customers.title", whatKey: "edu.f.customers.what", whyKey: "edu.f.customers.why", icon: UserCheck,    requires: "customers.view", adminPath: "/customers",          employeePath: "/customers" },
   { id: "purchases", titleKey: "edu.f.purchases.title", whatKey: "edu.f.purchases.what", whyKey: "edu.f.purchases.why", icon: ShoppingCart, requires: "purchases.view", adminPath: "/purchases" },
-  { id: "payments",  titleKey: "edu.f.payments.title",  whatKey: "edu.f.payments.what",  whyKey: "edu.f.payments.why",  icon: HandCoins,    requires: "payments.view",  adminPath: "/payments" },
-  { id: "reports",   titleKey: "edu.f.reports.title",   whatKey: "edu.f.reports.what",   whyKey: "edu.f.reports.why",   icon: BarChart2,    requires: "reports.view",   adminPath: "/reports" },
+  // The payment list, the recorded-money ledger and the statement became ONE money book
+  // (owner, 2026-10-31), and Business overview merged into the Finance screen (2026-11-12).
+  // The guide names the screen that exists now, not the two it replaced.
+  { id: "finance",   titleKey: "edu.f.finance.title",   whatKey: "edu.f.finance.what",   whyKey: "edu.f.finance.why",   icon: HandCoins,    requires: "payments.view",  adminPath: "/settings/hub/finance", employeePath: "/finance" },
+  { id: "reports",   titleKey: "edu.f.reports.title",   whatKey: "edu.f.reports.what",   whyKey: "edu.f.reports.why",   icon: BarChart2,    requires: "reports.view",   adminPath: "/reports",            employeePath: "/reports" },
+  // The assistant is a place of its own (`/assistant`) in both shells, with no permission of
+  // its own: it answers from what the signed-in account can already open.
+  { id: "assistant", titleKey: "edu.f.assistant.title", whatKey: "edu.f.assistant.what", whyKey: "edu.f.assistant.why", icon: Sparkles,     adminPath: "/assistant",          employeePath: "/assistant" },
   { id: "alerts",    titleKey: "edu.f.alerts.title",    whatKey: "edu.f.alerts.what",    whyKey: "edu.f.alerts.why",    icon: BellRing,     requires: "alerts.view",    adminPath: "/alerts/reminders" },
   { id: "staff",     titleKey: "edu.f.staff.title",     whatKey: "edu.f.staff.what",     whyKey: "edu.f.staff.why",     icon: Users,        requires: "employees.view", adminPath: "/employees" },
+  // Branches is its own screen (2026-10-28); the section lists every branch in its card and
+  // one branch's page opens from it.
+  { id: "branches",  titleKey: "edu.f.branches.title",  whatKey: "edu.f.branches.what",  whyKey: "edu.f.branches.why",  icon: Building2,    requires: "settings.view",  adminPath: "/settings/hub/branches" },
 ];
 
 export interface Workflow {
@@ -348,10 +381,19 @@ export interface Workflow {
  * feature is, so nothing reads as a control they hold.
  */
 export const WORKFLOWS: Workflow[] = [
-  { id: "sale",    titleKey: "edu.w.sale.title",    featureId: "sales",     stepKeys: ["edu.w.sale.1", "edu.w.sale.2", "edu.w.sale.3"] },
-  { id: "collect", titleKey: "edu.w.collect.title", featureId: "customers", stepKeys: ["edu.w.collect.1", "edu.w.collect.2", "edu.w.collect.3"] },
-  { id: "stock",   titleKey: "edu.w.stock.title",   featureId: "purchases", stepKeys: ["edu.w.stock.1", "edu.w.stock.2", "edu.w.stock.3"] },
-  { id: "reports", titleKey: "edu.w.reports.title", featureId: "reports",   stepKeys: ["edu.w.reports.1", "edu.w.reports.2", "edu.w.reports.3"] },
+  { id: "sale",    titleKey: "edu.w.sale.title",     featureId: "sales",     stepKeys: ["edu.w.sale.1", "edu.w.sale.2", "edu.w.sale.3"] },
+  { id: "collect", titleKey: "edu.w.collect.title",  featureId: "customers", stepKeys: ["edu.w.collect.1", "edu.w.collect.2", "edu.w.collect.3"] },
+  { id: "stock",   titleKey: "edu.w.stock.title",    featureId: "purchases", stepKeys: ["edu.w.stock.1", "edu.w.stock.2", "edu.w.stock.3"] },
+  { id: "reports", titleKey: "edu.w.reports.title",  featureId: "reports",   stepKeys: ["edu.w.reports.1", "edu.w.reports.2", "edu.w.reports.3"] },
+  // The two flows the app gained after the guide was written: money that is not a sale (0254)
+  // and a worker who must see only part of the shop. Both are multi-step and both cost money
+  // when done wrong, which is the rule this list follows.
+  { id: "expense", titleKey: "edu.w.expense.title",  featureId: "finance",   stepKeys: ["edu.w.expense.1", "edu.w.expense.2", "edu.w.expense.3"] },
+  { id: "worker",  titleKey: "edu.w.worker.title",   featureId: "staff",     stepKeys: ["edu.w.worker.1", "edu.w.worker.2", "edu.w.worker.3"] },
+  // The two follow-ups to a worker's first day, and to credit going late: what a role may
+  // open, and what to do about a reminder that has come due.
+  { id: "roles",   titleKey: "edu.w.roles.title",    featureId: "staff",     stepKeys: ["edu.w.roles.1", "edu.w.roles.2", "edu.w.roles.3"] },
+  { id: "alerts",  titleKey: "edu.w.alerts.title",   featureId: "finance",   stepKeys: ["edu.w.alerts.1", "edu.w.alerts.2", "edu.w.alerts.3"] },
 ];
 
 /** The feature a workflow belongs to — undefined only if the model is mis-wired. */
@@ -366,7 +408,7 @@ export function featureById(id: string): Feature | undefined {
 export function featurePath(feature: Feature, role: EduRole | undefined): string | null {
   const path = isOwnerRole(role) ? feature.adminPath : feature.employeePath;
   if (!path) return null;
-  return hasPermission(feature.requires) ? path : null;
+  return !feature.requires || hasPermission(feature.requires) ? path : null;
 }
 
 /**

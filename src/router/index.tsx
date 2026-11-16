@@ -27,6 +27,7 @@ import RegisterStatusPage from "@/pages/register/RegisterStatusPage";
 // Layout
 import EmployeeLayout from "@/components/layout/EmployeeLayout";
 import AppGuidePage from "@/pages/shared/AppGuidePage";
+import GuideDetailPage from "@/pages/shared/GuideDetailPage";
 import IntroPage from "@/pages/onboarding/IntroPage";
 import AdminLayout from "@/components/layout/AdminLayout";
 
@@ -69,7 +70,6 @@ import BusinessProfilePage from "@/pages/admin/settings/BusinessProfilePage";
 import CustomerReceivablePage from "@/pages/admin/settings/CustomerReceivablePage";
 import SupplierPayablePage from "@/pages/admin/settings/SupplierPayablePage";
 // The pending and overdue books behind the collection tiles, and one supplier's own payable page.
-import CustomerCreditPage from "@/pages/admin/settings/CustomerCreditPage";
 import SupplierCreditPage from "@/pages/admin/settings/SupplierCreditPage";
 import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
@@ -118,7 +118,6 @@ const UnitsPage = React.lazy(() => import("@/pages/admin/inventory/UnitsPage"));
 import PurchaseDetailPage from "@/pages/admin/purchases/PurchaseDetailPage";
 import StockMovementHistoryPage from "@/pages/admin/inventory/StockMovementHistoryPage";
 import ReorderSuggestionsPage from "@/pages/admin/inventory/ReorderSuggestionsPage";
-import DailyCashReconciliationPage from "@/pages/admin/payments/DailyCashReconciliationPage";
 import CashPositionPage from "@/pages/admin/payments/CashPositionPage";
 
 // Employee pages
@@ -223,6 +222,10 @@ export const router = createBrowserRouter([
       { path: "more",       element: <AdminMorePage /> },
       { path: "messages",   element: <AdminMessagesPage /> },
       { path: "guide",      element: <AppGuidePage /> },
+      // One explanation, its own page: the guide's rows lead here instead of jumping at a live
+      // screen or opening a sheet with no words in it.
+      { path: "guide/:kind/:id", element: <GuideDetailPage /> },
+      { path: "guide/step/:workflowId/:step", element: <GuideDetailPage /> },
       { path: "search", element: <SearchPage /> },
 
       // ── Customers (requires customers.view) ──────────────────────────────
@@ -315,11 +318,12 @@ export const router = createBrowserRouter([
           // opens the one screen, and the old settings routes are aliases to the same page.
           { path: "payments",   element: <MoneyStatementPage /> },
           { path: "payments/supplier/:companyId", element: <RecordSupplierPaymentPage /> },
-          { path: "payments/daily-cash", element: <DailyCashReconciliationPage /> },
-          // Cash position is its own screen: the figure the Finance hub opens with, the money
-          // that moved each way, and the last movements. The daily check stays beside it —
-          // counting the till at closing time is a different job from reading the position.
-          { path: "payments/cash-position", element: <CashPositionPage /> },
+          // ONE cash screen (owner, 2026-11-16). The till count and the position were two
+          // screens answering the same question — what cash should be here, what was recorded,
+          // and what moved — and only one of them actually saved the count. `daily-cash` is the
+          // one route now; `cash-position` stays as an alias so an old link still lands on it.
+          { path: "payments/daily-cash", element: <CashPositionPage /> },
+          { path: "payments/cash-position", element: <Navigate to="/admin/payments/daily-cash" replace /> },
         ] },
 
       // ── Suppliers/Companies (requires companies.view) ────────────────────
@@ -441,8 +445,12 @@ export const router = createBrowserRouter([
           // redirects to it instead of drawing a second copy.
           { path: "settings/overview", element: <Navigate to="/admin/settings/hub/finance" replace /> },
           { path: "settings/overview/customers", element: <CustomerReceivablePage /> },
-          { path: "settings/overview/customers/pending", element: <CustomerCreditPage mode="pending" /> },
-          { path: "settings/overview/customers/overdue", element: <CustomerCreditPage mode="overdue" /> },
+          // BOTH customer credit books are gone (owner, 2026-11-16): pending and overdue were
+          // the two halves of one list the receivables page already computes and filters to,
+          // and the overdue money is a plate figure on Finance now. Their addresses stay as
+          // redirects so an old bookmark does not 404; no action opens either of them.
+          { path: "settings/overview/customers/pending", element: <Navigate to="/admin/settings/overview/customers" replace /> },
+          { path: "settings/overview/customers/overdue", element: <Navigate to="/admin/settings/overview/customers" replace /> },
           { path: "settings/overview/suppliers", element: <SupplierPayablePage /> },
           { path: "settings/overview/suppliers/pending", element: <SupplierCreditPage mode="pending" /> },
           { path: "settings/overview/suppliers/overdue", element: <SupplierCreditPage mode="overdue" /> },
@@ -664,6 +672,8 @@ export const router = createBrowserRouter([
       { path: "notifications", element: <EmployeeNotificationsPage /> },
       { path: "more", element: <EmployeeMorePage /> },
       { path: "guide", element: <AppGuidePage /> },
+      { path: "guide/:kind/:id", element: <GuideDetailPage /> },
+      { path: "guide/step/:workflowId/:step", element: <GuideDetailPage /> },
     ],
   }],
   },

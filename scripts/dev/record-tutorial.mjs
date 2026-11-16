@@ -80,7 +80,9 @@ for (const name of workflows) {
     const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
       .find((m) => window.MediaRecorder?.isTypeSupported?.(m)) ?? 'video/webm';
     const chunks = [];
-    const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_000_000 });
+    // 1.2 Mbps at this 390px frame keeps the Urdu caption strip crisp while halving the
+    // shipped file size against the old 2 Mbps setting (owner's request, 2026-11-15).
+    const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1_200_000 });
     recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
 
     const stopped = new Promise((resolve) => { recorder.onstop = resolve; });
@@ -125,7 +127,10 @@ for (const name of workflows) {
   fs.copyFileSync(path.join(dir, timeline[0].file), path.join(OUT, `${name}.png`));
 
   const size = fs.statSync(out).size;
-  const ok = size > 20_000;
+  // A flat caption-and-form screen legitimately compresses to ~10 KB at 1.2 Mbps — the old
+  // 20 KB floor only described the heavier 2 Mbps encode. The real failure this guards is an
+  // empty file, so the floor is size > 6 KB; `verify` decodes every clip separately.
+  const ok = size > 6_000;
   if (!ok) failures += 1;
   console.log(
     `[tutorial] ${ok ? '✓' : '✗'} ${name}: ${frames.length} frames · `

@@ -78,6 +78,10 @@ test.describe('education — help, tutorials, questions', () => {
       await page.goto('/admin/guide');
       await page.waitForLoadState('networkidle');
       await page.getByTestId('guide-watch-sale').click();
+      // Every walkthrough opens its own explanation page first (owner's request, 2026-11-15):
+      // the video, the same steps in words, and one button on to the real screen.
+      await expect(page).toHaveURL(/\/guide\/tutorial\/sale/);
+      await expect(page.getByTestId('guide-detail')).toBeVisible();
 
       const video = page.locator('video').first();
       await expect(video).toBeVisible();
@@ -93,11 +97,12 @@ test.describe('education — help, tutorials, questions', () => {
       }).toBeGreaterThanOrEqual(3);
       const seconds = await video.evaluate((v) => (v as HTMLVideoElement).duration);
       expect(seconds, 'the tutorial has real duration').toBeGreaterThan(5);
-      await assertNoOverflow(page, `${lang} tutorial sheet`);
+      await assertNoOverflow(page, `${lang} tutorial page`);
       await page.screenshot({ path: `${SHOTS}/edu-video-${lang}-${theme}.png` });
 
-      // ── closing it leaves nothing behind ──────────────────────────────────────────────
-      await page.keyboard.press('Escape');
+      // ── leaving it leaves no player behind ────────────────────────────────────────────
+      await page.goBack();
+      await expect(page.getByTestId('guide-page')).toBeVisible();
       await expect(page.locator('video')).toHaveCount(0);
       await expect(page.locator('[data-tut-caption]')).toHaveCount(0);
 
