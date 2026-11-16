@@ -121,9 +121,10 @@ describe('Authoritative RBAC foundation', () => {
     expect(access.error).toBeNull();
     const roleRows = await sql(`SELECT count(*)::int AS count FROM role_permissions WHERE role_id='${roleId}'`);
     // 0285 grants every role customers.create/edit/payments at insert time (and
-    // create_role dedupes the requested customers.create), so the stored set is
-    // the two requested codes plus the two trigger-added customer codes.
-    expect(roleRows.rows[0].count).toBe(4);
+    // create_role dedupes the requested customers.create), and 0317 pairs
+    // customers.credit_limit with customers.edit, so the stored set is the two
+    // requested codes plus the three trigger-added customer codes.
+    expect(roleRows.rows[0].count).toBe(5);
   });
 
   it('creates an employee linked to the role without copying defaults', async () => {
