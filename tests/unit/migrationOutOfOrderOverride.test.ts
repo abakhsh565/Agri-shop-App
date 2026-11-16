@@ -28,14 +28,25 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 const ROOT = process.cwd();
 const TOOL = path.join(ROOT, 'scripts/migrate.mjs');
 const REASON =
   'Phase 2: 0277-0289 are new files numbered before the already-recorded 0299; the 0291-0299 batch does not depend on them and the plan puts them last.';
 
+/**
+ * Every test here SPAWNS `scripts/migrate.mjs`, and one spawn boots PGlite and takes ~14s on this
+ * machine (measured). The suite's default timeout is 30s, so a single call had less than two
+ * spawns of headroom and the fourth test — the only one that never declared a timeout — timed out
+ * whenever the full suite ran with every other file competing for CPU. These tests are slow by
+ * nature, not hung, so the budget is stated here once instead of per test.
+ */
+const SPAWN_BUDGET = 180_000;
+
 const scratch: string[] = [];
+/** The seeded hazard template, built once and copied per test (see `setupHazard`). */
+const seedDirs: string[] = [];
 
 function makeDir(files: Record<string, string>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agrishop-override-'));
@@ -53,15 +64,39 @@ afterEach(() => {
   while (scratch.length) fs.rmSync(scratch.pop()!, { recursive: true, force: true });
 });
 
-/** A ledger that already holds 0299, with 0277 pending in the directory — the Phase 2 shape. */
-function setupHazard() {
-  const migDir = makeDir({ '0299_b.sql': 'select 1;' });
-  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agrishop-override-state-'));
-  scratch.push(stateDir);
+afterAll(() => {
+  while (seedDirs.length) fs.rmSync(seedDirs.pop()!, { recursive: true, force: true });
+});
+
+/**
+ * The seeded hazard, built ONCE for the file: a ledger that already holds 0299, plus the
+ * directory a copy gets 0277 added to. Seeding costs one ~14s PGlite boot, and each test used to
+ * pay it again — four boots for state identical to the first. Copying the finished directory is
+ * milliseconds and keeps every test isolated: a copy can be mutated freely, the template cannot.
+ */
+let seededMigDir: string;
+let seededStateDir: string;
+
+beforeAll(() => {
+  // Built directly, not through `makeDir`: that helper registers scratch dirs for `afterEach`,
+  // which would delete the template the later tests copy from.
+  seededMigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agrishop-override-'));
+  seededStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agrishop-override-state-'));
+  seedDirs.push(seededMigDir, seededStateDir);
+  fs.writeFileSync(path.join(seededMigDir, '0299_b.sql'), 'select 1;');
   // `adopt` refuses a pglite target (it records history for a live environment), so the ledger
-  // is seeded the ordinary way: apply the 0299 file, then add the out-of-order 0277 file.
-  const seeded = run(['apply', '--target', 'pglite', '--state', stateDir, '--dir', migDir, '--apply']);
+  // is seeded the ordinary way: apply the 0299 file.
+  const seeded = run(['apply', '--target', 'pglite', '--state', seededStateDir, '--dir', seededMigDir, '--apply']);
   expect(seeded.status, `seeding 0299 should apply:\n${seeded.output}`).toBe(0);
+}, SPAWN_BUDGET);
+
+/** A copy of that hazard with the out-of-order 0277 file dropped in — the Phase 2 shape. */
+function setupHazard() {
+  const migDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agrishop-override-'));
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agrishop-override-state-'));
+  scratch.push(migDir, stateDir);
+  fs.cpSync(seededMigDir, migDir, { recursive: true });
+  fs.cpSync(seededStateDir, stateDir, { recursive: true });
   fs.writeFileSync(path.join(migDir, '0277_a.sql'), 'select 1;');
   return { migDir, stateDir };
 }
@@ -69,7 +104,7 @@ function setupHazard() {
 describe('the out-of-order override', () => {
   it(
     'refuses an out-of-order apply without the flag, and records nothing',
-    { timeout: 60000 },
+    { timeout: SPAWN_BUDGET },
     () => {
       const { migDir, stateDir } = setupHazard();
       const refused = run([
@@ -92,7 +127,7 @@ describe('the out-of-order override', () => {
 
   it(
     'applies with the flag and a reason, and a later verify passes without it',
-    { timeout: 60000 },
+    { timeout: SPAWN_BUDGET },
     () => {
       const { migDir, stateDir } = setupHazard();
       const report = path.join(migDir, 'report.json');
@@ -122,7 +157,7 @@ describe('the out-of-order override', () => {
 
   it(
     'lets verify honour the flag before anything is applied',
-    { timeout: 60000 },
+    { timeout: SPAWN_BUDGET },
     () => {
       const { migDir, stateDir } = setupHazard();
       const without = run(['verify', '--target', 'pglite', '--state', stateDir, '--dir', migDir]);
@@ -147,7 +182,7 @@ describe('the out-of-order override', () => {
     },
   );
 
-  it('refuses the flag without a reason, for other modes, and for production', () => {
+      it('refuses the flag without a reason, for other modes, and for production', { timeout: SPAWN_BUDGET }, () => {
     const { migDir, stateDir } = setupHazard();
     const noReason = run([
       'apply',
