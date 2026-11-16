@@ -1,0 +1,137 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-11-16T21:22:26.315Z",
+  "baseline": {
+    "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-15T00-11-55.sql",
+    "environment": "production",
+    "artifactSha256": "4e4668a6f4108f29f194900057c6a66cb139e7e91934c638be5d111ac41f9346",
+    "sha256Verified": true,
+    "capturedAt": "2026-11-15T00:11:55Z",
+    "statements": 1584,
+    "dataStatements": 125,
+    "dataStatementsSkipped": 123,
+    "referenceData": [
+      {
+        "table": "public.permissions",
+        "rows": 33
+      },
+      {
+        "table": "storage.buckets",
+        "rows": 6
+      }
+    ],
+    "loadFailures": [],
+    "skippedStatements": [
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA auth"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA storage"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" WITH SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('r"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('req"
+      },
+      {
+        "reason": "scaffold-publication",
+        "statement": "CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate')"
+      }
+    ]
+  },
+  "selection": {
+    "since": null,
+    "upto": null,
+    "files": "supabase/migrations/0315_a_demo_login_gets_the_identity_an_sms_login_would.sql,supabase/migrations/0316_the_login_bridge_carries_row_level_security.sql,supabase/migrations/0317_granting_customers_edit_still_grants_the_credit_limit.sql,supabase/migrations/0318_the_pairing_function_is_named_server_only.sql",
+    "resolved": [
+      "0315_a_demo_login_gets_the_identity_an_sms_login_would.sql",
+      "0316_the_login_bridge_carries_row_level_security.sql",
+      "0317_granting_customers_edit_still_grants_the_credit_limit.sql",
+      "0318_the_pairing_function_is_named_server_only.sql"
+    ]
+  },
+  "files": [
+    {
+      "filename": "0315_a_demo_login_gets_the_identity_an_sms_login_would.sql",
+      "version": "0315",
+      "statements": 14,
+      "sha256": "dc8a9a37ae0fa780b1e9227b2e0292c1286298bad4602a119c6fb72e1cedc58b",
+      "failures": []
+    },
+    {
+      "filename": "0316_the_login_bridge_carries_row_level_security.sql",
+      "version": "0316",
+      "statements": 4,
+      "sha256": "927edb9d955fd97106d88f41f05c9e4f92b7bb54320d160981ab6358844ce51c",
+      "failures": []
+    },
+    {
+      "filename": "0317_granting_customers_edit_still_grants_the_credit_limit.sql",
+      "version": "0317",
+      "statements": 7,
+      "sha256": "8e7cef318488b7a0d86d3b22d8ef3f79f8b1aaaca8597760dc7add771a344a55",
+      "failures": []
+    },
+    {
+      "filename": "0318_the_pairing_function_is_named_server_only.sql",
+      "version": "0318",
+      "statements": 1,
+      "sha256": "d2c4d3dd3a4116270765a46fec2fe57c165444cff5e7861942d19f0b1045e43d",
+      "failures": []
+    }
+  ],
+  "summary": {
+    "status": "PASS",
+    "files": 4,
+    "statements": 26,
+    "failedStatements": 0,
+    "envGapFailures": 0,
+    "sqlFailures": 0,
+    "expectedPhaseFailures": 0,
+    "baselineLoadFailures": 0,
+    "baselineSqlFailures": 0,
+    "baselineEnvGapFailures": 0,
+    "baselineExpectedPhaseFailures": 0,
+    "baselineSkippedStatements": 12,
+    "baselineSkippedByReason": {
+      "scaffold-schema": 3,
+      "extension-unavailable": 4,
+      "scaffold-function": 4,
+      "scaffold-publication": 1
+    }
+  },
+  "exitCode": 0
+}
