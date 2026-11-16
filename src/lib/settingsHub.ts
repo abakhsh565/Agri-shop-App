@@ -122,7 +122,7 @@ export const HUB_SECTIONS: HubSection[] = [
     id: "finance",
     titleKey: "settings.menu.finance",
     rows: [
-      { id: "cash", labelKey: "hub.finance.cash", to: "/payments/cash-position" },
+      { id: "cash", labelKey: "hub.finance.cash", to: "/payments/daily-cash" },
       // ONE money row (owner, 2026-10-31). The statement, the recorded-entry ledger and the
       // payment list were three destinations over the same movements; they are now one screen
       // with filters, and a recorded row opens its correction sheet in place. The form is the

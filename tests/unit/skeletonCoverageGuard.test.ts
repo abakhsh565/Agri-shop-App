@@ -47,7 +47,9 @@ const GATED: Array<[file: string, gate: RegExp, howItWaits: string]> = [
   ["src/pages/admin/settings/RolesAccessPage.tsx", /!ready && <SkeletonList/, "waits for the roles read"],
   ["src/pages/admin/reports/AdminReportsPage.tsx", /\{!ready \? \(/, "waits for all four stores before reporting"],
   ["src/pages/admin/returns/AdminReturnSelectItemsPage.tsx", /if \(loadingReturned\)/, "waits for the already-returned query"],
-  ["src/pages/admin/dashboard/AdminDashboardPage.tsx", /\{!listsReady && \(/, "waits before its recent-sales section"],
+  // Home carries no fetching list any more (2026-11-15): the recent-sales rows and the team
+  // table were removed, so there is no rows-shaped surface left to shape while it waits. Its
+  // one async figure — net profit — prints an em dash until the read lands, never a zero.
 
   // ── Employee ─────────────────────────────────────────────────────────────
   ["src/pages/employee/sales/SalesListPage.tsx", /\{!ready \? \(/, "waits for salesStore.ready"],

@@ -222,6 +222,13 @@
   --brand-fg: #0a0a0a;
   --brand-dark: #3f6212;
   --brand-light: #d9f99d;
+  /* A pale green SURFACE: the brand at one step of tint over the page, for a plate that should
+     read as green without shouting louder than the one real call to action on the screen. Light
+     and dark each supply their own value, because the ramp inverts. */
+  /* The same green wash as the dark theme, not a cream of its own: the tinted hero, the active
+     nav pill and the scan button must read as the SAME green on white and on black (owner,
+     2026-11-16). Only the text on top changes, because lime text on white is unreadable. */
+  --brand-tint: rgba(132, 204, 22, 0.16);
   --surface: var(--tone-card);
   --surface-2: var(--tone-sunken);
   --surface-3: var(--tone-sunken);
@@ -306,6 +313,7 @@
      screen. */
   --brand-dark: #a3e635;
   --brand-light: rgba(132, 204, 22, 0.18);
+  --brand-tint: rgba(132, 204, 22, 0.16);
   --surface: var(--tone-card);
   --surface-2: var(--tone-sunken);
   --surface-3: var(--tone-sunken);

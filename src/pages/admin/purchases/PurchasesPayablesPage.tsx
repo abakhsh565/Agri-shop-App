@@ -5,6 +5,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import Photo from "@/components/ui/Photo";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
@@ -157,12 +158,20 @@ export default function PurchasesPayablesPage() {
                   className="w-full text-start active:opacity-70"
                 >
                   <span className="flex items-start gap-3">
-                    <span
-                      className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0"
-                      style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-                    >
-                      {company.name.charAt(0).toUpperCase()}
-                    </span>
+                    {/* The supplier's latest saved logo, falling back to its initial. */}
+                    <Photo
+                      src={company.logoUrl}
+                      alt={company.name}
+                      className="size-10 rounded-full object-cover shrink-0"
+                      fallback={
+                        <span
+                          className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0"
+                          style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                        >
+                          {company.name.charAt(0).toUpperCase()}
+                        </span>
+                      }
+                    />
                     <span className="min-w-0 flex-1 block">
                       <span className="block text-14 font-bold truncate">{company.name}</span>
                       <span

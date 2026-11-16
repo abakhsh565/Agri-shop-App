@@ -381,6 +381,10 @@ export default function AdminLayout() {
                 boxShadow: "0 10px 30px rgba(0, 0, 0, 0.16)",
               }}
             >
+              {/* The travelling pill is a green TINT with brand-dark type, not a solid brand
+                  block (owner, 2026-11-16): on the tab bar the tint marks the active destination
+                  without competing with the solid-green New Sale and Scan actions, which are the
+                  two things the screen wants pressed. */}
               {indicator.ready && (
                 <span
                   aria-hidden
@@ -388,7 +392,7 @@ export default function AdminLayout() {
                   style={{
                     left: indicator.left,
                     width: indicator.width,
-                    background: "var(--brand)",
+                    background: "var(--brand-tint)",
                   }}
                 />
               )}
@@ -410,7 +414,7 @@ export default function AdminLayout() {
                     }
                     style={
                       isActive
-                        ? { color: "#0a0a0a" }
+                        ? { color: "var(--brand-dark)" }
                         : { color: "var(--text-secondary)" }
                     }
                   >
@@ -420,6 +424,9 @@ export default function AdminLayout() {
                 );
               })}
             </div>
+            {/* The scan action is a green TINT, not a solid brand circle (owner, 2026-11-16):
+                the one solid green left in the shell is New Sale, and a second loud green beside
+                the tab bar made the two compete. It still reads as the green action. */}
             <button
               type="button"
               onClick={handleNavScan}
@@ -428,12 +435,12 @@ export default function AdminLayout() {
               aria-busy={scanning}
               data-tour="tab:scan"
               className="flex size-14 shrink-0 items-center justify-center rounded-full ds-pressable disabled:opacity-60"
-              style={{ background: "var(--brand)", boxShadow: "0 8px 24px rgba(0, 0, 0, 0.2)" }}
+              style={{ background: "var(--brand-tint)", boxShadow: "0 8px 24px rgba(0, 0, 0, 0.2)" }}
             >
               <ScanLine
                 size={24}
                 strokeWidth={2.5}
-                color="#0a0a0a"
+                color="var(--brand-dark)"
                 className={scanning ? "animate-pulse" : undefined}
               />
             </button>

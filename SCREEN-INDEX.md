@@ -30,6 +30,8 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `more` | AdminMorePage | `src/pages/admin/more/MorePage` | accessibility, adminMicrocopy, crossScreenSync, education, imageSync, marketplaceListing, skeletonCoverage |
 | `messages` | AdminMessagesPage | `src/pages/admin/messages/AdminMessagesPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `guide` | AppGuidePage | `src/pages/shared/AppGuidePage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
+| `guide/:kind/:id` | GuideDetailPage | `src/pages/shared/GuideDetailPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
+| `guide/step/:workflowId/:step` | GuideDetailPage | `src/pages/shared/GuideDetailPage` | accessibility, crossScreenSync, imageSync, skeletonCoverage |
 | `search` | SearchPage | `src/pages/employee/search/SearchPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `customers` | CustomersListPage | `src/pages/employee/customers/CustomersListPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
 | `customers/new` | AddCustomerPage | `src/pages/employee/customers/AddCustomerPage` | accessibility, crossScreenSync, employeeStatusSafety, imageSync, skeletonCoverage |
@@ -73,8 +75,7 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `purchases/:purchaseId` | PurchaseDetailPage | `src/pages/admin/purchases/PurchaseDetailPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `payments` | MoneyStatementPage | `src/pages/admin/finance/MoneyStatementPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `payments/supplier/:companyId` | RecordSupplierPaymentPage | `src/pages/admin/payments/RecordSupplierPaymentPage` | accessibility, adminMicrocopy, crossScreenSync, doubleTapSafety, imageSync, skeletonCoverage |
-| `payments/daily-cash` | DailyCashReconciliationPage | `src/pages/admin/payments/DailyCashReconciliationPage` | accessibility, adminMicrocopy, crossScreenSync, doubleTapSafety, imageSync, skeletonCoverage |
-| `payments/cash-position` | CashPositionPage | `src/pages/admin/payments/CashPositionPage` | accessibility, adminMicrocopy, crossScreenSync, doubleTapSafety, imageSync, skeletonCoverage |
+| `payments/daily-cash` | CashPositionPage | `src/pages/admin/payments/CashPositionPage` | accessibility, adminMicrocopy, crossScreenSync, doubleTapSafety, imageSync, skeletonCoverage |
 | `companies` | CompaniesListPage | `src/pages/admin/companies/CompaniesListPage` | accessibility, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `companies/new` | AddCompanyPage | `src/pages/admin/companies/AddCompanyPage` | accessibility, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `companies/:companyId` | CompanyDetailPage | `src/pages/admin/companies/CompanyDetailPage` | accessibility, adminFullAccess, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
@@ -117,8 +118,6 @@ this file exists so an impact map starts from a lookup instead of fresh reconnai
 | `settings/hub/finance/reminders` | PaymentRemindersBookPage | `src/pages/admin/finance/PaymentRemindersBookPage` | accessibility, adminMicrocopy, crossScreenSync, imageSync, skeletonCoverage |
 | `settings/hub/:sectionId` | SectionHubPage | `src/pages/admin/settings/SectionHubPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `settings/overview/customers` | CustomerReceivablePage | `src/pages/admin/settings/CustomerReceivablePage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
-| `settings/overview/customers/pending` | CustomerCreditPage | `src/pages/admin/settings/CustomerCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
-| `settings/overview/customers/overdue` | CustomerCreditPage | `src/pages/admin/settings/CustomerCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `settings/overview/suppliers` | SupplierPayablePage | `src/pages/admin/settings/SupplierPayablePage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `settings/overview/suppliers/pending` | SupplierCreditPage | `src/pages/admin/settings/SupplierCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |
 | `settings/overview/suppliers/overdue` | SupplierCreditPage | `src/pages/admin/settings/SupplierCreditPage` | accessibility, accessUx, adminFullAccess, adminMicrocopy, businessProfilePapers, crossScreenSync, imageSync, marketplaceListing, roleDeleteSafety, setupCompletion, skeletonCoverage, systemDrive |

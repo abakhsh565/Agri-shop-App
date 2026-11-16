@@ -1916,7 +1916,7 @@
       "status": "LIVE",
       "screens": [
         "settings/hub/finance/reminders",
-        "payments/cash-position",
+        "payments/daily-cash",
         "settings/overview/customers",
         "settings/overview/suppliers",
         "companies/:companyId"
