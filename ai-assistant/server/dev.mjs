@@ -49,6 +49,14 @@ const env = {
   geminiKey: process.env.GEMINI_API_KEY || "",
   geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
   geminiFallbackModel: process.env.GEMINI_FALLBACK_MODEL || "",
+  // Groq answers first in every environment, so the harness has to be given the same key the
+  // deployed function is given — otherwise development is the one place that is slower and
+  // answers differently from what ships.
+  groqKey: process.env.GROQ_API_KEY || "",
+  groqModel: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+  groqVisionModel: process.env.GROQ_VISION_MODEL || "",
+  groqBaseUrl: process.env.GROQ_BASE_URL || "",
+  groqSpeechModel: process.env.GROQ_SPEECH_MODEL || "",
   // Where the model calls go: Google by default, or a gateway that serves the same Gemini wire
   // format when ASSISTANT_MODEL_BASE_URL is set. Read here and passed down, so this file stays the
   // one place that decides what the runner is configured with.
@@ -68,7 +76,7 @@ const server = http.createServer(async (req, res) => {
     res.end(
       JSON.stringify({
         ok: true,
-        model: env.geminiKey ? env.geminiModel : "built-in",
+        model: env.groqKey ? env.groqModel : env.geminiKey ? env.geminiModel : "built-in",
         project: env.supabaseUrl,
         // Said out loud so a question that fails can be traced to where it was sent.
         gateway: env.geminiKey
@@ -121,11 +129,14 @@ server.listen(port, () => {
   console.log(`  project ${env.supabaseUrl}`);
   console.log(
     `  model   ${
-      env.geminiKey
-        ? `${env.geminiModel}${env.geminiFallbackModel ? ` → ${env.geminiFallbackModel}` : " → gemini-flash-lite-latest (built in)"}`
-        : "built-in (no GEMINI_API_KEY)"
+      env.groqKey
+        ? `${env.groqModel} → ${env.geminiKey ? env.geminiModel : "built in"}`
+        : env.geminiKey
+          ? `${env.geminiModel}${env.geminiFallbackModel ? ` → ${env.geminiFallbackModel}` : " → gemini-flash-lite-latest (built in)"}`
+          : "built-in (no GROQ_API_KEY or GEMINI_API_KEY)"
     }`,
   );
+  if (env.groqKey) console.log("  sends   https://api.groq.com/openai/v1 → Gemini as the fallback");
   if (env.geminiKey) {
     console.log(
       `  sends   ${env.modelBaseUrl || "https://generativelanguage.googleapis.com/v1beta"}`,

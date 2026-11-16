@@ -54,8 +54,8 @@ async function login(page: Page, phone: string, side: "owner" | "employee" = "ow
     await page.getByTestId("auth-tab-employee").click();
     await page.getByTestId("shop-id-input").fill(SHOP_ID);
   }
-  await page.getByPlaceholder("e.g. 03001234567").fill(phone);
-  await page.getByRole("button", { name: "Send Code" }).click();
+  await page.getByPlaceholder("Enter your mobile number").fill(phone);
+  await page.getByRole("button", { name: "Continue" }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 25000 });
   const boxes = page.locator('[data-testid^="otp-digit-"]');
   await expect(boxes).toHaveCount(6);

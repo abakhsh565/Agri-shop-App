@@ -47,11 +47,15 @@ describe('profit has one calculation', () => {
   });
 
   it('every profit on a screen comes from the shared calculation', () => {
+    // Home shows NET profit (2026-11-15) — net sales less cost of goods less recorded
+    // expenses — so its arithmetic is the Finance screen's `netProfitOf`, not gross profit.
+    // Both live in one shared module each; a screen may not do either sum itself.
+    const shared = /from "@\/lib\/(profit|financeEntries)"/;
     for (const file of screens) {
       const src = fs.readFileSync(path.resolve(root, file), 'utf8');
       expect(
-        /from "@\/lib\/profit"/.test(src),
-        `${file} computes a profit without importing src/lib/profit.ts`,
+        shared.test(src),
+        `${file} computes a profit without importing src/lib/profit.ts or src/lib/financeEntries.ts`,
       ).toBe(true);
     }
   });

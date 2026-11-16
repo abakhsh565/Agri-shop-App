@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import Photo from "@/components/ui/Photo";
@@ -7,7 +7,6 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
-import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import SetupChecklist from "@/components/ui/SetupChecklist";
@@ -18,7 +17,8 @@ import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatDate, formatSmartDateTime } from "@/lib/formatters";
 import { generateReminders, calculatePaymentStatus, loadBusinessSettings } from "@/lib/reminderEngine";
 import { computeOverdueCreditTotal } from "@/lib/signalEngine";
-import { summariseSales, profitDisplay } from "@/lib/profit";
+import { netProfitOf, useFinanceTotals } from "@/lib/financeEntries";
+import { useBranchPeriodReport } from "@/lib/branchReports";
 import { summariseMoneyIn, loadCreditPayments, type CreditPaymentRow } from "@/lib/money";
 import { useT } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
@@ -28,18 +28,10 @@ import { AlertTriangle, CalendarDays, ChevronRight, ChevronDown, PackageX, Shopp
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
-import { SkeletonList } from "@/components/ui/Skeleton";
 import QuickAlertsPanel, { type QuickAlertItem } from "@/components/dashboard/QuickAlertsPanel";
+import MoreWithHisabPay from "@/components/dashboard/MoreWithHisabPay";
 import { getCreditRequestsDB, type LocalCreditRequest } from "@/lib/localGroupRegistry";
 import { latestRedCreditOverride, nextHarvestWindow, pkDayStartISO } from "@/lib/quickAlerts";
-
-function initBgColor(name: string | null | undefined) {
-  const safeName = String(name ?? '');
-  const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
-  let hash = 0;
-  for (const c of safeName) hash = (hash * 31 + c.charCodeAt(0)) & 0xffff;
-  return colors[hash % colors.length];
-}
 
 /** Map admin notification kind + entity_id → the specific detail page, not a list */
 function adminNotifRoute(n: AppNotification): string | null {
@@ -91,13 +83,7 @@ export default function AdminDashboardPage() {
   const mockSales = useSalesStore((s) => s.sales);
   const mockProducts = useProductsStore((s) => s.products);
   const mockCompanies = useCompaniesStore((s) => s.companies);
-  const mockEmployees = useEmployeesStore((s) => s.employees);
   const customers = useCustomersStore((s) => s.customers);
-  const customersReady = useCustomersStore((s) => s.ready);
-  // Read both stores unconditionally: short-circuiting a hook call is what
-  // crashed this screen, since React must see the same hooks every render.
-  const salesReady = useSalesStore((s) => s.ready);
-  const listsReady = salesReady && customersReady;
   const [allReturns, setAllReturns] = useState<{ amount: number; createdAt: string }[]>([]);
   // The udhaar payments, raw rows, so the date pill can filter them without a second query.
   // Loaded through `@/lib/money` so Reports reads the same table exactly the same way.
@@ -125,10 +111,6 @@ export default function AdminDashboardPage() {
     loadCreditPayments().then((rows) => { if (!cancelled) setCreditPayments(rows); }).catch(() => {});
     return () => { cancelled = true; };
   }, [workingBranchId, switchingBranch]);
-
-  function getCustomerImg(customerId: string) {
-    return customers.find((c) => c.id === customerId)?.imageUrl;
-  }
 
   const now = useCurrentTime();
   const today = now;
@@ -237,27 +219,8 @@ export default function AdminDashboardPage() {
   const allActive = mockSales.filter((s) => !s.isVoided);
   const filtered = dateFilter === "all" ? allActive : allActive.filter(inFilter);
 
-  // Fallback cost lookup, used only for lines the sale-time snapshot could not price. It is
-  // built from the products store, which loads ACTIVE products only, so it MUST NOT be the
-  // primary source: a deactivated product would silently cost zero and overstate profit.
-  const variantCost = new Map<string, number>();
-  mockProducts.forEach((p) => p.variants.forEach((v) => variantCost.set(v.id, v.costPrice)));
-
   const totalSales = filtered.reduce((s, x) => s + x.totalAmount, 0);
   const txCount = filtered.length;
-  // Gross profit = sale revenue - recorded line COGS, on the SAME authoritative revenue the
-  // reports use: the sale's own stored total_amount (stamped by create_sale). Recomputing
-  // the revenue from unit_price * qty looks equivalent but is not — the database rounds each
-  // line separately, so the two drift apart on fractional quantities, and Home would then
-  // disagree with Reports about the same period. COGS comes from the sale item's own
-  // snapshot (taken at sale time), so an item whose product has since been deactivated
-  // cannot silently cost zero.
-  //
-  // The arithmetic itself lives in src/lib/profit.ts so that Home, Sales, the sale record
-  // and Reports cannot drift apart again; this screen only decides how to say the result.
-  const gross = summariseSales(filtered, (id) => (id ? variantCost.get(id) : undefined));
-  const grossProfit = gross.profit;
-  const grossProfitDisplay = profitDisplay(gross);
   // Money in — the same date filter as sales, and the same calculation Reports shows. Home
   // prints the udhaar half (the money coming back against old bills); Reports prints the whole
   // picture, including the cash taken at the counter. Neither screen does its own addition.
@@ -273,10 +236,51 @@ export default function AdminDashboardPage() {
   // Same authoritative calculation as the S1 overdue-credit signals.
   const overdueAmount = computeOverdueCreditTotal(customers);
 
-  // Recent sales — filtered by selected date range, most recent first
-  const recentSales = [...filtered]
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-    .slice(0, 3);
+  /**
+   * Net profit — exactly the figure the Finance screen prints, from exactly the two reads it
+   * uses: the branch period report (net sales, cost of goods) and the recorded expenses.
+   *
+   * The card used to show gross profit here, which ignores every expense the shop has paid
+   * out. An owner reading that number as "profit" is being told the shop earned money it
+   * did not, so the card now carries the net figure and the same date pill drives it.
+   */
+  const profitRange = useMemo(() => {
+    if (dateFilter === "all") return { from: "2000-01-01", to: todayStr };
+    if (dateFilter === "yesterday") return { from: yesterdayStr, to: yesterdayStr };
+    if (dateFilter === "this_week") {
+      const nowPkt = new Date(today.toLocaleString("en-US", { timeZone: PKT }));
+      const sunday = new Date(nowPkt);
+      sunday.setDate(nowPkt.getDate() - nowPkt.getDay());
+      return { from: pkDate(sunday), to: todayStr };
+    }
+    if (dateFilter === "this_month") {
+      return { from: pkDate(new Date(today.getFullYear(), today.getMonth(), 1)), to: todayStr };
+    }
+    return { from: todayStr, to: todayStr };
+  }, [dateFilter, todayStr, yesterdayStr, today]);
+  const profitReport = useBranchPeriodReport(profitRange.from, profitRange.to);
+  const financeTotals = useFinanceTotals(profitRange.from, profitRange.to);
+  const profitRow = profitReport.rows?.find((row) => row.isCurrent) ?? null;
+  const netProfit = netProfitOf(
+    profitRow?.netSales ?? null,
+    profitRow?.cogs ?? null,
+    financeTotals.totals?.expense ?? null,
+  );
+  /**
+   * The card's Total Sales is the report's gross sales when that read has landed, so the two
+   * figures on the plate are one subtraction apart instead of one being summed from the 200
+   * sales the store keeps in memory. The store's own total stays as the fallback for roles
+   * the report refuses.
+   */
+  const heroTotalSales = profitRow?.grossSales ?? totalSales;
+  // The report is scoped by branch on the server, so moving to another branch re-reads it.
+  const profitBranch = useRef(workingBranchId);
+  useEffect(() => {
+    if (profitBranch.current === workingBranchId) return;
+    profitBranch.current = workingBranchId;
+    profitReport.retry();
+    financeTotals.retry();
+  }, [workingBranchId, profitReport.retry, financeTotals.retry]);
 
   // Alerts — stock of record is the variant; p.stockQty is its derived total.
   const outOfStockCount = mockProducts.filter(p => p.stockQty <= 0).length;
@@ -477,18 +481,6 @@ export default function AdminDashboardPage() {
   }
   quickAlertItems.sort((a, b) => b.priority - a.priority);
 
-  // Employee performance — filtered by selected date filter
-  const empStats = mockEmployees.map((emp) => {
-    const empSales = filtered.filter((s) => s.employeeId === emp.id);
-    const items = empSales.reduce((s, x) => s + x.items.reduce((q, it) => q + it.qty, 0), 0);
-    return {
-      emp,
-      total: empSales.reduce((s, x) => s + x.totalAmount, 0),
-      count: empSales.length,
-      items,
-    };
-  }).filter((e) => e.count > 0).sort((a, b) => b.total - a.total);
-
   const DATE_PILLS: { key: DateFilter; label: string }[] = [
     { key: "all",        label: t("sales.all") ?? "All" },
     { key: "today",      label: t("sales.today") },
@@ -501,7 +493,6 @@ export default function AdminDashboardPage() {
     await Promise.all([
       useSalesStore.getState().load(),
       useProductsStore.getState().load(),
-      useEmployeesStore.getState().load(),
       useCustomersStore.getState().load(),
       load(),
     ]);
@@ -760,50 +751,44 @@ export default function AdminDashboardPage() {
           sale. An owner, and an account whose visibility has not been read yet, see it. */}
       {canSeeDashboard("sales_overview") && (
       <div className="px-4 pt-3 animate-fade-in-up" data-tour="home:kpis">
+        {/* A green-TINTED plate, not a green block (owner, 2026-11-16): `--brand-tint` is the
+            brand at one step over the page, so the card reads green in both themes while the
+            only solid green on the screen is the New Sale button. Its labels take
+            `--brand-dark` and its values `--text-primary`, which is what the two ramps are for. */}
         <button
           className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform hover:opacity-95 active:scale-[0.98]"
-          style={{ background: "var(--brand)" }}
+          style={{ background: "var(--brand-tint)" }}
           onClick={() => navigate("/admin/settings/hub/finance")}
           data-testid="dashboard-overview-card"
         >
-          <p className="ds-section-label mb-1" style={{ color: "rgba(0,0,0,0.55)" }}>
+          <p className="ds-section-label mb-1" style={{ color: "var(--brand-dark)" }}>
             {t("admin.totalSales")}
           </p>
-          <p className="text-28 font-semibold leading-none" style={{ color: "#0a0a0a" }}>
-            {formatRs(totalSales)}
+          <p className="text-28 font-semibold leading-none" style={{ color: "var(--text-primary)" }}>
+            {formatRs(heroTotalSales)}
           </p>
 
           <div className="flex items-end justify-between mt-4">
             <div>
-              <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.5)" }}>
-                {t("inline.gross_profit")}
+              <p className="ds-section-label" style={{ color: "var(--brand-dark)" }}>
+                {t("dashboard.netProfit")}
               </p>
-              {/* A profit priced without a cost is not a profit, it is a floor. Say which
-                  one this is, in the smallest way that still cannot be misread: a figure
-                  on its own is exactly what made this number untrustworthy before. */}
-              <p className="text-16 font-semibold" style={{ color: "#0a0a0a" }} data-testid="home-gross-profit">
-                {grossProfitDisplay.kind === "unknown"
+              <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }} data-testid="home-net-profit">
+                {netProfit == null
                   ? "—"
-                  : grossProfitDisplay.kind === "atLeast"
-                    ? `≥ ${formatRs(grossProfit)}`
-                    : formatRs(grossProfit)}
+                  : netProfit < 0
+                    ? `−${formatRs(Math.abs(netProfit))}`
+                    : formatRs(netProfit)}
               </p>
-              {grossProfitDisplay.kind !== "exact" && (
-                <p className="text-11 font-medium" style={{ color: "rgba(0,0,0,0.55)" }}>
-                  {grossProfitDisplay.kind === "unknown"
-                    ? t("profit.addCostToSeeProfit")
-                    : t("profit.costMissingOn", { count: String(grossProfitDisplay.unknownLines) })}
-                </p>
-              )}
             </div>
-            <div className="w-px self-stretch mx-3" style={{ background: "rgba(0,0,0,0.15)" }} />
+            <div className="w-px self-stretch mx-3" style={{ background: "var(--divider)" }} />
             <div>
-              <p className="ds-section-label" style={{ color: "rgba(0,0,0,0.5)" }}>
+              <p className="ds-section-label" style={{ color: "var(--brand-dark)" }}>
                 {t("inline.credit_collect")}
               </p>
               <div className="flex items-center gap-2">
-                <p className="text-16 font-semibold" style={{ color: "#0a0a0a" }}>{formatRs(money.udhaar)}</p>
-                <p className="text-11 font-semibold" style={{ color: "rgba(0,0,0,0.5)" }}>
+                <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>{formatRs(money.udhaar)}</p>
+                <p className="text-11 font-semibold" style={{ color: "var(--text-secondary)" }}>
                   {formatRs(overdueAmount)} {t("inline.overdue")}
                 </p>
               </div>
@@ -820,53 +805,55 @@ export default function AdminDashboardPage() {
           places — and it renders nothing once the shop can trade. ── */}
       <SetupChecklist testId="setup-next-step" className="px-4 pt-4 animate-fade-in-up" />
 
-      {/* ── Summary: Action needed · Follow-ups · Out of stock ── */}
-      {canSeeDashboard("quick_alerts") && (
-      <div className="px-4 pt-4 flex gap-2 animate-fade-in-up">
-        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'action', subTab: 'critical' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--tone-card)" }}>
-          <p className="text-16 font-bold" style={{ color: (highRiskCount + creditLimitReached) > 0 ? "var(--error)" : "var(--text-secondary)" }}>{highRiskCount + creditLimitReached}</p>
-          <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("admin.actionNeeded")}</p>
-        </button>
-        <button onClick={() => navigate('/admin/alerts/reminders', { state: { tab: 'followups', subTab: 'ready' } })} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--tone-card)" }}>
-          <p className="text-16 font-bold" style={{ color: (delayedCount + dueReminderCount) > 0 ? "var(--warning)" : "var(--text-secondary)" }}>{delayedCount + dueReminderCount}</p>
-          <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("inline.follow_ups_x")}</p>
-        </button>
-        <button onClick={() => navigate('/admin/alerts/inventory')} className="flex-1 flex items-center gap-2.5 py-2.5 px-3 rounded-[var(--radius-tile)] active:opacity-70 transition-opacity" style={{ background: "var(--tone-card)" }}>
-          <p className="text-16 font-bold" style={{ color: outOfStockCount > 0 ? "var(--error)" : "var(--text-secondary)" }}>{outOfStockCount}</p>
-          <p className="text-10 font-medium leading-tight" style={{ color: "var(--text-secondary)" }}>{t("signal.detailOutOfStock")}</p>
-        </button>
-      </div>
-      )}
-
-      {/* ── Quick Actions ──
-          One glyph, one word, one surface. The three actions used to be flat outlined boxes
-          shorter than a list row, which read as fields rather than things to press; the
-          primary one is brand-filled and the other two are tone surfaces, the same grammar
-          every other card on this screen uses (no outlined boxes anywhere). ── */}
+      {/* ── The counter's three jobs ──
+          Payment and purchase are the two things a shop owner does between sales, so they sit
+          as a pair of grey tiles; New Sale is the work every figure on this screen comes from,
+          so it is the one solid-green full-width button — directly above Quick Alerts (owner,
+          2026-11-16). ── */}
       <div className="px-4 pt-4" data-tour="home:actions">
-        <div className="grid grid-cols-3 gap-2.5">
-          {([
-            { icon: ShoppingCart, label: t("dashboard.newSale"), go: () => navigate("/admin/sale"), primary: true },
-            // Record Payment asks which side the money is on rather than assuming the customer
-            // one: what a customer owes and what a supplier is owed are different books.
-            { icon: HandCoins,    label: t("dashboard.recordPayment"), go: () => setRecordPaymentOpen(true), primary: false },
-            // The purchase glyph, not a delivery truck: this button records stock coming in,
-            // and it is the same mark the Purchases screens and that FAB already use.
-            { icon: PackagePlus,  label: t("admin.purchases") ?? "Purchase", go: () => navigate("/admin/purchases/new"), primary: false },
-          ] as const).map(({ icon: Icon, label, go, primary }) => (
-            <button
-              key={label}
-              onClick={go}
-              className="h-14 rounded-[var(--radius-tile)] flex flex-col items-center justify-center gap-1 ds-pressable"
-              style={primary
-                ? { background: "var(--brand)", color: "#0a0a0a" }
-                : { background: "var(--tone-card)", color: "var(--text-primary)" }}
-            >
-              <Icon size={18} strokeWidth={1.8} />
-              <span className="text-11 font-semibold text-center leading-tight px-1">{label}</span>
-            </button>
-          ))}
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* Record Payment asks which side the money is on rather than assuming the customer
+              one: what a customer owes and what a supplier is owed are different books. */}
+          <button
+            type="button"
+            onClick={() => setRecordPaymentOpen(true)}
+            className="h-[72px] rounded-[var(--radius-tile)] flex flex-col items-center justify-center gap-1.5 ds-pressable"
+            style={{ background: "var(--tone-card)", color: "var(--text-primary)" }}
+            data-testid="home-action-payment"
+          >
+            <HandCoins size={20} strokeWidth={1.8} />
+            <span className="text-12 font-semibold text-center leading-tight px-1">
+              {t("dashboard.recordPayment")}
+            </span>
+          </button>
+          {/* The purchase glyph, not a delivery truck: this button records stock coming in,
+              and it is the same mark the Purchases screens and that FAB already use. */}
+          <button
+            type="button"
+            onClick={() => navigate("/admin/purchases/new")}
+            className="h-[72px] rounded-[var(--radius-tile)] flex flex-col items-center justify-center gap-1.5 ds-pressable"
+            style={{ background: "var(--tone-card)", color: "var(--text-primary)" }}
+            data-testid="home-action-purchase"
+          >
+            <PackagePlus size={20} strokeWidth={1.8} />
+            <span className="text-12 font-semibold text-center leading-tight px-1">
+              {t("admin.purchases")}
+            </span>
+          </button>
         </div>
+        <button
+          type="button"
+          onClick={() => navigate("/admin/sale")}
+          className="mt-2.5 w-full h-16 rounded-[var(--radius-tile)] flex items-center justify-between px-4 ds-pressable"
+          style={{ background: "var(--brand)", color: "#0a0a0a" }}
+          data-testid="home-action-sale"
+        >
+          <span className="flex items-center gap-2.5">
+            <ShoppingCart size={22} strokeWidth={1.9} />
+            <span className="text-15 font-bold">{t("dashboard.newSale")}</span>
+          </span>
+          <ChevronRight size={18} />
+        </button>
       </div>
 
       {/* ── Quick Alerts: ranked triage, three decisions at most ──
@@ -881,110 +868,8 @@ export default function AdminDashboardPage() {
         />
       )}
 
-      {/* ── Employee Performance ── */}
-      {canSeeDashboard("team_performance") && empStats.length > 0 && (
-        <div className="px-4 pt-5">
-          <p className="ds-section-label mb-3" style={{ color: "var(--text-secondary)" }}>
-            {t("admin.employeePerformance")}
-          </p>
-          <ListCard>
-            {empStats.map(({ emp, total, count, items }) => (
-              <ListRow
-                key={emp.id}
-                onClick={() => navigate("/admin/sales", { state: { employeeId: emp.id, dateFilter } })}
-                tile={
-                  <div
-                    className="size-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                    style={{ background: initBgColor(emp.name) }}
-                  >
-                    {(emp.name ?? '?').charAt(0)}
-                  </div>
-                }
-                trailing={
-                  <div className="flex items-center gap-2 shrink-0">
-                    <p className="text-sm font-bold" style={{ color: "var(--brand-dark)" }}>{formatRs(total)}</p>
-                    <ChevronRight size={14} style={{ color: "var(--text-secondary)" }} />
-                  </div>
-                }
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
-                  <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>{t(count === 1 ? "dashboard.saleCount" : "dashboard.salesCount", { count })} · {items} {t("common.items")}</p>
-                </div>
-              </ListRow>
-            ))}
-          </ListCard>
-        </div>
-      )}
-
-      {/* ── Recent Sales ── */}
-      {!listsReady && (
-        <div className="px-4 pt-5">
-          <SkeletonList rows={3} tile />
-        </div>
-      )}
-      {canSeeDashboard("sales_overview") && listsReady && recentSales.length > 0 && (
-        <div className="px-4 pt-5 pb-6">
-          <div className="flex items-center justify-between mb-3">
-            <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-              {t("dashboard.recentSales") ?? "Recent Sales"}
-            </p>
-            <button
-              onClick={() => navigate("/admin/sales")}
-              className="text-12 font-semibold"
-              style={{ color: "var(--brand-dark)" }}
-            >
-              {t("common.viewAll") ?? "View all"}
-            </button>
-          </div>
-          <ListCard>
-            {recentSales.map((sale) => {
-              const cImg = getCustomerImg(sale.customerId);
-              const cBg = initBgColor(sale.customerName);
-              return (
-              <ListRow
-                key={sale.id}
-                onClick={() => navigate(`/admin/sales/${sale.id}`)}
-                tile={
-                  <Photo
-                    src={cImg}
-                    alt={sale.customerName}
-                    className="size-9 rounded-full object-cover shrink-0"
-                    fallback={
-                      <div className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold" style={{ background: cBg, color: "#fff" }}>
-                        {(sale.customerName ?? '?').charAt(0).toUpperCase()}
-                      </div>
-                    }
-                  />
-                }
-                trailing={
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
-                      {formatRs(sale.totalAmount)}
-                    </span>
-                    {sale.paymentType !== "full" ? (
-                      <span className="text-10 font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-                        {t("common.creditTag")}
-                      </span>
-                    ) : (
-                      <span className="text-10 font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(132,204,22,0.15)", color: "var(--brand-dark)" }}>
-                        {t("common.paidTag")}
-                      </span>
-                    )}
-                  </div>
-                }
-              >
-                <div className="min-w-0">
-                  <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                  <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now)}</p>
-                  <p className="text-11 font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("common.soldBy")}: {sale.employeeName}</p>
-                </div>
-              </ListRow>
-              );
-            })}
-          </ListCard>
-        </div>
-      )}
+      {/* Discovery: every screen the app has, in the shop's own words. */}
+      <MoreWithHisabPay />
 
       {/* Which side is this payment on? Asked once, here, because the list, the balance, the
           form and the money movement that follow all belong to one side. */}

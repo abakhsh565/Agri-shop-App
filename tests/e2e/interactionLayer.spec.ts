@@ -59,8 +59,8 @@ async function login(page: Page) {
   await page.goto(`${BASE_URL}/login`);
   // The field takes the local 03… form; the 92… constant is read as a country-code paste
   // and becomes a 10-digit number the validator refuses.
-  await page.getByPlaceholder('e.g. 03001234567').fill(`0${OWNER_PHONE.slice(2)}`);
-  await page.getByRole('button', { name: 'Send Code' }).click();
+  await page.getByPlaceholder('Enter your mobile number').fill(`0${OWNER_PHONE.slice(2)}`);
+  await page.getByRole('button', { name: 'Continue' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
   const boxes = page.locator('[data-testid^="otp-digit-"]');
   await boxes.first().click();
@@ -247,11 +247,12 @@ test.describe('Interaction layer: motion, feedback, skeletons, toasts, date chro
     await page.goto(`${BASE_URL}/admin/payments/daily-cash`);
     await page.waitForTimeout(1200);
 
-    // Counted cash must be > 0 for the save to fire; the action is local-only, so
-    // nothing is written to the database.
-    await page.locator('input[type="number"]').first().fill('500');
-    await page.getByRole('button', { name: 'Save Reconciliation' }).click();
-    await page.waitForTimeout(120);
+    // One cash screen now (2026-11-16): the till count is recorded through its own sheet and
+    // saved, so the toast this test watches for is the real confirmation of that write.
+    await page.getByTestId('cash-position-add').click();
+    await page.getByTestId('cash-position-count-input').fill('500');
+    await page.getByTestId('cash-position-save').click();
+    await page.waitForTimeout(600);
 
     const toast = page.locator('.ds-anim-toast-in').first();
     await expect(toast, 'the toast did not animate in').toBeVisible();
@@ -399,8 +400,8 @@ test.describe('Interaction layer: motion, feedback, skeletons, toasts, date chro
     // ever drawn. This measures the boxes where the complaint was raised.
     await page.goto(`${BASE_URL}/login`);
     // Local form: the 92… constant would be read as a country-code paste by the field.
-    await page.getByPlaceholder('e.g. 03001234567').fill('03001234567');
-    await page.getByRole('button', { name: 'Send Code' }).click();
+    await page.getByPlaceholder('Enter your mobile number').fill('03001234567');
+    await page.getByRole('button', { name: 'Continue' }).click();
     await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 
     for (const theme of ['light', 'dark'] as const) {

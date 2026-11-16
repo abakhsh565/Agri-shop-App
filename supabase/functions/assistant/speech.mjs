@@ -217,33 +217,276 @@ export function pcmToWav(pcm, { sampleRate = 24000, channels = 1, bitsPerSample 
 }
 
 /**
+ * GROQ FOR THE SPOKEN HALF.
+ *
+ * The slow part of reading a reply aloud was never the audio: it was waiting for a translation
+ * before the voice could start. Groq answers that translation in a fraction of a second, so the
+ * speaker begins almost immediately, and the audio itself still comes from whichever provider can
+ * actually pronounce Urdu. If no speech model is configured on Groq, the translation is all it is
+ * asked for and Gemini does the voice, exactly as before.
+ */
+const GROQ_BASE = "https://api.groq.com/openai/v1";
+
+function groqHost(baseUrl) {
+  return String(baseUrl || GROQ_BASE).trim().replace(/\/+$/, "");
+}
+
+async function translateWithGroq({ text, groqKey, model, baseUrl }) {
+  const response = await fetch(`${groqHost(baseUrl)}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${groqKey}` },
+    body: JSON.stringify({
+      model: model || "openai/gpt-oss-120b",
+      temperature: 0.1,
+      max_tokens: 900,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Translate the user's text into natural spoken Urdu for Pakistan. Translate every sentence, do not summarise. Return only Urdu script, no English prose, no quotes, no markdown. Keep every number, amount, name, date and identifier exactly as given.",
+        },
+        { role: "user", content: text },
+      ],
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = new Error(payload?.error?.message || `The voice service replied with ${response.status}.`);
+    error.status = response.status;
+    throw error;
+  }
+  const urdu = String(payload?.choices?.[0]?.message?.content ?? "").trim();
+  if (!urdu || !URDU_SCRIPT.test(urdu)) throw new Error("The voice service did not return Urdu text.");
+  return urdu;
+}
+
+async function synthesizeWithGroq({ text, groqKey, model, voice, baseUrl }) {
+  const response = await fetch(`${groqHost(baseUrl)}/audio/speech`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${groqKey}` },
+    body: JSON.stringify({
+      model,
+      input: text,
+      voice: voice || "Fritz-PlayAI",
+      response_format: "wav",
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const error = new Error(payload?.error?.message || `The voice service replied with ${response.status}.`);
+    error.status = response.status;
+    throw error;
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!bytes.length) throw new Error("The voice service returned no audio.");
+  return isWave(bytes) ? bytes : pcmToWav(bytes, { sampleRate: 24000, channels: 1, bitsPerSample: 16 });
+}
+
+/**
+ * Split a reply into speakable pieces.
+ *
+ * The reason this exists: the voice used to be prepared as one request — translate the whole
+ * reply, synthesize the whole reply, then start — and a shopkeeper waited five to seven seconds
+ * for the first word. One sentence is a fraction of that work, so the first sentence is fetched
+ * alone and played while the rest is prepared behind it.
+ *
+ * Splitting is done on sentence ends, then grouped so no piece is so short that a round trip
+ * costs more than the sentence (a "Yes." alone is not worth its own request) and no piece is so
+ * long that it is a wait again.
+ */
+/** A sentence this short is not worth its own round trip; it rides with the one before it. */
+const MIN_SEGMENT_CHARS = 24;
+
+export function splitForSpeech(text) {
+  const clean = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+  const sentences = (clean.match(/[^.!?۔]+[.!?۔]+|[^.!?۔]+$/g) ?? [clean])
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const segments = [];
+  for (const sentence of sentences) {
+    const previous = segments[segments.length - 1];
+    // A clipped answer ("Yes.") and its example belong to the same breath, so they share a part
+    // instead of paying two request latencies for one short thought.
+    if (previous && previous.length < MIN_SEGMENT_CHARS) {
+      segments[segments.length - 1] = `${previous} ${sentence}`;
+    } else {
+      segments.push(sentence);
+    }
+  }
+  return segments;
+}
+
+function assertVoiceAvailable(apiKey, groqKey) {
+  if (!apiKey && !groqKey) {
+    const error = new Error("Urdu speech is not switched on for this shop.");
+    error.status = 503;
+    throw error;
+  }
+}
+
+/**
+ * One piece of a reply, translated and spoken, with both stages timed.
+ *
+ * The two stages are logged separately because they have different fixes: translation is a text
+ * round trip, the voice is an audio generation, and a change aimed at the wrong one measures as
+ * "no improvement".
+ */
+async function speakOne({
+  source,
+  apiKey,
+  model,
+  fallbackModel,
+  baseUrl,
+  groqKey = "",
+  // The Groq provider has its own model names; the Gemini text model must never be sent to it.
+  groqModel = "",
+  groqSpeechModel = "",
+  groqBaseUrl = "",
+}) {
+  const startedAt = Date.now();
+  let urdu = "";
+
+  // Already Urdu: nothing to translate, so the one text round trip is skipped outright.
+  if (URDU_SCRIPT.test(source)) urdu = source;
+
+  // Fast path first: Groq writes the Urdu, Gemini speaks it (or Groq speaks it, if configured).
+  if (!urdu && groqKey) {
+    try {
+      urdu = await translateWithGroq({ text: source, groqKey, model: groqModel, baseUrl: groqBaseUrl });
+    } catch (error) {
+      console.warn("[assistant speech] Groq translation failed:", error?.message);
+    }
+  }
+  if (!urdu && apiKey) {
+    urdu = await translateToUrdu({ text: source, apiKey, model, fallbackModel, baseUrl });
+  }
+  if (!urdu) {
+    const error = new Error("I could not prepare the Urdu voice. Please try again.");
+    error.status = 502;
+    throw error;
+  }
+
+  const translatedAt = Date.now();
+
+  let wav = null;
+  if (apiKey) {
+    try {
+      const audio = await synthesizeUrdu({ text: urdu, apiKey, baseUrl });
+      const raw = bytesFromBase64(audio.data);
+      wav = isWave(raw) ? raw : pcmToWav(raw, audioFormat(audio.mimeType));
+    } catch (error) {
+      console.warn("[assistant speech] Gemini voice failed:", error?.message);
+    }
+  }
+  if (!wav && groqKey && groqSpeechModel) {
+    try {
+      wav = await synthesizeWithGroq({
+        text: urdu,
+        groqKey,
+        model: groqSpeechModel,
+        baseUrl: groqBaseUrl,
+      });
+    } catch (error) {
+      console.warn("[assistant speech] Groq voice failed:", error?.message);
+    }
+  }
+  if (!wav) {
+    const error = new Error("I could not prepare the Urdu voice. Please try again.");
+    error.status = 502;
+    throw error;
+  }
+
+  const finishedAt = Date.now();
+  console.log(
+    `[assistant speech] urdu ${translatedAt - startedAt}ms, voice ${finishedAt - translatedAt}ms, total ${finishedAt - startedAt}ms, ${urdu.length} chars, ${wav.length} bytes`,
+  );
+
+  return { urdu, wav };
+}
+
+/**
  * Translate one reply to Urdu and return a playable WAV.
  *
  * `model` is the assistant's configured text model, with its existing smaller fallback for a
  * spent quota. The speech model is separate: a text quota must not make the speaker silently
  * fall back to an English voice.
  */
-export async function urduSpeech({ text, apiKey, model, fallbackModel, baseUrl } = {}) {
-  if (!apiKey) {
-    const error = new Error("Urdu speech is not switched on for this shop.");
-    error.status = 503;
-    throw error;
-  }
+export async function urduSpeech({
+  text,
+  apiKey,
+  model,
+  fallbackModel,
+  baseUrl,
+  groqKey = "",
+  groqModel = "",
+  groqSpeechModel = "",
+  groqBaseUrl = "",
+} = {}) {
+  assertVoiceAvailable(apiKey, groqKey);
   const source = String(text ?? "").trim();
   if (!source) {
     const error = new Error("There is nothing to read.");
     error.status = 400;
     throw error;
   }
+  const { urdu, wav } = await speakOne({
+    source,
+    apiKey,
+    model,
+    fallbackModel,
+    baseUrl,
+    groqKey,
+    groqModel,
+    groqSpeechModel,
+    groqBaseUrl,
+  });
+  return { urdu, audio: base64FromBytes(wav), mimeType: "audio/wav" };
+}
 
-  const urdu = await translateToUrdu({ text: source, apiKey, model, fallbackModel, baseUrl });
-  const audio = await synthesizeUrdu({ text: urdu, apiKey, baseUrl });
-  const raw = bytesFromBase64(audio.data);
-  const wav = isWave(raw) ? raw : pcmToWav(raw, audioFormat(audio.mimeType));
-
+/**
+ * One numbered piece of a reply, so the screen can start the first sentence while the rest is
+ * still being prepared. `total` lets the caller stop asking after the last piece.
+ */
+export async function urduSpeechPart({
+  text,
+  index = 0,
+  apiKey,
+  model,
+  fallbackModel,
+  baseUrl,
+  groqKey = "",
+  groqModel = "",
+  groqSpeechModel = "",
+  groqBaseUrl = "",
+} = {}) {
+  assertVoiceAvailable(apiKey, groqKey);
+  const source = String(text ?? "").trim();
+  if (!source) {
+    const error = new Error("There is nothing to read.");
+    error.status = 400;
+    throw error;
+  }
+  const segments = splitForSpeech(source);
+  const part = Math.min(Math.max(Number(index) || 0, 0), Math.max(segments.length - 1, 0));
+  const { urdu, wav } = await speakOne({
+    source: segments[part] ?? source,
+    apiKey,
+    model,
+    fallbackModel,
+    baseUrl,
+    groqKey,
+    groqModel,
+    groqSpeechModel,
+    groqBaseUrl,
+  });
   return {
     urdu,
     audio: base64FromBytes(wav),
     mimeType: "audio/wav",
+    index: part,
+    total: segments.length || 1,
   };
 }

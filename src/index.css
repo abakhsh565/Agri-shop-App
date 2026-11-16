@@ -222,6 +222,13 @@
   --brand-fg: #0a0a0a;
   --brand-dark: #3f6212;
   --brand-light: #d9f99d;
+  /* A pale green SURFACE: the brand at one step of tint over the page, for a plate that should
+     read as green without shouting louder than the one real call to action on the screen. Light
+     and dark each supply their own value, because the ramp inverts. */
+  /* The same green wash as the dark theme, not a cream of its own: the tinted hero, the active
+     nav pill and the scan button must read as the SAME green on white and on black (owner,
+     2026-11-16). Only the text on top changes, because lime text on white is unreadable. */
+  --brand-tint: rgba(132, 204, 22, 0.16);
   --surface: var(--tone-card);
   --surface-2: var(--tone-sunken);
   --surface-3: var(--tone-sunken);
@@ -306,6 +313,7 @@
      screen. */
   --brand-dark: #a3e635;
   --brand-light: rgba(132, 204, 22, 0.18);
+  --brand-tint: rgba(132, 204, 22, 0.16);
   --surface: var(--tone-card);
   --surface-2: var(--tone-sunken);
   --surface-3: var(--tone-sunken);
@@ -1689,52 +1697,240 @@ svg.lucide {
   box-shadow: 0 0 0 3px var(--roles-accent-soft);
 }
 
-/* The assistant's talking mark. It is built from the same three-bar idea as the reference, in
-   the app's green rather than the reference's orange, and it never carries meaning that is not
-   also in text: the label beside it says what the screen is. */
+/* The app's mark where the assistant used to draw its own bars: the same logo as the launcher
+   icon and the splash, breathing while the conversation is live. The label beside it always says
+   what the screen is, so the motion never carries meaning on its own. */
 .ds-assistant-orb {
   display: inline-flex;
-  width: 64px;
-  height: 64px;
+  width: 88px;
+  height: 88px;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: radial-gradient(circle at 50% 42%, var(--brand-light), var(--tone-card) 74%);
+  background: transparent;
 }
 .ds-assistant-orb--compact {
   width: 36px;
   height: 36px;
 }
-.ds-assistant-orb-bars {
-  display: flex;
-  height: 30px;
-  align-items: center;
-  gap: 3px;
+.ds-assistant-orb .ds-brand-logo {
+  animation-duration: 2.8s;
 }
-.ds-assistant-orb--compact .ds-assistant-orb-bars {
-  height: 18px;
-  gap: 2px;
-}
-.ds-assistant-orb-bars > span {
+/* The bot's mark where the chat used to draw its own shapes: the hero at the top of an empty
+   conversation, the avatar beside a reply, and the working state while an answer is fetched. */
+.ds-assistant-orb-mark {
   display: block;
+}
+.ds-assistant-orb-mark--lg {
+  animation: ds-fab-mark-breathe 3.8s ease-in-out infinite;
+}
+.ds-assistant-busy-mark {
+  display: block;
+  animation: ds-fab-mark-breathe 1.4s ease-in-out infinite;
+}
+
+/* The voice being prepared, as sound rather than text: three bars of different heights rising and
+falling out of step, so the speaker button looks like it is listening for its own audio. Decoration
+only — the button is named in aria-label — and it stops under prefers-reduced-motion. */
+.ds-voice-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.ds-voice-bars > span {
   width: 3px;
-  height: 100%;
   border-radius: 999px;
-  background: var(--brand-dark);
-  transform: scaleY(0.45);
-  animation: ds-assistant-bar 1.5s ease-in-out infinite;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: ds-voice-bar 900ms ease-in-out infinite;
 }
-.ds-assistant-orb--compact .ds-assistant-orb-bars > span {
-  width: 2px;
+.ds-voice-bars > span:nth-child(1) {
+  height: 50%;
+  animation-delay: -600ms;
 }
-.ds-assistant-orb-bars > span:nth-child(1) { height: 38%; }
-.ds-assistant-orb-bars > span:nth-child(2) { height: 68%; }
-.ds-assistant-orb-bars > span:nth-child(3) { height: 100%; }
-.ds-assistant-orb-bars > span:nth-child(4) { height: 72%; }
-.ds-assistant-orb-bars > span:nth-child(5) { height: 52%; }
-.ds-assistant-orb-bars > span:nth-child(6) { height: 78%; }
-.ds-assistant-orb-bars > span:nth-child(7) { height: 42%; }
+.ds-voice-bars > span:nth-child(2) {
+  height: 90%;
+  animation-delay: -300ms;
+}
+.ds-voice-bars > span:nth-child(3) {
+  height: 70%;
+}
+@keyframes ds-voice-bar {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-voice-bars > span { animation: none; transform: none; }
+}
+
+/* The assistant launcher: a liquid-glass sphere, not a coloured puck.
+
+THE SPHERE IS GLASS, so what it looks like is mostly what is behind it: a translucent body blurred
+and saturated with the screen underneath, a white specular lobe at the upper left where the light
+falls, a lime tint pooling at the base, and a dark inner rim at the bottom for the thickness of the
+edge. The top edge carries a hairline of white, the bottom sits in a soft contact shadow so the
+sphere reads as lifted off the surface rather than pasted onto it.
+
+The colour in the glass is the brand's own green bending into a cool cyan along the rim (a blurred,
+masked conic that orbits slowly) — enough to feel like a live bot, still the same lime the rest of
+the app is built from.
+
+All of it is decoration: the button's name is in aria-label, and every loop stops under
+prefers-reduced-motion. */
+.ds-assistant-fab {
+  position: relative;
+  display: flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 0;
+  isolation: isolate;
+  /* Brand green, and nothing drawn round it: no border, no ring, no hairline. Only the soft drop
+     shadow that lifts it off the page and a green glow, so the mesh inside is all there is to see. */
+  background: var(--brand);
+  border: 0;
+  box-shadow:
+    0 12px 22px -8px rgba(0, 0, 0, 0.5),
+    0 0 16px rgba(132, 204, 22, 0.28);
+}
+/* Nothing moves on the button itself: the drifting colour is the FILL OF THE GLYPH (BrandLogo
+   tone="mesh"), so the mesh animates inside the letterforms over a plain brand disc. */
+.ds-assistant-fab-mark {
+  position: relative;
+  z-index: 1;
+  /* Breathing all the time, and blinking twice every nine seconds — a bot that is awake, not a
+     static badge. The blink is opacity only, so it never fights the drop shadow. */
+  animation:
+    ds-fab-mark-breathe 3.8s ease-in-out infinite,
+    ds-fab-mark-blink 9s ease-in-out infinite;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
+}
+
+@keyframes ds-fab-mark-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.07); }
+}
+@keyframes ds-fab-mark-blink {
+  0%, 84%, 100% { opacity: 1; }
+  86% { opacity: 0.22; }
+  88% { opacity: 1; }
+  90% { opacity: 0.4; }
+  92%, 100% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-assistant-fab-mark { animation: none; opacity: 1; }
+}
+
+/* The mark DRAWING ITSELF, which is what the first screen is for:
+     0.00s  the disc pops in
+     0.24s  the glyph is written (stroke travels the whole outline, normalised by pathLength=1)
+     0.88s  the fill arrives behind the stroke
+     0.90s  one sheen crosses the disc, then a slow breath keeps it alive while the session
+            restores — about 1.6s in all, and the splash holds 1.8s so it finishes on screen. */
+.ds-brand-logo { display: block; }
+.ds-brand-logo.is-animated { animation: ds-logo-breathe 3.6s ease-in-out 1.5s infinite; }
+.ds-brand-logo.is-animated .ds-brand-disc {
+  transform-origin: 514px 514px;
+  animation: ds-brand-disc 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.ds-brand-logo.is-animated .ds-brand-glyph {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation:
+    ds-brand-draw 760ms cubic-bezier(0.65, 0, 0.35, 1) 240ms both,
+    ds-brand-fill 320ms ease-out 880ms both;
+}
+.ds-brand-logo.is-animated .ds-brand-sheen {
+  animation: ds-brand-sheen 900ms ease-in-out 900ms both;
+}
+.ds-brand-logo:not(.is-animated) .ds-brand-glyph { stroke: none; }
+.ds-brand-logo:not(.is-animated) .ds-brand-sheen { display: none; }
+
+.ds-splash-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* The name and the line under it arrive after the mark has been written, not with it: the screen
+   builds in reading order instead of appearing complete and then moving. */
+.ds-splash-name {
+  animation: ds-splash-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) 1.05s both;
+}
+.ds-splash-tagline {
+  animation: ds-splash-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) 1.3s both;
+}
+/* Handing over: the words step back, then the mark grows — steadily, no turn and no fade — until
+   it is bigger than the screen. At that instant a brand sheet takes over and the next screen is
+   revealed from under it, so the page always arrives out of the logo. `--fly-scale` is measured in
+   code from the mark's own box and the viewport. */
+.ds-splash-stage.is-leaving .ds-splash-name,
+.ds-splash-stage.is-leaving .ds-splash-tagline {
+  animation: ds-splash-out 180ms ease-in both;
+}
+.ds-splash-stage.is-leaving .ds-splash-mark {
+  animation: ds-splash-fly 620ms cubic-bezier(0.5, 0, 0.75, 0.4) both;
+}
+
+/* The sheet that carries the hand-over: a body child, so it is still there when this page
+   unmounts. It covers the whole viewport, then fades away over the screen that is already behind. */
+.ds-splash-handover {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  pointer-events: none;
+  /* The page tone, not the brand: the mark has already dissolved by the time this takes over, and a
+     full green frame under a dissolving logo reads as a flash. This only has to bridge the gap
+     between the splash and the screen behind it. */
+  background: var(--background);
+  opacity: 0;
+  transition: opacity 120ms linear;
+}
+.ds-splash-handover.is-on { opacity: 1; }
+.ds-splash-handover.is-off {
+  opacity: 0;
+  transition: opacity 420ms ease-out;
+}
+
+@keyframes ds-splash-out {
+  to { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes ds-splash-fly {
+  from { transform: scale(1); opacity: 1; }
+  25% { transform: scale(calc(1 + (var(--fly-scale, 24) - 1) * 0.18)); opacity: 0.95; }
+  55% { transform: scale(calc(1 + (var(--fly-scale, 24) - 1) * 0.45)); opacity: 0.62; }
+  85% { transform: scale(calc(1 + (var(--fly-scale, 24) - 1) * 0.78)); opacity: 0.14; }
+  to { transform: scale(var(--fly-scale, 24)); opacity: 0; }
+}
+
+@keyframes ds-brand-disc {
+  from { opacity: 0; transform: scale(0.55); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes ds-brand-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes ds-brand-fill {
+  from { fill-opacity: 0; }
+  to { fill-opacity: 1; }
+}
+@keyframes ds-brand-sheen {
+  from { transform: translateX(-320px); }
+  to { transform: translateX(320px); }
+}
+@keyframes ds-splash-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes ds-logo-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
 
 .ds-assistant-thinking {
   display: inline-flex;
@@ -1779,11 +1975,21 @@ svg.lucide {
   50% { transform: scale(1); opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ds-assistant-orb-bars > span,
   .ds-assistant-thinking > span,
   .ds-assistant-listening > span {
     animation: none;
     transform: scaleY(0.7);
     opacity: 1;
   }
+  /* The mark is a still picture for anyone who asked the system not to move: the disc is
+     already there, the glyph is filled instead of drawn, and the halo and sheen are not drawn. */
+  .ds-brand-logo.is-animated,
+  .ds-brand-logo.is-animated .ds-brand-disc,
+  .ds-brand-logo.is-animated .ds-brand-glyph {
+    animation: none;
+  }
+  .ds-brand-logo .ds-brand-glyph { stroke-dashoffset: 0; fill-opacity: 1; }
+  .ds-brand-logo .ds-brand-sheen { display: none; }
+  .ds-splash-name,
+  .ds-splash-tagline { animation: none; opacity: 1; transform: none; }
 }

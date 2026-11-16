@@ -45,9 +45,10 @@ import {
   useFinanceTotals,
 } from "@/lib/financeEntries";
 import { useMoneyTotals } from "@/lib/financeMoney";
+import { loadCreditPayments, summariseMoneyIn, type CreditPaymentRow } from "@/lib/money";
 import { formatCompactCurrency, formatCurrency } from "@/lib/formatters";
 import { computeOverdueCreditTotal } from "@/lib/signalEngine";
-import { pkMonthStart, pkMonthStartOf, pkToday, pkWeekStart } from "@/lib/pkDate";
+import { pkDateFromISO, pkMonthStart, pkMonthStartOf, pkToday, pkWeekStart } from "@/lib/pkDate";
 
 /**
  * Financial overview — one screen, one appearance of each figure.
@@ -309,6 +310,25 @@ export default function AdminFinanceSectionPage() {
   const activeBranchId = useShopStore((s) => s.activeBranchId);
   const activeBranchName = useShopStore((s) => s.activeBranchName);
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
+
+  /**
+   * Credit collect — the udhaar that came back in the window, and the overdue standing balance.
+   *
+   * BOTH ARE HOME'S FIGURES, from Home's reads (owner, 2026-11-16): the same
+   * `customer_payments` rows through `summariseMoneyIn` for the collect figure, and
+   * `computeOverdueCreditTotal` for the overdue one. Neither screen does its own addition, so
+   * the hero and this plate cannot print two different numbers for the same week.
+   */
+  const [creditPayments, setCreditPayments] = useState<CreditPaymentRow[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    setCreditPayments([]);
+    if (!activeBranchId) return;
+    loadCreditPayments()
+      .then((rows) => { if (!cancelled) setCreditPayments(rows); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeBranchId]);
   const openSwitcher = useShopStore((s) => s.openSwitcher);
 
   const role = useAuthStore((s) => s.user?.membershipRole);
@@ -357,6 +377,18 @@ export default function AdminFinanceSectionPage() {
 
   const moneyIn = movement.totals?.moneyIn ?? null;
   const moneyOut = movement.totals?.moneyOut ?? null;
+
+  const creditCollected = useMemo(() => {
+    if (!activeBranchId) return null;
+    return summariseMoneyIn({
+      sales: [],
+      payments: creditPayments,
+      inPeriod: (iso) => {
+        const day = pkDateFromISO(iso);
+        return day >= rangeFrom && day <= rangeTo;
+      },
+    }).udhaar;
+  }, [activeBranchId, creditPayments, rangeFrom, rangeTo]);
 
   /** A figure in the short form the report's plate uses (Rs. 139.5K). */
   const money = (value: number | null | undefined) =>
@@ -747,6 +779,30 @@ export default function AdminFinanceSectionPage() {
         <p className="text-11" style={{ color: "var(--text-tertiary)" }} data-testid="finance-cash-note">
           {t("finance.plateNote")}
         </p>
+        {/* Credit collect + overdue, as plate figures rather than a line or a screen of their own
+            (owner, 2026-11-16). Both are read exactly as Home reads them, so the hero's
+            "Credit collect Rs. 1,000 · Rs. 22,000 overdue" and this row always agree. */}
+        <div className="mt-1">
+          <PlateRow
+            cells={[
+              {
+                id: "credit-collect",
+                label: t("inline.credit_collect"),
+                value: money(creditCollected),
+                note: t("finance.creditCollectNote"),
+                tone: "var(--text-tertiary)",
+              },
+              {
+                id: "credit-overdue",
+                label: t("overall.overdueCredit"),
+                value: money(overdueCredit),
+                note: t("finance.overdueNote"),
+                tone: "var(--text-tertiary)",
+              },
+            ]}
+            divided
+          />
+        </div>
       </div>
 
       {/* The standing cost that leaves the till whether or not anything sells. It sits in a box of
@@ -774,7 +830,7 @@ export default function AdminFinanceSectionPage() {
           <FlatRow
             icon={HandCoins}
             title={t("overall.customerReceivable")}
-            meta={overdueCredit > 0 ? t("overall.overdue", { amount: formatCurrency(overdueCredit) }) : t("overall.oweYou")}
+            meta={t("overall.oweYou")}
             value={formatCurrency(receivableDue)}
             onClick={() => navigate(`${base}/settings/overview/customers`)}
             testId="finance-receivables"

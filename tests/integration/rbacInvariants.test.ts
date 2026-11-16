@@ -35,6 +35,9 @@ const INTERNAL_TABLES = [
   'impact_analyses', 'impact_mappings', 'incident_rate_limits', 'incident_signatures',
   'incidents', 'known_resolutions', 'resolution_regression_tests',
   'activity_log', 'daily_cash_reconciliations', 'payments', 'shop_requests',
+  // 0316: the demo-login switch is server-side state — RLS on, no policy on purpose, every client
+  // grant revoked — so it is policy-free like the internal tables above, not app-facing.
+  'login_bridge',
 ];
 
 /** Genuinely pre-auth or platform-internal RPCs. */

@@ -16,7 +16,6 @@ import { useProductsStore } from "@/stores/productsStore";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
 import FirstRunGate from "@/components/education/FirstRunGate";
-import ContextHelp from "@/components/education/ContextHelp";
 import { useT, tNow, type I18nKey } from "@/lib/i18n";
 import { useBootstrapData } from "@/stores/useBootstrapData";
 import { useShopStore } from "@/stores/shopStore";
@@ -436,7 +435,6 @@ export default function EmployeeLayout() {
       {/* Education: the employee's own tour and first-run welcome — the same gate as the
           owner shell, teaching the employee's steps rather than the owner's. */}
       <FirstRunGate />
-      <ContextHelp />
 
       {/* The assistant, off the bar and within thumb reach of home. It answers on the employee's
           own session — from what this account can already open — so it is safe to put in front

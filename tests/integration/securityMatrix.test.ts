@@ -431,6 +431,10 @@ describe('Security matrix — admin is a role, not the owner', () => {
     expect(adminPerms.error).toBeNull();
     expect([...(adminPerms.data as string[])].sort()).toEqual([
       'customers.create',
+      // 0317: whoever may edit a customer may set their limit, so the insert-time customer grants
+      // (0285) now include the paired credit-limit permission. It is the same rule `0311` states,
+      // enforced on the grant instead of copied once.
+      'customers.credit_limit',
       'customers.edit',
       'customers.payments',
       'reports.view',

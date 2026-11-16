@@ -31,6 +31,15 @@ serve((req: Request) =>
   handle(req, {
     supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
     anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    // Groq first (fast text), Gemini second. Either alone is enough to answer; with neither the
+    // function still answers from the built-in layer.
+    groqKey: Deno.env.get("GROQ_API_KEY") ?? "",
+    groqModel: Deno.env.get("GROQ_MODEL") ?? "openai/gpt-oss-120b",
+    groqVisionModel: Deno.env.get("GROQ_VISION_MODEL") ?? "",
+    groqBaseUrl: Deno.env.get("GROQ_BASE_URL") ?? "",
+    // Only used when there is no Gemini key: Groq's own voices. Urdu is spoken best by the Gemini
+    // voice, so this is a fallback, not the default.
+    groqSpeechModel: Deno.env.get("GROQ_SPEECH_MODEL") ?? "",
     geminiKey: Deno.env.get("GEMINI_API_KEY") ?? "",
     geminiModel: Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash",
     // Quota is counted per model per day; the small one is tried when the good one is spent.

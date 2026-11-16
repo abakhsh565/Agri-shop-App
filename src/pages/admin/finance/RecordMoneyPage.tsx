@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Check, ContactRound, Mic, Square, X } from "lucide-react";
+import { ArrowLeft, Check, ContactRound, Mic, Square } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import Button from "@/components/ui/Button";
 import DateField from "@/components/ui/DateField";
@@ -10,7 +10,7 @@ import { useShellBase } from "@/lib/useShellBase";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useThemeStore } from "@/stores/themeStore";
-import { hasInAppHistory } from "@/lib/navContext";
+import { navigateBack } from "@/lib/navContext";
 import { useUIStore } from "@/stores/uiStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { canPickContact, pickContact } from "@/lib/contacts";
@@ -153,7 +153,6 @@ export default function RecordMoneyPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [params, setParams] = useSearchParams();
-  const recordOrigin = (location.state as { from?: string } | null)?.from;
   const { addToast } = useUIStore();
   const customers = useCustomersStore((s) => s.customers);
   const role = useAuthStore((s) => s.user?.membershipRole);
@@ -363,17 +362,18 @@ export default function RecordMoneyPage() {
   }, [measureMark]);
 
   /**
-   * Closing the form must not add a second finance entry above the form in history. Opening it
-   * from a finance book goes back to that book; the Assistant card replaces the form with the
-   * finance screen, so the finance back arrow returns to the conversation instead of reopening
-   * the form forever.
+   * The leading control is a BACK arrow, because this page is a step, not a panel: it is opened
+   * from the Home grid, from a finance book, or from the Assistant's hand-over.
+   *
+   * It used to be a cross that only stepped back when the form was opened from Finance
+   * (`state.from === "finance"`); from anywhere else it REPLACED itself with the finance hub, so
+   * opening it from Home sent the reader to a screen they had never visited. `navigateBack` is the
+   * app's own handler: it retraces the tab's real history when there is one (Home → Home, the
+   * money book → the money book, the conversation → the conversation) and falls back to the
+   * finance book only on a cold open, where there is no page behind this one.
    */
   function closeRecord() {
-    if (recordOrigin === "finance" && hasInAppHistory()) {
-      navigate(-1);
-      return;
-    }
-    navigate(`${base}/settings/hub/finance`, { replace: true });
+    navigateBack(location, navigate, `${base}/settings/hub/finance`);
   }
 
   function chooseKind(next: FinanceEntryKind) {
@@ -536,12 +536,14 @@ export default function RecordMoneyPage() {
           <button
             type="button"
             onClick={closeRecord}
-            aria-label={t("common.close")}
-            data-testid="record-money-close"
+            aria-label={t("common.back")}
+            data-testid="record-money-back"
             className="ds-iconbtn shrink-0"
             style={{ color: "var(--text-secondary)" }}
           >
-            <X size={22} />
+            {/* The glyph is always the LTR arrow; the global `[dir="rtl"]` icon rule mirrors it
+                once in Urdu, so it is not rotated here as well. */}
+            <ArrowLeft size={22} />
           </button>
 
           <div ref={tabListRef} className="relative flex items-center gap-5 min-w-0" role="tablist">

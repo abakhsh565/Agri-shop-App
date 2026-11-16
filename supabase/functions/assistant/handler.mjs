@@ -19,7 +19,7 @@
  */
 import { makeClient, TOOLS_BY_NAME, toolsFor } from "./tools.mjs";
 import { ask } from "./providers.mjs";
-import { urduSpeech } from "./speech.mjs";
+import { urduSpeech, urduSpeechPart } from "./speech.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,6 +77,13 @@ export async function handle(req, env) {
   const geminiKey = env.geminiKey ?? "";
   const geminiModel = env.geminiModel ?? "gemini-2.5-flash";
   const geminiFallbackModel = env.geminiFallbackModel ?? "";
+  // Groq answers first: it is the quick one. Gemini stays as the second provider (and the only one
+  // that reads a photo unless a Groq vision model is configured), and the built-in layer is last.
+  const groqKey = env.groqKey ?? "";
+  const groqModel = env.groqModel ?? "openai/gpt-oss-120b";
+  const groqVisionModel = env.groqVisionModel ?? "";
+  const groqBaseUrl = env.groqBaseUrl ?? "";
+  const modelLabel = geminiKey ? geminiModel : groqKey ? groqModel : "built-in";
   // Where the model calls go. Empty means Google. See providers.mjs: this is what lets the same
   // function be pointed at a gateway without a second call path.
   const modelBaseUrl = env.modelBaseUrl ?? "";
@@ -161,15 +168,25 @@ export async function handle(req, env) {
   // The speaker needs a spoken Urdu rendering, not the browser's best installed voice. This is a
   // read-only action: it translates the reply and returns audio, and never touches shop data.
   if (body.action === "speak") {
-    if (!geminiKey) return json({ error: "Urdu speech is not switched on for this shop." }, 503);
+    if (!geminiKey && !groqKey) return json({ error: "Speech is not switched on for this shop." }, 503);
     try {
-      const speech = await urduSpeech({
+      const voice = {
         text: body.text,
         apiKey: geminiKey,
         model: geminiModel,
         fallbackModel: geminiFallbackModel || "gemini-flash-lite-latest",
         baseUrl: modelBaseUrl,
-      });
+        groqKey,
+        groqModel,
+        groqSpeechModel: env.groqSpeechModel ?? "",
+        groqBaseUrl,
+      };
+      // A numbered piece is what the screen asks for: the first sentence is played while the rest
+      // is being prepared. The whole reply is still supported for a caller that asks for it.
+      const speech =
+        body.part === undefined || body.part === null
+          ? await urduSpeech(voice)
+          : await urduSpeechPart({ ...voice, index: body.part });
       return json(speech);
     } catch (error) {
       console.error("[assistant speech] failed:", error?.message);
@@ -193,7 +210,7 @@ export async function handle(req, env) {
       withheld: [...TOOLS_BY_NAME.values()]
         .filter((t) => !offered.has(t.name))
         .map((t) => ({ name: t.name, title: t.title, permission: t.permission })),
-      model: geminiKey ? geminiModel : "built-in",
+      model: modelLabel,
     });
   }
 
@@ -205,7 +222,7 @@ export async function handle(req, env) {
     return json({ error: error.message }, 400);
   }
   if (!text && !photo) return json({ error: "Ask me something." }, 400);
-  if (photo && !geminiKey) {
+  if (photo && !geminiKey && !(groqKey && groqVisionModel)) {
     return json({
       answer: "I cannot read a photo just now. Type the sale number written on it and I will look it up.",
       speak: "I cannot read photos just now. Type the sale number on it and I will look it up.",
@@ -227,6 +244,11 @@ export async function handle(req, env) {
       model: geminiModel,
       fallbackModel: geminiFallbackModel || undefined,
       baseUrl: modelBaseUrl,
+      groqKey,
+      // A photo goes to a Groq vision model when one is configured; plain questions use the fast
+      // text model. Gemini remains the fallback for both.
+      groqModel: photo ? groqVisionModel || groqModel : groqModel,
+      groqBaseUrl,
     });
     return json({
       answer: result.answer,

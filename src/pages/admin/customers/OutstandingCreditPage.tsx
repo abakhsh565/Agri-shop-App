@@ -4,6 +4,7 @@ import { ChevronRight, Wallet } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
+import Photo from "@/components/ui/Photo";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useShopStore } from "@/stores/shopStore";
@@ -225,14 +226,31 @@ export default function OutstandingCreditPage() {
                 data-testid={`outstanding-row-${c.id}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-15 font-semibold truncate">{c.name}</p>
-                    <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                      {branchName ? `${branchName} · ` : ""}
-                      {c.dueDate
-                        ? t("outstanding.dueOn", { date: formatDate(c.dueDate) })
-                        : t("outstanding.noDueDate")}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-3">
+                    {/* The customer's own picture, always the latest one saved on the account:
+                        a row of names is how an owner loses track of who is who. */}
+                    <Photo
+                      src={c.imageUrl}
+                      alt={c.name}
+                      className="size-10 rounded-full object-cover shrink-0"
+                      fallback={
+                        <span
+                          className="size-10 rounded-full flex items-center justify-center text-13 font-bold shrink-0"
+                          style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                        >
+                          {c.name.charAt(0).toUpperCase()}
+                        </span>
+                      }
+                    />
+                    <div className="min-w-0">
+                      <p className="text-15 font-semibold truncate">{c.name}</p>
+                      <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+                        {branchName ? `${branchName} · ` : ""}
+                        {c.dueDate
+                          ? t("outstanding.dueOn", { date: formatDate(c.dueDate) })
+                          : t("outstanding.noDueDate")}
+                      </p>
+                    </div>
                   </div>
                   <div className="shrink-0 text-end">
                     <p className="text-14 font-bold tabular-nums">{formatCurrency(c.outstandingBalance)}</p>

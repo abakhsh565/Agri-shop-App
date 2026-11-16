@@ -22,8 +22,8 @@ const OWNER_PHONE = '03001234567';
 
 async function reachCodeScreen(page: Page) {
   await page.goto(`${BASE}/login`);
-  await page.getByPlaceholder('e.g. 03001234567').fill(OWNER_PHONE);
-  await page.getByRole('button', { name: 'Send Code' }).click();
+  await page.getByPlaceholder('Enter your mobile number').fill(OWNER_PHONE);
+  await page.getByRole('button', { name: 'Continue' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
   await expect(page.locator('[data-testid^="otp-digit-"]')).toHaveCount(6);
 }
