@@ -92,7 +92,7 @@ export default function InvoiceListPage() {
               {t("invoice.unpaid")}
             </p>
             <p className="text-20 font-bold mt-1" style={{ color: "var(--text-primary)" }} data-testid="invoice-unpaid-total">
-              <RollingNumber value={summary.unpaid} format={formatCurrency} />
+              <RollingNumber value={summary.unpaid} format={formatCurrency} animateOnMount />
             </p>
           </div>
           <div>
@@ -101,7 +101,7 @@ export default function InvoiceListPage() {
               {t("invoice.collected")}
             </p>
             <p className="text-20 font-bold mt-1" style={{ color: "var(--text-primary)" }} data-testid="invoice-collected-total">
-              <RollingNumber value={summary.collected} format={formatCurrency} />
+              <RollingNumber value={summary.collected} format={formatCurrency} animateOnMount />
             </p>
           </div>
         </div>

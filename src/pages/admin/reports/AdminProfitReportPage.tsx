@@ -266,6 +266,7 @@ export default function AdminProfitReportPage() {
             ) : (
               <RollingNumber
                 text={`${(activeRow?.unknownLines ?? 0) > 0 ? "≥ " : ""}${money(profitFigure)}`}
+                animateOnMount
               />
             )}
           </p>

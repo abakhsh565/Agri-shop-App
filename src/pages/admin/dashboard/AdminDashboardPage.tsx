@@ -815,7 +815,7 @@ export default function AdminDashboardPage() {
               their new value instead of being repainted — the movement is what ties the pill above
               to the number below it. */}
           <p className="text-28 font-semibold leading-none" style={{ color: "var(--text-primary)" }} data-testid="home-total-sales">
-            <RollingNumber value={heroTotalSales} format={formatRs} />
+            <RollingNumber value={heroTotalSales} format={formatRs} animateOnMount />
           </p>
 
           <div className="flex items-end justify-between mt-4">
@@ -830,6 +830,7 @@ export default function AdminDashboardPage() {
                   <RollingNumber
                     value={Math.abs(netProfit)}
                     format={(figure) => (netProfit < 0 ? "−" : "") + formatRs(figure)}
+                    animateOnMount
                   />
                 )}
               </p>
@@ -840,8 +841,8 @@ export default function AdminDashboardPage() {
                 {t("inline.credit_collect")}
               </p>
               <div className="flex items-center gap-2">
-                <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>
-                  <RollingNumber value={money.udhaar} format={formatRs} />
+                <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }} data-testid="home-credit-collect">
+                  <RollingNumber value={money.udhaar} format={formatRs} animateOnMount />
                 </p>
                 <p className="text-11 font-semibold" style={{ color: "var(--text-secondary)" }}>
                   {formatRs(overdueAmount)} {t("inline.overdue")}

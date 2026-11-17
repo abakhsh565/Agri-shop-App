@@ -167,7 +167,7 @@ export default function SalesListPage() {
           {summaryLabel}
         </p>
         <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
-          <RollingNumber value={total} format={formatCurrency} />
+          <RollingNumber value={total} format={formatCurrency} animateOnMount />
         </p>
       </div>
 

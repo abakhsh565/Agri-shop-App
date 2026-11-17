@@ -393,7 +393,7 @@ export default function AdminSalesListPage() {
               >
                 {/* Switching All / Credit / Paid or the window changes this figure: it rolls, like
                     the dashboard's hero, so the tab and the number move as one gesture. */}
-                <RollingNumber value={summary.amount} format={formatCurrency} />
+                <RollingNumber value={summary.amount} format={formatCurrency} animateOnMount />
               </p>
               <p
                 className="text-12 font-medium mt-1"
