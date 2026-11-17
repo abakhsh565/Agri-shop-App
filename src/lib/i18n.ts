@@ -3099,6 +3099,8 @@ export const translations = {
     // The subtraction the report used to leave implicit (owner, 2026-11-17).
     "profit.listSales":              "Sale value",
     "profit.discountsGiven":         "Discounts",
+    "profit.salesMeta":              "{count} sales · avg {average}",
+    "profit.switchBranch":           "Switch branch",
     "profit.byProduct":              "Profit by product",
     "profit.byProductHint":          "Which products earned this period's profit",
     "profit.byBranch":               "By branch",
@@ -8537,6 +8539,8 @@ export const translations = {
     "profit.netProfitHint": "فروخت منہا بکری کی لاگت",
     "profit.listSales": "فروخت کی قیمت",
     "profit.discountsGiven": "رعایت",
+    "profit.salesMeta": "{count} فروخت · اوسط {average}",
+    "profit.switchBranch": "برانچ تبدیل کریں",
     "profit.byProduct":              "مصنوعات کے حساب سے منافع",
     "profit.byProductHint":          "اس مدت کا منافع کن مصنوعات سے آیا",
     "profit.byBranch":               "برانچ کے حساب سے",

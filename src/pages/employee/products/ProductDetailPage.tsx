@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import OverflowMenu from "@/components/ui/OverflowMenu";
 import Photo from "@/components/ui/Photo";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ImageCrop from "@/components/ui/ImageCrop";
@@ -232,7 +233,54 @@ export default function ProductDetailPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title={t("sale.productDetails")} />
+      <NavHeader
+        title={t("sale.productDetails")}
+        right={
+          <OverflowMenu
+            testId="product-actions"
+            label={t("common.more")}
+            actions={[
+              ...(canEditProduct
+                ? [{
+                    icon: Pencil,
+                    label: t("products.editProduct"),
+                    onClick: () => navigate(`${base}/inventory/${product.id}/edit`),
+                    testId: "product-action-edit",
+                  }]
+                : []),
+              ...(canAdjustStock
+                ? [{
+                    icon: TrendingUp,
+                    label: t("products.adjustStock"),
+                    onClick: () => navigate(`${base}/inventory/${product.id}/adjust`),
+                    testId: "product-action-adjust",
+                  }]
+                : []),
+              ...(canEditProduct
+                ? [{
+                    icon: Barcode,
+                    label: t("products.generateBarcode"),
+                    disabled: barcodeMinting,
+                    onClick: () =>
+                      product.barcode
+                        ? navigate(`${base}/inventory/barcodes?product=${product.id}`)
+                        : void handleGenerateBarcode(),
+                    testId: "product-barcode-generate",
+                  }]
+                : []),
+              ...(canDeleteProduct
+                ? [{
+                    icon: Trash2,
+                    label: t("products.deleteProduct"),
+                    destructive: true,
+                    onClick: () => setToDelete(true),
+                    testId: "product-action-delete",
+                  }]
+                : []),
+            ]}
+          />
+        }
+      />
 
       <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
         {/* ── HERO CARD: Image + Name + Category + Stock Badge ── */}
@@ -445,60 +493,6 @@ export default function ProductDetailPage() {
         {/* ── CUSTOMERS LIKELY TO WANT THIS ── */}
         <ProductCustomerRecommendations productId={product.id} />
 
-        {/* ── ALL ACTIONS: Edit + Adjust + Barcode + Delete (unified) ── */}
-        <div
-          className="rounded-[var(--radius-card)] overflow-hidden"
-          style={{ border: "1px solid var(--divider)" }}
-        >
-          {canEditProduct && (
-            <button
-              onClick={() => navigate(`${base}/inventory/${product.id}/edit`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
-              style={{ color: "var(--text-primary)" }}
-            >
-              <Pencil size={16} style={{ color: "var(--brand)" }} />
-              {t("products.editProduct")}
-            </button>
-          )}
-          {canAdjustStock && (
-            <button
-              onClick={() => navigate(`${base}/inventory/${product.id}/adjust`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
-              style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
-            >
-              <TrendingUp size={16} style={{ color: "var(--brand)" }} />
-              {t("products.adjustStock")}
-            </button>
-          )}
-          {canEditProduct && (
-            <button
-              onClick={() =>
-                product.barcode
-                  ? navigate(`${base}/inventory/barcodes?product=${product.id}`)
-                  : void handleGenerateBarcode()
-              }
-              disabled={barcodeMinting}
-              data-testid="product-barcode-generate"
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70 disabled:opacity-60"
-              style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
-            >
-              {barcodeMinting
-                ? <Loader2 size={16} className="animate-spin" style={{ color: "var(--brand)" }} />
-                : <Barcode size={16} style={{ color: "var(--brand)" }} />}
-              {t("products.generateBarcode")}
-            </button>
-          )}
-          {canDeleteProduct && (
-            <button
-              onClick={() => setToDelete(true)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
-              style={{ color: "var(--error)", borderTop: "1px solid var(--divider)" }}
-            >
-              <Trash2 size={16} />
-              {t("products.deleteProduct")}
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Edit Product Bottom Sheet */}

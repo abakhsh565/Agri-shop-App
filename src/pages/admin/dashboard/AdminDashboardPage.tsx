@@ -433,7 +433,8 @@ export default function AdminDashboardPage() {
       tone: "warning",
       icon: Truck,
       title: t("quickAlerts.supplierTitle", { amount: formatRs(totalPayable) }),
-      body: t("quickAlerts.supplierBody"),
+      // No body line: "Settle or schedule supplier payments" told the reader what the row already
+      // says and what its Review action already does (owner, 2026-11-17).
       meta: t("quickAlerts.needsReview"),
       action: t("admin.review"),
       priority: 75,
@@ -754,7 +755,7 @@ export default function AdminDashboardPage() {
           The field is the door to the search screen rather than a keyboard on the home screen:
           a shopkeeper who wants to type is going to type a customer, a bill number or a product,
           and that screen already answers all three with its own filters. */}
-      <div className="px-4 pt-3">
+      <div className="px-4 pt-5">
         <button
           type="button"
           onClick={() => navigate("/admin/search")}
@@ -771,7 +772,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* ── Time-period filter — controls all figures below ── */}
-      <div className="flex gap-2 px-4 pt-2.5 pb-2 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
+      <div className="flex gap-2 px-4 pt-3 pb-3 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
         {DATE_PILLS.map(({ key, label }) => (
           <button
             key={key}
@@ -796,7 +797,7 @@ export default function AdminDashboardPage() {
           `sales.view`: a role can be shown the shop's takings without being able to void a
           sale. An owner, and an account whose visibility has not been read yet, see it. */}
       {canSeeDashboard("sales_overview") && (
-      <div className="px-4 pt-3 animate-fade-in-up" data-tour="home:kpis">
+      <div className="px-4 pt-5 animate-fade-in-up" data-tour="home:kpis">
         {/* A green-TINTED plate, not a green block (owner, 2026-11-16): `--brand-tint` is the
             brand at one step over the page, so the card reads green in both themes while the
             only solid green on the screen is the New Sale button. Its labels take
@@ -850,15 +851,15 @@ export default function AdminDashboardPage() {
           the owner has just looked at instead of leading the screen. One checklist, the same
           component Settings renders, so a new owner sees the identical three steps in both
           places — and it renders nothing once the shop can trade. ── */}
-      <SetupChecklist testId="setup-next-step" className="px-4 pt-4 animate-fade-in-up" />
+      <SetupChecklist testId="setup-next-step" className="px-4 pt-5 animate-fade-in-up" />
 
       {/* ── The counter's three jobs ──
           Payment and purchase are the two things a shop owner does between sales, so they sit
           as a pair of grey tiles; New Sale is the work every figure on this screen comes from,
           so it is the one solid-green full-width button — directly above Quick Alerts (owner,
           2026-11-16). ── */}
-      <div className="px-4 pt-4" data-tour="home:actions">
-        <div className="grid grid-cols-2 gap-2.5">
+      <div className="px-4 pt-5" data-tour="home:actions">
+        <div className="grid grid-cols-2 gap-3">
           {/* Record Payment asks which side the money is on rather than assuming the customer
               one: what a customer owes and what a supplier is owed are different books. */}
           <button
@@ -891,7 +892,7 @@ export default function AdminDashboardPage() {
         <button
           type="button"
           onClick={() => navigate("/admin/sale")}
-          className="mt-2.5 w-full h-16 rounded-[var(--radius-tile)] flex items-center justify-between px-4 ds-pressable"
+          className="mt-3 w-full h-16 rounded-[var(--radius-tile)] flex items-center justify-between px-4 ds-pressable"
           style={{ background: "var(--brand)", color: "#0a0a0a" }}
           data-testid="home-action-sale"
         >

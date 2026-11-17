@@ -73,7 +73,7 @@ const numberOrNull = (value: number | string | null | undefined): number | null 
  * branches" — the two look identical in a list of zeros. `failed` is a state of its own for the
  * same reason: an RPC that is not deployed yet must not be drawn as a quiet period.
  */
-export function useBranchPeriodReport(from: string, to: string): {
+export function useBranchPeriodReport(from: string, to: string, refreshKey?: string): {
   rows: BranchPeriodReport[] | null;
   failed: boolean;
   retry: () => void;
@@ -112,7 +112,9 @@ export function useBranchPeriodReport(from: string, to: string): {
     return () => {
       live = false;
     };
-  }, [from, to, attempt]);
+    // `refreshKey` is the branch the reader is standing in: switching branch changes which row is
+    // `is_current` at the database, so the answer is re-read rather than relabelled.
+  }, [from, to, attempt, refreshKey]);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
   return { rows, failed, retry };

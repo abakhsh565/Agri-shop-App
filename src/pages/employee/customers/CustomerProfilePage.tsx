@@ -5,6 +5,7 @@ import Photo from "@/components/ui/Photo";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import NavHeader from "@/components/ui/NavHeader";
+import OverflowMenu from "@/components/ui/OverflowMenu";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useUIStore } from "@/stores/uiStore";
@@ -340,7 +341,35 @@ export default function CustomerProfilePage() {
       style={{ background: "var(--background)", direction: isUrdu ? "rtl" : "ltr" }}
     >
       <StatusBar />
-      <NavHeader title={t("customerProfile.title")} historyBack />
+      <NavHeader
+        title={t("customerProfile.title")}
+        historyBack
+        right={
+          <OverflowMenu
+            testId="customer-actions"
+            label={t("common.more")}
+            actions={[
+              ...(canEditCustomers
+                ? [{
+                    icon: Pencil,
+                    label: t("customerProfile.editCustomer"),
+                    onClick: startEdit,
+                    testId: "customer-action-edit",
+                  }]
+                : []),
+              ...(canArchiveCustomers
+                ? [{
+                    icon: Trash2,
+                    label: t("customerProfile.deleteCustomer"),
+                    destructive: true,
+                    onClick: () => setShowDelete(true),
+                    testId: "customer-action-delete",
+                  }]
+                : []),
+            ]}
+          />
+        }
+      />
 
       <div className="flex flex-col gap-3.5 px-4 pt-3 pb-8">
 
@@ -612,21 +641,6 @@ export default function CustomerProfilePage() {
               title={t("customerProfile.recordPayment")}
             />
           )}
-          {canEditCustomers && (
-            <ListRow
-              onClick={startEdit}
-              icon={Pencil}
-              title={t("customerProfile.editCustomer")}
-            />
-          )}
-          {canArchiveCustomers && (
-            <ListRow
-              onClick={() => setShowDelete(true)}
-              icon={Trash2}
-            >
-              <span className="text-sm" style={{ color: "var(--error)" }}>{t("customerProfile.deleteCustomer")}</span>
-            </ListRow>
-          )}
         </ListCard>
 
       </div>
@@ -835,10 +849,11 @@ function RecommendedSection({
   if (recs.length === 0) {
     return (
       <ListCard section={sectionTitle}>
+        {/* One line. The second line explained what would happen next, which is the app's job,
+            not the reader's (owner, 2026-11-17). */}
         <ListRow
           testId="recommendations-none-in-season"
           title={t("customerProfile.nothingInSeasonTitle")}
-          description={t("customerProfile.nothingInSeasonBody")}
         />
       </ListCard>
     );
