@@ -766,7 +766,7 @@ export const translations = {
     "moves.purchaseRef":              "Purchase #{number}",
     "moves.returnRef":                "Return",
     "moves.scopeNote":                "Recent movements in {branch}, newest first.",
-    "alerts.stockScopeNote":          "Packs in {branch} · open one to adjust it",
+    "alerts.stockScopeNote":          "Open a pack to adjust it",
     "expiry.expiringSoon":            "Expiring soon",
     "expiry.expired":                 "Already expired",
     "expiry.none":                    "No pack is near its date",
@@ -3933,7 +3933,7 @@ export const translations = {
 
     // The credit book's pending and overdue screens, shared wording by both sides, and one
     // supplier's own payable page. Same control, same words — the two sides read alike.
-    "creditList.scope":                   "{branch} · PKR",
+    "creditList.scope":                   "PKR",
     "creditList.days1to7":                "1-7 days",
     "creditList.days8to30":               "8-30 days",
     "creditList.recordPayment":           "Record payment",
@@ -4361,6 +4361,7 @@ export const translations = {
     "reminders.daysAfterDue": "{n} days after due date",
     // Products list (new keys only)
     "products.addButton": "Add Product",
+    "addProduct.addCategory": "Add category",
     "products.unitLiter": "liter",
     "products.actualInventoryHint": "Actual inventory in {unit}. Sellable units consume from this pool.",
     "addProduct.hintPiece": "1 = 1 piece",
@@ -5074,7 +5075,7 @@ export const translations = {
     "outstanding.bucket2":             "8–30 days",
     "outstanding.bucket3":             "31+ days",
     "outstanding.overdueAmount":       "Overdue amount",
-    "outstanding.scope":               "{count} accounts · {branch}",
+    "outstanding.scope":               "{count} accounts",
     "outstanding.dueOn":               "Due {date}",
     "outstanding.noDueDate":           "No due date",
     "outstanding.notYetDue":           "Not yet due",
@@ -6063,7 +6064,7 @@ export const translations = {
     "moves.purchaseRef":              "خریداری #{number}",
     "moves.returnRef":                "واپسی",
     "moves.scopeNote":                "{branch} میں حالیہ حرکتیں، نئی پہلے۔",
-    "alerts.stockScopeNote":          "{branch} کے پیک · درستی کے لیے کسی پر ٹیپ کریں",
+    "alerts.stockScopeNote":          "درستی کے لیے کسی پیک پر ٹیپ کریں",
     "expiry.expiringSoon":            "جلد اختتام",
     "expiry.expired":                 "اختتام ہو چکا",
     "expiry.none":                    "کوئی پیک اپنی تاریخ کے قریب نہیں",
@@ -9057,7 +9058,7 @@ export const translations = {
     "paymentBook.setForSupplier":     "{name} کے لیے یاد دہانی بنائیں",
     "paymentBook.wasDue":             "{date} کو واجب تھی",
 
-    "creditList.scope":                   "{branch} · PKR",
+    "creditList.scope":                   "PKR",
     "creditList.days1to7":                "1-7 دن",
     "creditList.days8to30":               "8-30 دن",
     "creditList.recordPayment":           "ادائیگی ریکارڈ کریں",
@@ -9465,6 +9466,7 @@ export const translations = {
     "reminders.daysAfterDue": "ادائیگی کی تاریخ سے {n} دن بعد",
     // Products list (new keys only)
     "products.addButton": "نیا سامان",
+    "addProduct.addCategory": "نئی کیٹیگری",
     "products.unitLiter": "لیٹر",
     "products.actualInventoryHint": "اصل اسٹاک {unit} میں۔ قابلِ فروخت یونٹس اسی ذخیرے سے کم ہوتے ہیں۔",
     "addProduct.hintPiece": "1 = 1 عدد",
@@ -10161,7 +10163,7 @@ export const translations = {
     "outstanding.bucket2":             "8–30 دن",
     "outstanding.bucket3":             "31+ دن",
     "outstanding.overdueAmount":       "تاخیر شدہ رقم",
-    "outstanding.scope":               "{count} کھاتے · {branch}",
+    "outstanding.scope":               "{count} کھاتے",
     "outstanding.dueOn":               "تاریخ {date}",
     "outstanding.noDueDate":           "کوئی تاریخ نہیں",
     "outstanding.notYetDue":           "ابھی تاریخ نہیں آئی",

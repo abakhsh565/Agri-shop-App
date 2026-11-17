@@ -58,7 +58,6 @@ export default function PaymentRemindersPage() {
   const customers = useCustomersStore((s) => s.customers);
   const customersReady = useCustomersStore((s) => s.ready);
   const sales = useSalesStore((s) => s.sales);
-  const branchName = useShopStore((s) => s.activeBranchName);
 
   const [reminders, setReminders] = useState<GeneratedReminder[] | null>(null);
   const [logs, setLogs] = useState<ReminderLog[] | null>(null);
@@ -138,7 +137,6 @@ export default function PaymentRemindersPage() {
           <div className="min-w-0">
             <p className="text-15 font-semibold truncate">{reminder.customerName}</p>
             <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-              {branchName ? `${branchName} · ` : ""}
               {formatCurrency(reminder.outstanding)} {t("reminders.outstanding")}
             </p>
           </div>

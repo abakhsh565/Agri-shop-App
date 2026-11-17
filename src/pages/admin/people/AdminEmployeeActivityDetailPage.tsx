@@ -59,7 +59,6 @@ export default function AdminEmployeeActivityDetailPage() {
   const employeesReady = useEmployeesStore((s) => s.ready);
   const loadEmployees = useEmployeesStore((s) => s.load);
   const branchId = useShopStore((s) => s.activeBranchId);
-  const branchName = useShopStore((s) => s.activeBranchName);
 
   const employee = employees.find((e) => e.id === employeeId) ?? null;
 
@@ -163,7 +162,6 @@ export default function AdminEmployeeActivityDetailPage() {
       <div className="px-4 pt-1 pb-3">
         <p className="text-12 font-semibold">
           {roleLine}
-          {branchName ? ` · ${branchName}` : ""}
         </p>
         <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
           {t("people.businessOnlyHint")}

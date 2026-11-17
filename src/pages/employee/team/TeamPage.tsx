@@ -55,9 +55,6 @@ export default function EmployeeTeamPage() {
           <div className="min-w-0">
             <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t("nav.team")}</p>
             <p className="text-20 font-bold mt-0.5 tabular-nums">{loading ? "—" : team.length}</p>
-            <p className="text-10 mt-0.5 truncate" style={{ color: "var(--text-tertiary)" }}>
-              {activeBranchName ?? t("audit.noBranch")}
-            </p>
           </div>
           <span
             className="size-10 rounded-full flex items-center justify-center shrink-0"

@@ -66,7 +66,6 @@ export default function ProductDetailPage() {
   // quantity in — so a pack reads the same here as it does on the shelf it sits on.
   const products = useProductsStore((s) => s.products);
   const productsReady = useProductsStore((s) => s.ready);
-  const activeBranchName = useShopStore((s) => s.activeBranchName);
   const product = products.find((p) => p.id === productId);
   // The shelf this product is filed on, when it has one (0259).
   const categories = useCatalogueStore((s) => s.categories);
@@ -298,9 +297,7 @@ export default function ProductDetailPage() {
           </div>
           <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
             <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-              {activeBranchName
-                ? t("products.stockInBranch", { branch: activeBranchName })
-                : t("products.stock")}
+              {t("products.stock")}
             </p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {t("common.itemsCount", { count: String(totalStock) })}

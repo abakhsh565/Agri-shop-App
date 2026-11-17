@@ -170,7 +170,6 @@ export default function OutstandingCreditPage() {
             {ready
               ? t("outstanding.scope", {
                   count: String(totals.accounts),
-                  branch: branchName ?? t("hub.inventory.selectedBranch"),
                 })
               : t("common.loading")}
           </p>
@@ -245,7 +244,6 @@ export default function OutstandingCreditPage() {
                     <div className="min-w-0">
                       <p className="text-15 font-semibold truncate">{c.name}</p>
                       <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                        {branchName ? `${branchName} · ` : ""}
                         {c.dueDate
                           ? t("outstanding.dueOn", { date: formatDate(c.dueDate) })
                           : t("outstanding.noDueDate")}

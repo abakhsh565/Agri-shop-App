@@ -78,7 +78,6 @@ export default function ProductsListPage() {
   // Half-finished products, read from this device and only for the branch being looked at —
   // a draft is not a product, so it cannot arrive from the products store with the rest.
   const activeShopId = useShopStore((s) => s.activeShopId);
-  const activeBranchName = useShopStore((s) => s.activeBranchName);
   const drafts = loadProductDrafts(activeShopId);
   const { search: addressQuery } = useLocation();
   const [search, setSearch] = useState(() => new URLSearchParams(addressQuery).get("q") ?? "");
@@ -199,12 +198,6 @@ export default function ProductsListPage() {
             </button>
           }
         />
-        {activeBranchName && (
-          <p className="text-10 text-center pb-2" style={{ color: "var(--text-secondary)" }}>
-            {t("products.stockInBranch", { branch: activeBranchName })}
-          </p>
-        )}
-
         <div className="px-4 pb-3">
           <SearchBar
             value={search}
@@ -212,6 +205,33 @@ export default function ProductsListPage() {
             onClear={() => setSearch("")}
             placeholder={t("products.search")}
           />
+        </div>
+
+        {/* Adding sits directly under the search, where the reader is already looking, instead of
+            floating over the list where it covered the last rows and moved with the scroll. Two
+            labelled controls, not one labelled and one glyph: a bare icon for creating a shelf
+            read as "filters". */}
+        <div className="flex gap-2 px-4 pb-3">
+          {hasPermission("products.create") && (
+            <button
+              onClick={() => navigate(`${base}/inventory/new`)}
+              data-testid="products-add-button"
+              className="flex-1 h-11 rounded-full flex items-center justify-center gap-2 text-13 font-bold active:scale-[0.98] transition-transform"
+              style={{ background: "#262626", color: "var(--brand)" }}
+            >
+              <Plus size={17} strokeWidth={2.5} /> {t("products.addButton")}
+            </button>
+          )}
+          {hasPermission("products.edit") && (
+            <button
+              onClick={() => navigate(`${base}/inventory/categories/new`)}
+              data-testid="products-add-category"
+              className="flex-1 h-11 rounded-full flex items-center justify-center gap-2 text-13 font-bold active:scale-[0.98] transition-transform"
+              style={{ background: "var(--surface-2)", color: "var(--brand-dark)", border: "1px solid var(--divider)" }}
+            >
+              <Plus size={17} strokeWidth={2.5} /> {t("addProduct.addCategory")}
+            </button>
+          )}
         </div>
 
         {/* One chip per way of looking at the shelf: the three categories it files products
@@ -325,25 +345,6 @@ export default function ProductsListPage() {
         )}
       </div>
 
-      {/* Floating Add Product — shown wherever the owner granted `products.create`, which the
-          Add Product screen's own guard checks too. It used to be tied to the admin shell, so
-          an employee who was granted the permission saw no way to use it at all. */}
-      {hasPermission("products.create") && (
-        <div
-          className="fixed start-0 end-0 max-w-[480px] mx-auto pointer-events-none z-40"
-          style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
-        >
-          <div className="flex px-4 justify-end">
-            <button
-              onClick={() => navigate(`${base}/inventory/new`)}
-              className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-14 font-bold active:scale-95 transition-transform"
-              style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
-            >
-              <Plus size={20} strokeWidth={2.5} /> {t("products.addButton")}
-            </button>
-          </div>
-        </div>
-      )}
     </PullToRefresh>
   );
 }

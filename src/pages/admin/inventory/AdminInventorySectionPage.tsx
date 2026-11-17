@@ -61,7 +61,6 @@ export default function AdminInventorySectionPage() {
   const returnTo = useReturnTo(`${base}/more`);
   const products = useProductsStore((s) => s.products);
   const ready = useProductsStore((s) => s.ready);
-  const branchName = useShopStore((s) => s.activeBranchName);
   const branches = useShopStore((s) => s.branches);
   const activeBranchId = useShopStore((s) => s.activeBranchId);
   const branchesLoaded = useShopStore((s) => s.branchesLoaded);
@@ -96,7 +95,7 @@ export default function AdminInventorySectionPage() {
 
   /** The figures this screen is showing, as rows — the same numbers the owner can see. */
   const figureRows = [
-    { label: t("hub.inventory.totalValue"), value: valueLabel, note: branchName ?? "" },
+    { label: t("hub.inventory.totalValue"), value: valueLabel, note: "" },
     { label: t("hub.inventory.listedProducts"), value: ready ? String(counts.products) : "—", note: "" },
     { label: t("hub.inventory.packsCount"), value: ready ? String(counts.packs) : "—", note: t("hub.inventory.packsCaption") },
     { label: t("hub.inventory.lowStockCount"), value: ready ? String(counts.low) : "—", note: t("hub.inventory.lowStockCaption") },
@@ -264,11 +263,6 @@ export default function AdminInventorySectionPage() {
           </p>
         </div>
       </div>
-      {branchName && (
-        <p className="px-4 pt-2 text-10" style={{ color: "var(--text-tertiary)" }}>
-          {t("products.stockInBranch", { branch: branchName })}
-        </p>
-      )}
 
       <div className="px-4 pt-4">
         <div

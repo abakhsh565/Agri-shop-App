@@ -32,7 +32,6 @@ export default function ExpiryAlertsPage() {
   const navigate = useNavigate();
   const products = useProductsStore((s) => s.products);
   const ready = useProductsStore((s) => s.ready);
-  const branch = useShopStore((s) => s.activeBranchName);
 
   const items = expiryItems(products);
   const expired = items.filter((item) => item.expired);
@@ -101,7 +100,7 @@ export default function ExpiryAlertsPage() {
                 icon={item.expired ? CalendarX : CalendarClock}
                 title={item.productName}
                 line={item.variantName}
-                note={`${t("expiry.expiresOn", { date: formatDate(item.expiryDate) })}${branch ? ` · ${branch}` : ""}`}
+                note={t("expiry.expiresOn", { date: formatDate(item.expiryDate) })}
                 statusLabel={item.expired ? t("expiry.expired") : t("expiry.expiringSoon")}
                 statusColor={item.expired ? "var(--error)" : "var(--warning)"}
                 onClick={() => navigate(`${base}/products/${item.productId}`)}

@@ -9,7 +9,8 @@ import InlineSelect from "@/components/ui/InlineSelect";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import LogoTile from "@/components/ui/LogoTile";
 import Checkbox from "@/components/ui/Checkbox";
-import { backToSelf, dependencyHint, readReturnTo } from "@/lib/dependencyGraph";
+import { backToSelf, dependencyHint, readReturnTo, withReturn } from "@/lib/dependencyGraph";
+import { hasPermission } from "@/lib/tenantContext";
 import { useShellBase } from "@/lib/useShellBase";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -751,10 +752,22 @@ export default function AddProductPage() {
   const labelCls = "text-11 font-medium mb-1.5";
   const cellLabel = labelCls;
   const herePath = isEdit ? `${base}/inventory/${productId}/edit` : `${base}/inventory/new`;
+  const selfReturnTo = backToSelf(herePath, returnTo, `${base}/products`);
   const supplierHint = dependencyHint("supplier", t, {
     base,
-    returnTo: backToSelf(herePath, returnTo, `${base}/products`),
+    returnTo: selfReturnTo,
   });
+  /**
+   * Creating the next shelf from inside the form, not only when none exists. The picker offered
+   * this as an empty-state escape; a shop that already had shelves was expected to leave the
+   * half-filled product, go to Catalogue, add one there and come back to it.
+   */
+  const categoryCreateAction = hasPermission("products.edit")
+    ? {
+        label: t("addProduct.addCategory"),
+        onClick: () => navigate(withReturn(`${base}/inventory/categories/new`, selfReturnTo)),
+      }
+    : undefined;
 
   /**
    * The shelves and units, as the pickers offer them.
@@ -941,7 +954,9 @@ export default function AddProductPage() {
                      be a dead end: the user was told nothing was available and had to leave,
                      create one, and come back to a cleared form. */
                   emptyLabel={supplierHint.title}
-                  emptyAction={
+                  /* Always shown, under the search: whether the shop has one supplier or a
+                     hundred, the way to add the next one sits in the same place. */
+                  action={
                     supplierHint.action
                       ? { label: supplierHint.action.label, onClick: () => navigate(supplierHint.action!.to) }
                       : undefined
@@ -1012,6 +1027,7 @@ export default function AddProductPage() {
                 options={categoryOptions}
                 label={t("inline.category")}
                 testId="product-category"
+                action={categoryCreateAction}
                 onChange={(id) => {
                   classificationTouched.current = true;
                   setCategoryId(id);
