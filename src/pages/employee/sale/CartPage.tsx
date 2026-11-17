@@ -10,7 +10,9 @@ import { useCartStore } from "@/stores/cartStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, getCreditHealth, getCreditHealthColor } from "@/lib/formatters";
-import { Plus, AlertTriangle, Clock } from "lucide-react";
+import { Plus, AlertTriangle, Clock, X, Percent } from "lucide-react";
+import Photo from "@/components/ui/Photo";
+import Sheet from "@/components/ui/Sheet";
 import { useUIStore } from "@/stores/uiStore";
 import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
@@ -26,7 +28,19 @@ export default function CartPage() {
   const navigate = useNavigate();
   const base = useShellBase();
   const t = useT();
-  const { customer, items, updateQty, removeItem, subtotal, clearCart, setCustomer } = useCartStore();
+  const {
+    customer,
+    items,
+    updateQty,
+    removeItem,
+    subtotal,
+    total: cartTotal,
+    discount,
+    setDiscount,
+    setLineDiscount,
+    clearCart,
+    setCustomer,
+  } = useCartStore();
   const { addToast } = useUIStore();
   const createSale = useSalesStore((s) => s.createSale);
   const setCreditLimit = useCustomersStore((s) => s.setCreditLimit);
@@ -85,7 +99,32 @@ export default function CartPage() {
   // While redirecting, render nothing
   if (items.length === 0 && !completingRef.current) return null;
 
-  const total = subtotal();
+  const total = cartTotal();
+  /**
+   * The discount sheet's own state. One sheet for both scopes because the question is the same —
+   * how much off, and off what — and because a second screen for "discount this line" would leave
+   * the review screen without the number it is about to charge.
+   */
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [discountScope, setDiscountScope] = useState<string>("sale");
+  const [discountMode, setDiscountMode] = useState<"percent" | "amount">("percent");
+  const [discountValue, setDiscountValue] = useState("");
+
+  const discountLine = items.find((i) => i.variantId === discountScope) ?? null;
+  /** What the chosen scope is worth before any discount — a percent is taken against this. */
+  const discountBase = discountScope === "sale"
+    ? subtotal()
+    : discountLine
+      ? discountLine.qty * discountLine.unitPrice
+      : 0;
+  const typedDiscount = Number(discountValue) || 0;
+  const discountAmount = Math.max(
+    0,
+    Math.min(
+      discountBase,
+      discountMode === "percent" ? (discountBase * typedDiscount) / 100 : typedDiscount,
+    ),
+  );
   /**
    * A walk-in sale is paid at the counter — there is no account to owe the difference and nobody
    * to remind, so credit is not offered at all until a customer is added. */
@@ -180,10 +219,12 @@ export default function CartPage() {
           unitSize: it.unitSize,
           baseUnit: it.baseUnit,
           lineTotal: it.lineTotal,
+          discount: it.discount ?? 0,
         })),
-        subtotal: total,
+        subtotal: total + discount,
         taxAmount: 0,
         totalAmount: total,
+        discount,
         amountPaid,
         outstandingBalance,
         paymentMethod,
@@ -259,11 +300,43 @@ export default function CartPage() {
       ) : (
         <>
           <div className="mx-4 mt-3 bg-muted rounded-[var(--radius-tile)] p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-bold text-foreground">{customer.name}</p>
-              <span className="text-xs" style={{ color: getCreditHealthColor(creditHealth) }}>
-                {t("sale.creditHealth")}: {creditHealth === "good" ? t("sale.good") : creditHealth === "warning" ? t("sale.warning") : t("sale.overLimit")}
-              </span>
+            {/* The person this sale belongs to, with the two things that can change it: swap and
+                remove. Removing a customer does not cancel the sale — it makes it a walk-in,
+                which is what a customer added by mistake actually is (owner, 2026-11-17). */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="size-10 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}>
+                <Photo
+                  src={customer.imageUrl}
+                  alt={customer.name}
+                  className="w-full h-full object-cover"
+                  fallback={customer.name.charAt(0).toUpperCase()}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-foreground truncate">{customer.name}</p>
+                <p className="text-xs" style={{ color: getCreditHealthColor(creditHealth) }}>
+                  {t("sale.creditHealth")}: {creditHealth === "good" ? t("sale.good") : creditHealth === "warning" ? t("sale.warning") : t("sale.overLimit")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(`${base}/sale`, { state: { fromCart: true } })}
+                className="h-8 px-3 rounded-full text-xs font-semibold shrink-0"
+                style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
+                data-testid="sale-change-customer"
+              >
+                {t("common.change")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomer(null)}
+                aria-label={t("sale.removeCustomer")}
+                className="size-8 rounded-full flex items-center justify-center shrink-0"
+                style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+                data-testid="sale-remove-customer"
+              >
+                <X size={15} />
+              </button>
             </div>
             <div className="flex gap-8">
               <div>
@@ -331,6 +404,7 @@ export default function CartPage() {
                     <p className="text-sm font-bold text-foreground">{item.productName}</p>
                     <p className="text-xs text-caption">
                       {item.variantName} · {formatCurrency(item.unitPrice)} × {item.qty}
+                      {item.discount ? ` · −${formatCurrency(item.discount)}` : ""}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -486,16 +560,47 @@ export default function CartPage() {
         </div>
       )}
 
+      {/* Discount — the one place money comes OFF the sale, so it sits directly above the
+          figures it changes rather than inside a menu (owner, 2026-11-17). */}
+      <div className="px-4 pt-4">
+        <button
+          type="button"
+          onClick={() => {
+            setDiscountScope("sale");
+            setDiscountMode("percent");
+            setDiscountValue("");
+            setDiscountOpen(true);
+          }}
+          className="w-full h-12 px-4 rounded-[var(--radius-tile)] flex items-center justify-between ds-pressable"
+          style={{ background: "var(--tone-card)", border: "1px solid var(--divider)" }}
+          data-testid="sale-discount"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            <Percent size={15} />
+            {t("sale.discount")}
+          </span>
+          <span className="text-sm font-semibold" style={{ color: discount > 0 ? "var(--error)" : "var(--brand-dark)" }}>
+            {discount > 0 ? `−${formatCurrency(discount)}` : t("sale.addDiscount")}
+          </span>
+        </button>
+      </div>
+
       {/* Summary box */}
       {items.length > 0 && (
         <div
-          className="mx-4 mt-5 rounded-[var(--radius-tile)] p-4"
+          className="mx-4 mt-3 rounded-[var(--radius-tile)] p-4"
           style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
         >
           <div className="flex justify-between py-1">
             <span className="text-sm text-caption">{t("sale.subtotal")}</span>
-            <span className="text-sm font-medium text-foreground">{formatCurrency(total)}</span>
+            <span className="text-sm font-medium text-foreground">{formatCurrency(subtotal())}</span>
           </div>
+          {discount > 0 && (
+            <div className="flex justify-between py-1">
+              <span className="text-sm text-caption">{t("sale.discount")}</span>
+              <span className="text-sm font-medium" style={{ color: "var(--error)" }}>−{formatCurrency(discount)}</span>
+            </div>
+          )}
           <div className="flex justify-between py-1">
             <span className="text-sm text-caption">{t("sale.paidLabel")}</span>
             <span className="text-sm font-medium text-foreground">{formatCurrency(amountPaid)}</span>
@@ -540,6 +645,123 @@ export default function CartPage() {
       {/* Setting a limit is one small decision, so it gets its own sheet instead of a field
           wedged into the payment column — and the sheet is reachable whether or not this sale
           needs credit. Without the lending permission the same sheet files a request instead. */}
+      {/* Taking money off: one sheet, two scopes, two ways of typing the same amount. */}
+      <Sheet
+        open={discountOpen}
+        title={t("sale.discount")}
+        onClose={() => setDiscountOpen(false)}
+      >
+        <div className="px-4 flex flex-col gap-4">
+          <div>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
+              {t("sale.discountScope")}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setDiscountScope("sale")}
+                className="h-11 px-4 rounded-[var(--radius-tile)] text-sm font-medium text-start flex items-center justify-between"
+                style={{
+                  border: `1px solid ${discountScope === "sale" ? "var(--brand)" : "var(--divider)"}`,
+                  color: "var(--text-primary)",
+                }}
+              >
+                <span>{t("sale.wholeSale")}</span>
+                <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{formatCurrency(subtotal())}</span>
+              </button>
+              {items.map((it) => (
+                <button
+                  key={it.variantId}
+                  type="button"
+                  onClick={() => setDiscountScope(it.variantId)}
+                  className="h-11 px-4 rounded-[var(--radius-tile)] text-sm font-medium text-start flex items-center justify-between gap-2"
+                  style={{
+                    border: `1px solid ${discountScope === it.variantId ? "var(--brand)" : "var(--divider)"}`,
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  <span className="truncate">{it.productName} · {it.variantName}</span>
+                  <span className="text-xs shrink-0" style={{ color: "var(--text-secondary)" }}>
+                    {formatCurrency(it.qty * it.unitPrice)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
+              {t("sale.discountHow")}
+            </p>
+            <div className="flex gap-2">
+              {(["percent", "amount"] as const).map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => setDiscountMode(kind)}
+                  aria-pressed={discountMode === kind}
+                  className="flex-1 h-11 rounded-full text-sm font-medium ds-pressable"
+                  style={{
+                    border: `1px solid ${discountMode === kind ? "var(--brand-dark)" : "var(--border)"}`,
+                    color: discountMode === kind ? "var(--brand-dark)" : "var(--text-primary)",
+                  }}
+                >
+                  {kind === "percent" ? t("sale.percentOff") : t("sale.amountOff")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={discountValue}
+              onChange={(e) => setDiscountValue(e.target.value)}
+              placeholder={discountMode === "percent" ? "0" : "0.00"}
+              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm text-foreground outline-none"
+              style={{ border: "1.5px solid var(--brand)" }}
+              data-testid="sale-discount-value"
+            />
+            <div className="flex justify-between mt-2 px-1">
+              <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("sale.discountOff")}</span>
+              <span className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
+                {formatCurrency(discountAmount)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pb-2">
+            {(discountScope === "sale" ? discount : discountLine?.discount ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (discountScope === "sale") setDiscount(0);
+                  else setLineDiscount(discountScope, 0);
+                  setDiscountOpen(false);
+                }}
+                className="h-12 px-5 rounded-[var(--radius-tile)] text-sm font-semibold"
+                style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+              >
+                {t("sale.removeDiscount")}
+              </button>
+            )}
+            <div className="flex-1">
+              <Button
+                fullWidth
+                onClick={() => {
+                  if (discountScope === "sale") setDiscount(discountAmount);
+                  else setLineDiscount(discountScope, discountAmount);
+                  setDiscountOpen(false);
+                }}
+              >
+                {t("sale.applyDiscount")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Sheet>
+
       <CreditLimitSheet
         open={limitMode !== null}
         currentLimit={customer?.creditLimit ?? 0}

@@ -8,6 +8,12 @@ interface QuantityCounterProps {
   onChange: (qty: number) => void;
   max?: number;
   step?: number;
+  /**
+   * The lowest number the counter may hold. Defaults to one step, because a cart line that reaches
+   * zero is a removed line rather than a line with nothing on it. The product page stages several
+   * packs at once and needs the opposite: a variant nobody has picked yet is a real, visible 0.
+   */
+  min?: number;
   deleteOnOne?: boolean;
   onDelete?: () => void;
   size?: "sm" | "md";
@@ -37,13 +43,14 @@ export default function QuantityCounter({
   onChange,
   max,
   step = 1,
+  min,
   deleteOnOne = false,
   onDelete,
   size = "md",
   boxed = false,
 }: QuantityCounterProps) {
   const isSmall = size === "sm";
-  const minQty = step;
+  const minQty = min ?? step;
   const [inputValue, setInputValue] = useState("");
   const [isFocused, setIsFocused] = useState(false);
 
@@ -73,7 +80,7 @@ export default function QuantityCounter({
 
   function increment() {
     if (!max || qty < max) {
-      const next = Math.round((qty + step) * 1000) / 1000;
+      const next = Math.round((Math.max(qty, minQty) + step) * 1000) / 1000;
       onChange(max ? Math.min(next, max) : next);
     }
   }
@@ -101,10 +108,11 @@ export default function QuantityCounter({
       <button
         type="button"
         onClick={decrement}
+        disabled={qty <= minQty && !deleteOnOne}
         // Icon-only (a minus, or a bin at the minimum): with no name a screen reader
         // announces an unlabelled button.
         aria-label={removing ? tNow("common.remove") : tNow("common.decrease")}
-        className={`${btn} rounded-full flex items-center justify-center shrink-0 ds-pressable transition-colors`}
+        className={`${btn} rounded-full flex items-center justify-center shrink-0 ds-pressable transition-colors disabled:opacity-30`}
         style={
           removing
             ? { background: "var(--error)", color: "#ffffff" }

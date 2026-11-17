@@ -481,6 +481,16 @@ export default function SaleDetailView() {
                     is the ledger line a shopkeeper says out loud — "4,750 of goods, 4,050
                     still on him, he has given 700, 4,750 in all". */}
                 <AmountRow label={t("sale.subtotal")} value={formatCurrency(sale.subtotal)} />
+                {/* The discount that was given at the counter is part of what this bill was, so
+                    it is a line in the arithmetic rather than a smaller subtotal that nobody
+                    can explain later (owner, 2026-11-17). */}
+                {(sale.discount ?? 0) > 0 && (
+                  <AmountRow
+                    label={t("sale.discount")}
+                    value={`-${formatCurrency(sale.discount ?? 0)}`}
+                    tone="var(--error)"
+                  />
+                )}
                 {sale.taxAmount > 0 && (
                   <AmountRow label={t("saleDetail.tax")} value={formatCurrency(sale.taxAmount)} />
                 )}

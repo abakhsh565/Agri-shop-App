@@ -82,6 +82,7 @@ const SupplierPaymentsPage = React.lazy(() => import("@/pages/admin/purchases/Su
 const SupplierPaymentDetailPage = React.lazy(() => import("@/pages/admin/purchases/SupplierPaymentDetailPage"));
 const PurchasesPayablesPage = React.lazy(() => import("@/pages/admin/purchases/PurchasesPayablesPage"));
 import RecordSupplierPaymentPage from "@/pages/admin/payments/RecordSupplierPaymentPage";
+import SelectSupplierPage from "@/pages/admin/purchases/SelectSupplierPage";
 const AdminReportsPage = React.lazy(() => import("@/pages/admin/reports/AdminReportsPage"));
 // The Reports *hub* and its Profit screen are eager: both are entered from Settings, whose
 // section pages are already in the shell's first bundle, and one is the parent of the other.
@@ -130,6 +131,8 @@ import SelectCustomerPage from "@/pages/employee/sale/SelectCustomerPage";
 import BrowseProductsPage from "@/pages/employee/sale/BrowseProductsPage";
 import VariantSelectorPage from "@/pages/employee/sale/VariantSelectorPage";
 import CartPage from "@/pages/employee/sale/CartPage";
+// Every unfinished sale, for the cart icon: a counter serving three people has three baskets.
+import CartDraftsPage from "@/pages/employee/sale/CartDraftsPage";
 import InvoiceListPage from "@/pages/admin/invoices/InvoiceListPage";
 import InvoiceFormPage from "@/pages/admin/invoices/InvoiceFormPage";
 import InvoiceDetailPage from "@/pages/admin/invoices/InvoiceDetailPage";
@@ -149,6 +152,8 @@ import ReturnSelectItemsPage from "@/pages/employee/returns/ReturnSelectItemsPag
 import ReturnConfirmPage from "@/pages/employee/returns/ReturnConfirmPage";
 import ReturnSuccessPage from "@/pages/employee/returns/ReturnSuccessPage";
 import SearchPage from "@/pages/employee/search/SearchPage";
+// The search screen's filters are a screen, not a strip that would have to hold six dimensions.
+import SearchFiltersPage from "@/pages/employee/search/SearchFiltersPage";
 import SettingsPage from "@/pages/employee/settings/SettingsPage";
 import MyReportsPage from "@/pages/employee/reports/MyReportsPage";
 import ActivityLogPage from "@/pages/employee/activity/ActivityLogPage";
@@ -232,6 +237,7 @@ export const router = createBrowserRouter([
       { path: "guide/:kind/:id", element: <GuideDetailPage /> },
       { path: "guide/step/:workflowId/:step", element: <GuideDetailPage /> },
       { path: "search", element: <SearchPage /> },
+      { path: "search/filters", element: <SearchFiltersPage /> },
 
       // ── Customers (requires customers.view) ──────────────────────────────
       { element: <PermissionGuard requires="customers.view" />,
@@ -297,6 +303,7 @@ export const router = createBrowserRouter([
           { path: "sale/products", element: <BrowseProductsPage /> },
           { path: "sale/products/:productId", element: <VariantSelectorPage /> },
           { path: "sale/cart",  element: <CartPage /> },
+          { path: "sale/carts", element: <CartDraftsPage /> },
           { path: "sale/success", element: <SaleSuccessPage /> },
           { path: "sales",      element: <AdminSalesListPage /> },
           { path: "sales/:saleId", element: <SaleDetailView /> },
@@ -316,6 +323,8 @@ export const router = createBrowserRouter([
       { element: <PermissionGuard requires="purchases.view" />,
         children: [
           { path: "purchases",  element: <AdminPurchasesPage /> },
+          // The supplier a delivery came from is a screen of its own, not a sheet over the form.
+          { path: "purchases/party", element: <SelectSupplierPage /> },
           { path: "purchases/new", element: <RecordPurchasePage /> },
           { path: "purchases/payments", element: <SupplierPaymentsPage /> },
           { path: "purchases/payments/:paymentId", element: <SupplierPaymentDetailPage /> },
@@ -556,6 +565,7 @@ export const router = createBrowserRouter([
               { path: "sale/products", element: <BrowseProductsPage /> },
               { path: "sale/products/:productId", element: <VariantSelectorPage /> },
               { path: "sale/cart", element: <CartPage /> },
+              { path: "sale/carts", element: <CartDraftsPage /> },
               { path: "sale/success", element: <SaleSuccessPage /> },
             ] },
           { path: "sales", element: <AdminSalesListPage /> },
@@ -595,7 +605,10 @@ export const router = createBrowserRouter([
           { path: "purchases", element: <AdminPurchasesPage /> },
           { path: "purchases/:purchaseId", element: <PurchaseDetailPage /> },
           { element: <PermissionGuard requires="purchases.create" fallback="/co-owner/purchases" />,
-            children: [{ path: "purchases/new", element: <RecordPurchasePage /> }] },
+            children: [
+              { path: "purchases/party", element: <SelectSupplierPage /> },
+              { path: "purchases/new", element: <RecordPurchasePage /> },
+            ] },
         ] },
       { element: <PermissionGuard requires="companies.view" fallback="/co-owner/dashboard" />,
         children: [
@@ -619,6 +632,7 @@ export const router = createBrowserRouter([
           { path: "settings/hub/people/activity/:employeeId", element: <AdminEmployeeActivityDetailPage /> },
         ] },
       { path: "search", element: <SearchPage /> },
+      { path: "search/filters", element: <SearchFiltersPage /> },
     ],
   }],
   },
@@ -636,6 +650,7 @@ export const router = createBrowserRouter([
       { path: "sale/products", element: <BrowseProductsPage /> },
       { path: "sale/products/:productId", element: <VariantSelectorPage /> },
       { path: "sale/cart", element: <CartPage /> },
+      { path: "sale/carts", element: <CartDraftsPage /> },
 
       { path: "sale/success", element: <SaleSuccessPage /> },
       { path: "sales", element: <SalesListPage /> },
@@ -671,6 +686,7 @@ export const router = createBrowserRouter([
         ] },
       { path: "finance", element: <MoneyStatementPage /> },
       { path: "purchases", element: <AdminPurchasesPage /> },
+      { path: "purchases/party", element: <SelectSupplierPage /> },
       { path: "purchases/new", element: <RecordPurchasePage /> },
       { path: "purchases/payments", element: <SupplierPaymentsPage /> },
       { path: "purchases/payments/:paymentId", element: <SupplierPaymentDetailPage /> },
@@ -681,6 +697,7 @@ export const router = createBrowserRouter([
       { path: "stock", element: <StockManagementPage /> },
       { path: "team", element: <EmployeeTeamPage /> },
       { path: "search", element: <SearchPage /> },
+      { path: "search/filters", element: <SearchFiltersPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "reports", element: <MyReportsPage /> },
       { path: "activity", element: <ActivityLogPage /> },

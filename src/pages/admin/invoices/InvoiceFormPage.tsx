@@ -318,13 +318,17 @@ export default function InvoiceFormPage() {
   }
 
   const partyOptions = useMemo(() => {
+    // Every row carries the record's own picture, whatever kind it is: a customer's photo, a
+    // supplier's logo, a member of staff's photo. The picker reads them from the same stores the
+    // rest of the app does, so a picture changed anywhere is the picture shown here (owner,
+    // 2026-11-17). Rows with none fall back to initials, as everywhere else.
     if (partyType === "customer") {
       return customers
         .filter((c) => !c.isArchived)
-        .map((c) => ({ value: c.id, label: c.name, meta: c.phone }));
+        .map((c) => ({ value: c.id, label: c.name, meta: c.phone, imageUrl: c.imageUrl }));
     }
     if (partyType === "supplier") {
-      return companies.map((c) => ({ value: c.id, label: c.name, meta: c.phone }));
+      return companies.map((c) => ({ value: c.id, label: c.name, meta: c.phone, imageUrl: c.logoUrl }));
     }
     if (partyType === "employee") {
       return employees.map((e) => ({ value: e.id, label: e.name, meta: e.phone }));

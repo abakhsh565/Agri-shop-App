@@ -27,6 +27,7 @@ import { branchKind } from "@/lib/branchKind";
 import { AlertTriangle, CalendarDays, ChevronRight, ChevronDown, PackageX, ShoppingCart, Search, Bell, Truck, Wallet, CheckCircle2, HandCoins, PackagePlus, Store } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import RollingNumber from "@/components/ui/RollingNumber";
+import { useCartStore } from "@/stores/cartStore";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import QuickAlertsPanel, { type QuickAlertItem } from "@/components/dashboard/QuickAlertsPanel";
@@ -76,6 +77,18 @@ export default function AdminDashboardPage() {
   const t = useT();
   const isUrdu = language === "ur";
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  // The till's open sales, for the cart icon: one sale opens straight onto it, several open onto
+  // the list that says whose they are (owner, 2026-11-17).
+  const cartDrafts = useCartStore((s) => s.drafts);
+  const switchDraft = useCartStore((s) => s.switchDraft);
+  const filledDrafts = cartDrafts.filter((d) => d.items.length > 0);
+  const openCart = () => {
+    if (filledDrafts.length === 0) navigate("/admin/sale/products");
+    else if (filledDrafts.length === 1) {
+      switchDraft(filledDrafts[0].id);
+      navigate("/admin/sale/cart");
+    } else navigate("/admin/sale/carts");
+  };
   const [showNotifs, setShowNotifs] = useState(false);
   // Record Payment asks whether the money is going to a customer or a supplier before it
   // opens a screen; both sides are reachable from Home now, not just the customer one.
@@ -576,16 +589,28 @@ export default function AdminDashboardPage() {
           </span>
         </button>
 
-        {/* gap-2.5 (10px), up from 6: the two round buttons are 36px each and were sitting
-            almost edge to edge, which read as one wide pill rather than two controls. */}
+        {/* Search moved out of this corner (owner, 2026-11-17): a 36px glyph was the smallest
+            target on the screen for the thing an owner reaches for most. It is now a full-width
+            field above the period pills, and the corner keeps only the bell. */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {/* The till's basket, beside the bell: what is on the counter right now is as much a
+              thing to check as what happened while you were away. */}
           <button
-            onClick={() => navigate("/admin/search")}
-            aria-label={t("common.search")}
-            className="flex items-center justify-center rounded-full size-9 transition-colors active:opacity-60"
+            onClick={openCart}
+            aria-label={t("sale.openSales")}
+            data-testid="home-cart"
+            className="flex items-center justify-center rounded-full size-9 relative transition-colors active:opacity-60"
             style={{ background: "var(--surface-2)" }}
           >
-            <Search size={16} style={{ color: "var(--text-primary)" }} />
+            <ShoppingCart size={16} style={{ color: "var(--text-primary)" }} />
+            {filledDrafts.length > 0 && (
+              <span
+                className="absolute top-0.5 end-0.5 min-w-[14px] h-[14px] px-[3px] rounded-full flex items-center justify-center text-8 font-bold"
+                style={{ background: "var(--brand)", color: "#0a0a0a" }}
+              >
+                {filledDrafts.length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setShowNotifs((v) => !v)}
@@ -725,8 +750,28 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
+      {/* ── Search — full width, above the period pills ──
+          The field is the door to the search screen rather than a keyboard on the home screen:
+          a shopkeeper who wants to type is going to type a customer, a bill number or a product,
+          and that screen already answers all three with its own filters. */}
+      <div className="px-4 pt-3">
+        <button
+          type="button"
+          onClick={() => navigate("/admin/search")}
+          aria-label={t("common.search")}
+          data-testid="home-search"
+          className="w-full h-11 rounded-full flex items-center gap-2.5 px-4 text-start ds-pressable"
+          style={{ background: "var(--tone-card)", border: "1px solid var(--divider)" }}
+        >
+          <Search size={16} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+          <span className="text-13 truncate" style={{ color: "var(--text-secondary)" }}>
+            {t("search.homeHint")}
+          </span>
+        </button>
+      </div>
+
       {/* ── Time-period filter — controls all figures below ── */}
-      <div className="flex gap-2 px-4 pt-1 pb-2 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
+      <div className="flex gap-2 px-4 pt-2.5 pb-2 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
         {DATE_PILLS.map(({ key, label }) => (
           <button
             key={key}
@@ -778,14 +823,7 @@ export default function AdminDashboardPage() {
                 {t("dashboard.netProfit")}
               </p>
               <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }} data-testid="home-net-profit">
-                {netProfit == null ? (
-                  "—"
-                ) : (
-                  <RollingNumber
-                    value={netProfit}
-                    format={(n) => (n < 0 ? `−${formatRs(Math.abs(n))}` : formatRs(n))}
-                  />
-                )}
+                {netProfit == null ? "—" : netProfit < 0 ? `−${formatRs(Math.abs(netProfit))}` : formatRs(netProfit)}
               </p>
             </div>
             <div className="w-px self-stretch mx-3" style={{ background: "var(--divider)" }} />
@@ -795,7 +833,7 @@ export default function AdminDashboardPage() {
               </p>
               <div className="flex items-center gap-2">
                 <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>
-                  <RollingNumber value={money.udhaar} format={formatRs} />
+                  {formatRs(money.udhaar)}
                 </p>
                 <p className="text-11 font-semibold" style={{ color: "var(--text-secondary)" }}>
                   {formatRs(overdueAmount)} {t("inline.overdue")}
