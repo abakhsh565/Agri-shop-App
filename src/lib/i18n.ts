@@ -4574,6 +4574,9 @@ export const translations = {
     "observation_bot": "👁️ John — Observer",
     "overview":        "Overview",
     "actions":         "Actions",
+    // The Action Center's merged first tab: decisions, chases and dates for today.
+    "actionCenter.today":    "Today",
+    "actionCenter.followUp": "Follow up",
     "errors":          "Errors",
     "feedback":        "Feedback",
     "export":          "Export",
@@ -9673,6 +9676,8 @@ export const translations = {
     "observation_bot": "👁️ جان — مشاہدہ کار",
     "overview":        "جائزہ",
     "actions":         "کارروائیاں",
+    "actionCenter.today":    "آج",
+    "actionCenter.followUp": "فالو اپ",
     "errors":          "خرابیاں",
     "feedback":        "رائے",
     "export":          "ایکسپورٹ",

@@ -201,12 +201,18 @@ function ReminderCard({
   onNavigate,
   isSent,
   statusKey,
+  note,
 }: {
   reminder: GeneratedReminder;
   onSend: (r: GeneratedReminder) => void;
   onNavigate: (customerId: string) => void;
   isSent: boolean;
   statusKey?: string;
+  /**
+   * The fact a merged action row carried before this tab folded it in (e.g. "86% of the credit
+   * limit used"). Without it, removing the duplicate row would also remove the reason to act.
+   */
+  note?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const t = useT();
@@ -251,6 +257,9 @@ function ReminderCard({
           </span>
         )}
         <span className="text-11" style={{ color: "var(--text-secondary)" }}>{reminder.triggerDetail}</span>
+        {note && (
+          <span className="text-11 w-full" style={{ color: "var(--text-secondary)" }}>{note}</span>
+        )}
       </div>
 
       {expanded && (
@@ -310,6 +319,30 @@ function EmptyState({ icon, title, subtitle }: { icon: React.ReactNode; title: s
   );
 }
 
+/**
+ * The Action Center used to split one job across two tabs — "Actions" (live signals, reviewed) and
+ * "Follow-ups" (reminder occurrences, sent) — so a customer with a late balance could sit on both
+ * tabs with the same money fact and two different buttons. They are one tab now, "Today".
+ * Sub-tab keys from the old pair are mapped, because the dashboard, the harvest alert and saved
+ * deep links still name them.
+ */
+type MainTab = "today" | "groups";
+
+const LEGACY_SUBTAB: Record<string, string> = {
+  ready: "followup",
+  warning: "followup",
+  info: "followup",
+  recently_sent: "sent",
+  upcoming: "upcoming",
+  critical: "critical",
+};
+
+function resolveTab(tab: string | undefined, sub: string | undefined): { main: MainTab; sub: string } {
+  if (tab === "groups") return { main: "groups", sub: "" };
+  const mapped = sub ? LEGACY_SUBTAB[sub] : undefined;
+  return { main: "today", sub: mapped ?? (tab === "followups" ? "followup" : "critical") };
+}
+
 /* ── Main page ── */
 export default function RemindersOverviewPage() {
   const navigate = useNavigate();
@@ -360,19 +393,14 @@ export default function RemindersOverviewPage() {
   /* ── Tab State ── */
   const stateTab = (location.state as any)?.tab as string | undefined;
   const stateSubTab = (location.state as any)?.subTab as string | undefined;
-  const [mainTab, setMainTab] = useState<"action" | "followups" | "groups">(
-    stateTab === "followups" ? "followups" : stateTab === "groups" ? "groups" : "action"
-  );
-  const [subTab, setSubTab] = useState<string>(
-    stateSubTab || (stateTab === "followups" ? "ready" : stateTab === "groups" ? "" : "critical")
-  );
+  const initialTab = resolveTab(stateTab, stateSubTab);
+  const [mainTab, setMainTab] = useState<MainTab>(initialTab.main);
+  const [subTab, setSubTab] = useState<string>(initialTab.sub);
 
   useEffect(() => {
-    const t = (location.state as any)?.tab as string | undefined;
-    const s = (location.state as any)?.subTab as string | undefined;
-    if (t === "followups") { setMainTab("followups"); if (s) setSubTab(s); }
-    else if (t === "groups") { setMainTab("groups"); setSubTab(""); }
-    else if (t === "action") { setMainTab("action"); if (s) setSubTab(s); else setSubTab("critical"); }
+    const next = resolveTab((location.state as any)?.tab, (location.state as any)?.subTab);
+    setMainTab(next.main);
+    setSubTab(next.sub);
   }, [location.state]);
 
   const [editingReminder, setEditingReminder] = useState<GeneratedReminder | null>(null);
@@ -480,20 +508,54 @@ export default function RemindersOverviewPage() {
   const todaySent = useMemo(() => summariseSentToday(allLogs), [allLogs]);
 
 
-  /* ── Sub-tabs using live signals ── */
-  const actionSubTabs = [
-    { key: "critical", label: t("inline.critical"), count: criticalSignals.length, color: "#dc2626" },
-    { key: "warning", label: t("sale.warning"), count: warningSignals.length, color: "#d97706" },
-    { key: "info", label: t("inline.info"), count: infoSignals.length, color: "#2563eb" },
-  ];
+  /* ── One chase per customer ──
+   * A customer whose money is late is both a warning signal ("18 days overdue") and, usually, a
+   * ready reminder ("send the message"). Those were two rows on two tabs doing one job, so the
+   * reminder keeps the row and carries the signal's fact as a note; the signal is not listed again.
+   */
+  const readyCustomerIds = useMemo(
+    () => new Set(readyReminders.map(r => r.customerId)),
+    [readyReminders],
+  );
+  /**
+   * A customer signal is carried by that customer's ready reminder when one exists — critical or
+   * warning alike, because "Review" and "Send" on the same balance is the duplicate the merge is
+   * meant to remove. A pending credit request is never carried: its answer is an amount, and that
+   * screen is the request detail, not the customer's reminder.
+   */
+  const carriedByReminder = useMemo(
+    () => [...criticalSignals, ...warningSignals].filter(
+      s => s.entity_type === "customer" && creditRequestIdOf(s.id) === null && readyCustomerIds.has(s.entity_id),
+    ),
+    [criticalSignals, warningSignals, readyCustomerIds],
+  );
+  const chaseSignals = useMemo(
+    () => warningSignals.filter(s => !carriedByReminder.includes(s)),
+    [warningSignals, carriedByReminder],
+  );
+  const decisionSignals = useMemo(
+    () => criticalSignals.filter(s => !carriedByReminder.includes(s)),
+    [criticalSignals, carriedByReminder],
+  );
+  /** The fact the reminder row has to keep, now that the signal row it came from is gone. */
+  const noteByCustomer = useMemo(() => {
+    const map = new Map<string, string>();
+    // Warnings first, then criticals, so the more serious fact wins the one line the row has.
+    [...warningSignals, ...criticalSignals].forEach(s => {
+      if (carriedByReminder.includes(s)) map.set(s.entity_id, t(s.detailKey, s.detailParams));
+    });
+    return map;
+  }, [carriedByReminder, warningSignals, criticalSignals, t]);
 
-  const followupSubTabs = [
-    { key: "ready", label: t("inline.ready"), count: readyReminders.length, color: "var(--brand-dark, #65a30d)" },
+  /* ── Sub-tabs: grouped by what the owner does, not by which engine produced the row ── */
+  const todaySubTabs = [
+    { key: "critical", label: t("inline.critical"), count: decisionSignals.length, color: "#dc2626" },
+    { key: "followup", label: t("actionCenter.followUp"), count: readyReminders.length + chaseSignals.length + infoSignals.length, color: "#d97706" },
     { key: "upcoming", label: t("inline.upcoming"), count: upcomingReminders.length, color: "#2563eb" },
-    { key: "recently_sent", label: t("common.recentlySent"), count: sentLogs.length, color: "var(--text-secondary)" },
+    { key: "sent", label: t("common.recentlySent"), count: sentLogs.length, color: "var(--text-secondary)" },
   ];
 
-  const currentSubTabs = mainTab === "action" ? actionSubTabs : mainTab === "followups" ? followupSubTabs : [];
+  const currentSubTabs = mainTab === "today" ? todaySubTabs : [];
 
   function openSendSheet(reminder: GeneratedReminder) {
     setEditingReminder(reminder);
@@ -636,125 +698,132 @@ export default function RemindersOverviewPage() {
     );
   }
 
-  function renderActionContent() {
+  /* ── Sent history — unchanged, it is an outcome of its own ── */
+  function renderSentContent() {
+    return sentLogs.length === 0 ? (
+      <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.nothing_sent_yet")} subtitle={t("inline.sent_reminders_will_appear_here_after_you_se")} />
+    ) : (
+      <div className="flex flex-col gap-3">
+        {todaySent.total > 0 && (
+          <div
+            className="rounded-[var(--radius-card)] p-4"
+            style={{ background: "var(--warning-bg)" }}
+            data-testid="reminders-sent-today"
+          >
+            <div className="flex items-start gap-3">
+              <Bell size={18} className="mt-0.5 shrink-0" style={{ color: "var(--warning)" }} />
+              <div className="min-w-0 flex-1">
+                <p className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>
+                  {t("reminders.sentToday")}
+                </p>
+                <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>
+                  {t("reminders.sentTodayChannels", {
+                    whatsapp: String(todaySent.whatsapp),
+                    sms: String(todaySent.sms),
+                    customers: String(todaySent.customers),
+                  })}
+                </p>
+              </div>
+              <span className="shrink-0 text-11 font-semibold" style={{ color: "var(--warning)" }}>
+                {t("reminders.sentTodayCount", { count: String(todaySent.total) })}
+              </span>
+            </div>
+          </div>
+        )}
+        {(() => {
+          const tenDaysAgo = new Date();
+          tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+          const recentLogs = sentLogs.filter(l => new Date(l.sentAt) >= tenDaysAgo);
+          const now2 = new Date();
+          const todayStr = now2.toISOString().split("T")[0];
+          const yesterday = new Date(now2); yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split("T")[0];
+          const groups: { heading: string; items: typeof recentLogs }[] = [];
+          const byDate = new Map<string, typeof recentLogs>();
+          for (const log of recentLogs) {
+            const d = new Date(log.sentAt).toISOString().split("T")[0];
+            if (!byDate.has(d)) byDate.set(d, []);
+            byDate.get(d)!.push(log);
+          }
+          for (const [date, items] of byDate) {
+            let heading = date;
+            if (date === todayStr) heading = t("emp.today");
+            else if (date === yesterdayStr) heading = t("sales.yesterday");
+            groups.push({ heading, items });
+          }
+          return groups.map(g => (
+            <div key={g.heading}>
+              <p className="ds-section-label px-1 pt-3 pb-1" style={{ color: "var(--text-secondary)" }}>{g.heading}</p>
+              <ListCard>
+              {g.items.map((log, i) => (
+                <ActivityItem key={log.id || i} log={log} />
+              ))}
+              </ListCard>
+            </div>
+          ));
+        })()}
+      </div>
+    );
+  }
+
+  /* ── Today: one list per thing the owner has to do ──
+   * Critical is a decision, Follow up is a message or a fix, Upcoming is a date, Sent is history.
+   * The reminder rows and the signal rows share this list, so the same customer is not offered
+   * twice with two buttons for one overdue balance.
+   */
+  function renderTodayContent() {
     switch (subTab) {
       case "critical":
-        return criticalSignals.length === 0 ? (
+        return decisionSignals.length === 0 ? (
           <EmptyState icon={<AlertOctagon size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.no_critical_actions")} subtitle={t("inline.no_critical_business_signals_right_now")} />
         ) : (
           <div className="flex flex-col gap-2.5">
-            {criticalSignals.map(s => renderSignalCard(s))}
+            {decisionSignals.map(s => renderSignalCard(s))}
           </div>
         );
-      case "warning":
-        return warningSignals.length === 0 ? (
-          <EmptyState icon={<AlertTriangle size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.no_warnings")} subtitle={t("inline.everything_looks_fine")} />
-        ) : (
-          <div className="flex flex-col gap-2.5">
-            {warningSignals.map(s => renderSignalCard(s))}
+      case "followup": {
+        const hasAnything = readyReminders.length > 0 || chaseSignals.length > 0 || infoSignals.length > 0;
+        if (!hasAnything) {
+          return <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={t("reminders.allCaughtUp")} subtitle={t("inline.no_reminders_are_due_right_now")} />;
+        }
+        return (
+          <div className="flex flex-col gap-3">
+            {readyReminders.length > 0 && (
+              <ListCard>
+                {readyReminders.map((r, i) => (
+                  <ReminderCard
+                    key={r._occurrenceKey || r.configId || i}
+                    reminder={r}
+                    onSend={openSendSheet}
+                    onNavigate={navigateToCustomer}
+                    isSent={false}
+                    statusKey="reminders.readyToSend"
+                    note={noteByCustomer.get(r.customerId)}
+                  />
+                ))}
+              </ListCard>
+            )}
+            {(chaseSignals.length > 0 || infoSignals.length > 0) && (
+              <div className="flex flex-col gap-2.5">
+                {chaseSignals.map(s => renderSignalCard(s))}
+                {infoSignals.map(s => renderSignalCard(s))}
+              </div>
+            )}
           </div>
         );
-      case "info":
-        return infoSignals.length === 0 ? (
-          <EmptyState icon={<Info size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.no_info_signals")} subtitle={t("inline.all_information_is_complete")} />
-        ) : (
-          <div className="flex flex-col gap-2.5">
-            {infoSignals.map(s => renderSignalCard(s))}
-          </div>
-        );
-      default:
-        return null;
-    }
-  }
-
-  /* ── Render follow-ups ── */
-  function renderFollowupsContent() {
-    switch (subTab) {
-      case "ready":
-        return readyReminders.length === 0 ? (
-          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={t("reminders.allCaughtUp")} subtitle={t("inline.no_reminders_are_due_right_now")} />
-        ) : (
-          <ListCard>
-            {readyReminders.map((r, i) => (
-              <ReminderCard key={i} reminder={r} onSend={openSendSheet} onNavigate={navigateToCustomer} isSent={false} statusKey="reminders.readyToSend" />
-            ))}
-          </ListCard>
-        );
+      }
       case "upcoming":
         return upcomingReminders.length === 0 ? (
           <EmptyState icon={<Clock size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.no_upcoming_reminders")} subtitle={t("inline.configure_reminder_schedules_on_customer_pro")} />
         ) : (
           <ListCard>
             {upcomingReminders.map((r, i) => (
-              <ReminderCard key={i} reminder={r} onSend={openSendSheet} onNavigate={navigateToCustomer} isSent={false} statusKey="reminders.futureReady" />
+              <ReminderCard key={r._occurrenceKey || r.configId || i} reminder={r} onSend={openSendSheet} onNavigate={navigateToCustomer} isSent={false} statusKey="reminders.futureReady" />
             ))}
           </ListCard>
         );
-      case "recently_sent":
-        return sentLogs.length === 0 ? (
-          <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.nothing_sent_yet")} subtitle={t("inline.sent_reminders_will_appear_here_after_you_se")} />
-        ) : (
-          <div className="flex flex-col gap-3">
-            {todaySent.total > 0 && (
-              <div
-                className="rounded-[var(--radius-card)] p-4"
-                style={{ background: "var(--warning-bg)" }}
-                data-testid="reminders-sent-today"
-              >
-                <div className="flex items-start gap-3">
-                  <Bell size={18} className="mt-0.5 shrink-0" style={{ color: "var(--warning)" }} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-14 font-semibold" style={{ color: "var(--text-primary)" }}>
-                      {t("reminders.sentToday")}
-                    </p>
-                    <p className="text-12 mt-1" style={{ color: "var(--text-secondary)" }}>
-                      {t("reminders.sentTodayChannels", {
-                        whatsapp: String(todaySent.whatsapp),
-                        sms: String(todaySent.sms),
-                        customers: String(todaySent.customers),
-                      })}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-11 font-semibold" style={{ color: "var(--warning)" }}>
-                    {t("reminders.sentTodayCount", { count: String(todaySent.total) })}
-                  </span>
-                </div>
-              </div>
-            )}
-            {(() => {
-              const tenDaysAgo = new Date();
-              tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
-              const recentLogs = sentLogs.filter(l => new Date(l.sentAt) >= tenDaysAgo);
-              const now2 = new Date();
-              const todayStr = now2.toISOString().split("T")[0];
-              const yesterday = new Date(now2); yesterday.setDate(yesterday.getDate() - 1);
-              const yesterdayStr = yesterday.toISOString().split("T")[0];
-              const groups: { heading: string; items: typeof recentLogs }[] = [];
-              const byDate = new Map<string, typeof recentLogs>();
-              for (const log of recentLogs) {
-                const d = new Date(log.sentAt).toISOString().split("T")[0];
-                if (!byDate.has(d)) byDate.set(d, []);
-                byDate.get(d)!.push(log);
-              }
-              for (const [date, items] of byDate) {
-                let heading = date;
-                if (date === todayStr) heading = t("emp.today");
-                else if (date === yesterdayStr) heading = t("sales.yesterday");
-                groups.push({ heading, items });
-              }
-              return groups.map(g => (
-                <div key={g.heading}>
-                  <p className="ds-section-label px-1 pt-3 pb-1" style={{ color: "var(--text-secondary)" }}>{g.heading}</p>
-                  <ListCard>
-                  {g.items.map((log, i) => (
-                    <ActivityItem key={log.id || i} log={log} />
-                  ))}
-                  </ListCard>
-                </div>
-              ));
-            })()}
-          </div>
-        );
+      case "sent":
+        return renderSentContent();
       default:
         return null;
     }
@@ -823,8 +892,7 @@ export default function RemindersOverviewPage() {
   /* ── Tab Content Switcher ── */
   function renderTabContent() {
     switch (mainTab) {
-      case "action": return renderActionContent();
-      case "followups": return renderFollowupsContent();
+      case "today": return renderTodayContent();
       case "groups": return renderGroupsContent();
       default: return null;
     }
@@ -845,13 +913,12 @@ export default function RemindersOverviewPage() {
         {/* Main tabs — premium segmented control */}
         <div className="flex items-center gap-1 p-1 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
           {([
-            { key: "action" as const, label: t("actions") },
-            { key: "followups" as const, label: t("inline.follow_ups") },
+            { key: "today" as const, label: t("actionCenter.today") },
             { key: "groups" as const, label: t("inline.group_reminder") },
           ] as const).map(tab => (
             <button
               key={tab.key}
-              onClick={() => { setMainTab(tab.key); setSubTab(tab.key === "action" ? "critical" : tab.key === "followups" ? "ready" : ""); }}
+              onClick={() => { setMainTab(tab.key); setSubTab(tab.key === "groups" ? "" : (subTab || "critical")); }}
               className="flex-1 text-center py-2 rounded-[var(--radius-tile)] text-13 font-semibold transition-all flex items-center justify-center gap-1.5"
               style={{
                 color: mainTab === tab.key ? "var(--text-primary)" : "var(--text-secondary)",
@@ -897,7 +964,7 @@ export default function RemindersOverviewPage() {
         )}
 
         {/* Tab content */}
-        {mainTab === "followups" && savedPaymentReminders.length > 0 && (
+        {mainTab === "today" && subTab === "followup" && savedPaymentReminders.length > 0 && (
           <section className="flex flex-col gap-2" data-testid="saved-payment-reminders">
             <div className="flex items-center justify-between gap-3">
               <p className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
