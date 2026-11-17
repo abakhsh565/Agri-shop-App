@@ -284,10 +284,12 @@ export default function AdminProfitReportPage() {
               </span>
             )}
             <span className="text-11 tabular-nums" style={{ color: "var(--text-secondary)" }}>
-              {t("profit.salesMeta", {
-                count: String(saleCount),
-                average: averageSale == null ? "—" : money(averageSale),
-              })}
+              <RollingNumber
+                text={t("profit.salesMeta", {
+                  count: String(saleCount),
+                  average: averageSale == null ? "—" : money(averageSale),
+                })}
+              />
             </span>
           </div>
           {(activeRow?.unknownLines ?? 0) > 0 && (
@@ -333,7 +335,7 @@ export default function AdminProfitReportPage() {
         )}
         {returns != null && returns > 0 && (
           <p className="text-11 mt-2" style={{ color: "var(--text-secondary)" }}>
-            {t("hub.sales.returns")} −{money(returns)}
+            <RollingNumber text={`${t("hub.sales.returns")} −${money(returns)}`} />
           </p>
         )}
       </div>
@@ -361,8 +363,9 @@ export default function AdminProfitReportPage() {
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="text-13 font-semibold truncate min-w-0">{product.name}</p>
                     <p className="text-13 font-bold tabular-nums shrink-0">
-                      {product.unknownLines > 0 ? "≥ " : ""}
-                      {money(product.profit)}
+                      <RollingNumber
+                        text={`${product.unknownLines > 0 ? "≥ " : ""}${money(product.profit)}`}
+                      />
                     </p>
                   </div>
                   <div
@@ -370,10 +373,13 @@ export default function AdminProfitReportPage() {
                     style={{ color: "var(--text-tertiary)" }}
                   >
                     <p className="text-10 truncate min-w-0">
-                      {t("sales.revenue")} {money(product.revenue)} ·{" "}
-                      {product.unknownLines === 0
-                        ? `${t("reports.costOfGoods")} ${money(product.cost)}`
-                        : t("profit.unknownCostLine")}
+                      <RollingNumber
+                        text={`${t("sales.revenue")} ${money(product.revenue)} · ${
+                          product.unknownLines === 0
+                            ? `${t("reports.costOfGoods")} ${money(product.cost)}`
+                            : t("profit.unknownCostLine")
+                        }`}
+                      />
                     </p>
                     {product.unknownLines === 0 && (
                       <p className="text-10 tabular-nums shrink-0">{product.margin}%</p>
@@ -457,16 +463,20 @@ export default function AdminProfitReportPage() {
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="text-13 font-semibold truncate min-w-0">{product.name}</p>
                   <p className="text-13 font-bold tabular-nums shrink-0">
-                    {product.unknownLines > 0 ? "≥ " : ""}
-                    {money(product.profit)}
+                    <RollingNumber
+                      text={`${product.unknownLines > 0 ? "≥ " : ""}${money(product.profit)}`}
+                    />
                   </p>
                 </div>
                 <div className="flex items-baseline justify-between gap-3 mt-0.5">
                   <p className="text-10 truncate min-w-0" style={{ color: "var(--text-tertiary)" }}>
-                    {t("sales.revenue")} {money(product.revenue)} ·{" "}
-                    {product.unknownLines === 0
-                      ? `${t("reports.costOfGoods")} ${money(product.cost)}`
-                      : t("profit.unknownCostLine")}
+                    <RollingNumber
+                      text={`${t("sales.revenue")} ${money(product.revenue)} · ${
+                        product.unknownLines === 0
+                          ? `${t("reports.costOfGoods")} ${money(product.cost)}`
+                          : t("profit.unknownCostLine")
+                      }`}
+                    />
                   </p>
                   <p className="text-10 tabular-nums shrink-0" style={{ color: "var(--text-tertiary)" }}>
                     {t("sales.soldQty", { count: product.qty.toLocaleString("en-PK") })}
@@ -516,7 +526,7 @@ function StatTile({
         className="text-18 font-bold mt-1.5 tabular-nums break-words"
         style={tone === "warn" ? { color: "var(--warning-text, var(--text-primary))" } : undefined}
       >
-        {value}
+        <RollingNumber text={value} />
       </p>
     </div>
   );

@@ -14,6 +14,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { resolveImageUrl } from "@/lib/storage";
 import { useT, tNow } from "@/lib/i18n";
 import SegmentedTabs from "@/components/ui/SegmentedTabs";
+import RollingNumber from "@/components/ui/RollingNumber";
 import { generateReminders, generateReminderMessage, calculatePaymentStatus, markOccurrenceSent, categorizeReminders } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
 import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock, AlertTriangle, AlertOctagon, Info, Plus, Users, Trash2, Eye, Send, XCircle } from "lucide-react";
@@ -162,7 +163,8 @@ function AlertCard({
    */
   image?: string | null;
   title: string;
-  subtitle: string;
+  /** A phrase — the amount inside it rolls while the words stay put. */
+  subtitle: React.ReactNode;
   actionLabel: string;
   cardBg: string;
   iconBg: string;
@@ -239,7 +241,7 @@ function ReminderCard({
         <div className="min-w-0">
           <p className="text-15 font-semibold truncate" style={{ color: "var(--text-primary)" }}>{reminder.customerName}</p>
           <p className="text-13 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            {formatCurrency(reminder.outstanding)} {t("reminders.outstanding")}
+            <RollingNumber text={`${formatCurrency(reminder.outstanding)} ${t("reminders.outstanding")}`} />
           </p>
         </div>
       </ListRow>
@@ -684,7 +686,7 @@ export default function RemindersOverviewPage() {
         icon={config.icon}
         image={signalImage(signal)}
         title={signal.title}
-        subtitle={t(signal.detailKey, signal.detailParams)}
+        subtitle={<RollingNumber text={t(signal.detailKey, signal.detailParams)} />}
         actionLabel={t("admin.review")}
         cardBg={config.cardBg}
         iconBg={config.iconBg}

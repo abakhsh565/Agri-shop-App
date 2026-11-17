@@ -191,7 +191,7 @@ function PlateRow({ cells, divided }: { cells: Cell[]; divided: boolean }) {
             style={{ color: cell.tone }}
             data-testid={`finance-figure-note-${cell.id}`}
           >
-            {cell.note}
+            <RollingNumber text={cell.note} />
           </p>
         </div>
       ))}

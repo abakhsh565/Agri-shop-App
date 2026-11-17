@@ -1,3 +1,4 @@
+import RollingNumber from "@/components/ui/RollingNumber";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import type { CustomerCollection } from "@/lib/customerCredit";
@@ -40,7 +41,7 @@ export default function CollectionPlate({ summary, ready, testId = "customers-co
         className="text-26 font-bold mt-1 tabular-nums break-words"
         data-testid="customers-total-outstanding"
       >
-        {ready ? formatCurrency(summary.due) : "—"}
+        <RollingNumber text={ready ? formatCurrency(summary.due) : "—"} />
       </p>
 
       <div className="flex items-baseline justify-between gap-3 mt-4">
@@ -72,7 +73,7 @@ export default function CollectionPlate({ summary, ready, testId = "customers-co
             {t("overall.collected")}
           </p>
           <p className="text-14 font-bold mt-0.5 tabular-nums break-words">
-            {ready ? formatCurrency(summary.collected) : "—"}
+            <RollingNumber text={ready ? formatCurrency(summary.collected) : "—"} />
           </p>
         </div>
         <div className="min-w-0 text-end">
@@ -80,7 +81,7 @@ export default function CollectionPlate({ summary, ready, testId = "customers-co
             {t("receivable.totalDue")}
           </p>
           <p className="text-14 font-bold mt-0.5 tabular-nums break-words">
-            {ready ? formatCurrency(summary.billed) : "—"}
+            <RollingNumber text={ready ? formatCurrency(summary.billed) : "—"} />
           </p>
         </div>
       </div>

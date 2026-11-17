@@ -400,7 +400,7 @@ export default function AdminSalesListPage() {
                 data-testid={summary.subTestId}
                 style={{ color: "var(--text-secondary)" }}
               >
-                {summary.subline}
+                <RollingNumber text={summary.subline} />
               </p>
             </div>
             <button
@@ -743,7 +743,7 @@ export default function AdminSalesListPage() {
                     trailing={
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
-                          {formatCurrency(sale.totalAmount)}
+                          <RollingNumber text={formatCurrency(sale.totalAmount)} />
                         </span>
                         {sale.paymentType !== "full" ? (
                           <span className="text-10 font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>

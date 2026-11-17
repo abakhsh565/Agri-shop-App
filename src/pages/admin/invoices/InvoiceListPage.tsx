@@ -170,7 +170,11 @@ export default function InvoiceListPage() {
                     </div>
                   }
                   title={`${inv.invoice_number} · ${inv.customer_name}`}
-                  meta={`${formatDate(inv.issued_on)} · ${formatCurrency(inv.total)}`}
+                  meta={
+                    <>
+                      {formatDate(inv.issued_on)} · <RollingNumber text={formatCurrency(inv.total)} />
+                    </>
+                  }
                   trailing={
                     <div className="flex flex-col items-end gap-1">
                       <span
@@ -181,7 +185,7 @@ export default function InvoiceListPage() {
                       </span>
                       {due > 0 && (
                         <span className="text-11 tabular-nums" style={{ color: "var(--text-secondary)" }}>
-                          {formatCurrency(due)}
+                          <RollingNumber text={formatCurrency(due)} />
                         </span>
                       )}
                     </div>

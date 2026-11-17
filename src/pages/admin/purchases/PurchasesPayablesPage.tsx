@@ -7,6 +7,7 @@ import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import Photo from "@/components/ui/Photo";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import RollingNumber from "@/components/ui/RollingNumber";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useCompaniesStore } from "@/stores/companiesStore";
@@ -183,7 +184,7 @@ export default function PurchasesPayablesPage() {
                     </span>
                     <span className="shrink-0 text-end">
                       <span className="block text-14 font-bold tabular-nums">
-                        {formatCurrency(company.outstandingPayable)}
+                        <RollingNumber text={formatCurrency(company.outstandingPayable)} />
                       </span>
                       {overdue && (
                         <span
@@ -248,7 +249,7 @@ export default function PurchasesPayablesPage() {
                               trailing={
                                 <div className="text-end shrink-0">
                                   <p className="text-13 font-bold tabular-nums">
-                                    {formatCurrency(bill.outstandingPayable)}
+                                    <RollingNumber text={formatCurrency(bill.outstandingPayable)} />
                                   </p>
                                   <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
                                     {t("supplierDetail.unpaidAtDelivery")}

@@ -21,9 +21,10 @@ import { useState } from "react";
  *
  * ON ARRIVAL. A figure that is already correct on the first paint had nothing to animate, which is
  * why the home card's total moved (its data landed a tick later) while net profit and credit sat
- * still. `animateOnMount` seeds the previous value with the same figure zeroed, so a headline rolls
- * up from zeros to what it really is as the screen appears. It is opt-in: a list of twenty cart
- * lines all rolling at once would be noise, and a sum that arrives with the page is a headline.
+ * still. On arrival the previous value is seeded with the same figure zeroed, so every amount rolls
+ * up from zeros to what it really is as the screen appears — ON by default since the owner asked
+ * for the motion on every screen, and switchable off with `animateOnMount={false}` where a list of
+ * figures would read as noise.
  *
  * Accessibility and motion: the whole thing is `aria-hidden` behind one readable copy of the
  * final text, so a screen reader hears "Rs. 24,182" once, and `prefers-reduced-motion` removes the
@@ -35,7 +36,7 @@ export default function RollingNumber({
   format,
   className,
   style,
-  animateOnMount = false,
+  animateOnMount = true,
 }: {
   /** The formatted figure, for a value that only exists as a string. */
   text?: string;

@@ -6,6 +6,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
 import Photo from "@/components/ui/Photo";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import RollingNumber from "@/components/ui/RollingNumber";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useT } from "@/lib/i18n";
@@ -150,7 +151,7 @@ export default function OutstandingCreditPage() {
                 {t("receivable.totalOutstanding")}
               </p>
               <p className="text-22 font-bold mt-1 tabular-nums break-words" data-testid="outstanding-total">
-                {ready ? formatCurrency(totals.outstanding) : "—"}
+                <RollingNumber text={ready ? formatCurrency(totals.outstanding) : "—"} />
               </p>
             </div>
             <div className="min-w-0 text-end">
@@ -162,7 +163,7 @@ export default function OutstandingCreditPage() {
                 style={{ color: totals.overdue > 0 ? "var(--error)" : "var(--text-primary)" }}
                 data-testid="outstanding-overdue"
               >
-                {ready ? formatCurrency(totals.overdue) : "—"}
+                <RollingNumber text={ready ? formatCurrency(totals.overdue) : "—"} />
               </p>
             </div>
           </div>
@@ -251,7 +252,9 @@ export default function OutstandingCreditPage() {
                     </div>
                   </div>
                   <div className="shrink-0 text-end">
-                    <p className="text-14 font-bold tabular-nums">{formatCurrency(c.outstandingBalance)}</p>
+                    <p className="text-14 font-bold tabular-nums">
+                      <RollingNumber text={formatCurrency(c.outstandingBalance)} />
+                    </p>
                     <span
                       className="inline-block text-10 font-bold px-2 py-0.5 rounded-full mt-1"
                       style={{

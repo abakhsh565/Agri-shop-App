@@ -22,6 +22,7 @@ import ListRow from "@/components/ui/ListRow";
 import Sheet from "@/components/ui/Sheet";
 import { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import { Skeleton } from "@/components/ui/Skeleton";
+import RollingNumber from "@/components/ui/RollingNumber";
 import SalesActivitySheet, { type SalesActivityKind } from "@/components/sales/SalesActivitySheet";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
@@ -772,7 +773,7 @@ export default function AdminSalesSectionPage() {
               {row.map((tile) => (
                 <div key={tile.testId} className="min-w-0" data-testid={tile.testId}>
                   <p className="text-18 font-semibold leading-none tabular-nums break-words">
-                    {tile.value}
+                    <RollingNumber text={tile.value} />
                   </p>
                   <p className="text-13 mt-2" style={{ color: "var(--text-secondary)" }}>
                     {tile.label}
@@ -782,7 +783,7 @@ export default function AdminSalesSectionPage() {
                     style={{ color: tile.note.tone }}
                     data-testid={`${tile.testId}-note`}
                   >
-                    {tile.note.text}
+                    <RollingNumber text={tile.note.text} />
                   </p>
                 </div>
               ))}
@@ -798,7 +799,7 @@ export default function AdminSalesSectionPage() {
           <div className="min-w-0">
             <p className="text-13" style={{ color: "var(--text-secondary)" }}>{t("sales.today")}</p>
             <p className="text-18 font-semibold mt-1 tabular-nums break-words">
-              {compactMoney(daily.todayGross)}
+              <RollingNumber text={compactMoney(daily.todayGross)} />
             </p>
           </div>
           <div className="min-w-0">
@@ -806,7 +807,7 @@ export default function AdminSalesSectionPage() {
               {t("sales.sameDayLastWeek")}
             </p>
             <p className="text-18 font-semibold mt-1 tabular-nums break-words">
-              {compactMoney(daily.lastWeekGross)}
+              <RollingNumber text={compactMoney(daily.lastWeekGross)} />
             </p>
           </div>
         </div>
@@ -858,7 +859,7 @@ export default function AdminSalesSectionPage() {
           </div>
 
           <p className="text-18 font-semibold mt-3 tabular-nums break-words">
-            {compactMoney(metricTotal)}
+            <RollingNumber text={compactMoney(metricTotal)} />
           </p>
           <p className="text-11 mt-0.5 flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
             {change != null && (
