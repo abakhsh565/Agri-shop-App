@@ -334,7 +334,7 @@ export default function ProductsListPage() {
                         {/* The product's name in the shop's own words, then its reference: two
                             products can share a name, and the shelf label cannot tell them apart. */}
                         <span className="text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>
-                          {referenceCode("INV", p.id)}
+                          {referenceCode("product", p.id)}
                         </span>
                         <span
                           className="text-10 font-semibold px-1.5 py-0.5 rounded-full"

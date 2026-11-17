@@ -400,7 +400,7 @@ export default function SalesListPage() {
                       {/* The sale's own name first: one customer can have several sales on the same
                           day, and a time alone cannot be quoted over the counter. */}
                       <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                        <span className="tabular-nums">{sale.saleNumber || referenceCode("SL", sale.id)}</span> · {formatSmartDateTime(sale.createdAt, now, t)}
+                        <span className="tabular-nums">{sale.saleNumber || referenceCode("sale", sale.id)}</span> · {formatSmartDateTime(sale.createdAt, now, t)}
                       </p>
                     </div>
                   </ListRow>

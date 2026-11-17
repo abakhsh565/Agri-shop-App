@@ -776,7 +776,7 @@ export default function AdminSalesListPage() {
                       {/* The shop's own sale number, first: it is what the counter says out loud and
                           what the receipt prints, and it was only visible after opening the sale. */}
                       <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                        <span className="tabular-nums">{sale.saleNumber || referenceCode("SL", sale.id)}</span> · {formatSmartDateTime(sale.createdAt, now, t)}
+                        <span className="tabular-nums">{sale.saleNumber || referenceCode("sale", sale.id)}</span> · {formatSmartDateTime(sale.createdAt, now, t)}
                       </p>
                       <p className="text-11 font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("saleDetail.soldBy")}: {sale.employeeName}</p>
                     </div>

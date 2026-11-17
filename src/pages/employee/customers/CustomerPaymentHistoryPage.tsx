@@ -5,6 +5,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import { CreditHealthBadge } from "@/components/ui/Badge";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import { referenceCode } from "@/lib/referenceCode";
 import { useCustomersStore } from "@/stores/customersStore";
 import { fetchCustomerPayments } from "@/lib/db";
 import type { CustomerPayment } from "@/types";
@@ -129,6 +130,10 @@ export default function CustomerPaymentHistoryPage() {
                   <div>
                     <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
                       {formatDate(p.createdAt)}
+                    </p>
+                    {/* The payment's own name, the way it is written in the book. */}
+                    <p className="text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>
+                      {referenceCode("payment", p.id)}
                     </p>
                     <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
                       {t("sale.paymentMethod")}: {String(p.method) === "split" ? (t("recordPayment.splitPayment")) : p.method === "cash" ? t("sale.cash") : t("sale.bankTransfer")}

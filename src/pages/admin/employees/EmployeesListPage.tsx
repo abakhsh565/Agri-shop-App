@@ -157,7 +157,7 @@ export default function EmployeesListPage() {
                   <div className="flex flex-col flex-1 min-w-0 gap-0.5">
                     <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
                     <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{emp.phone}</p>
-                    <p className="text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>{referenceCode("EMP", emp.id)}</p>
+                    <p className="text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>{referenceCode("employee", emp.id)}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span
                         className="text-10 font-bold px-2 py-0.5 rounded-full"
@@ -203,7 +203,7 @@ export default function EmployeesListPage() {
               <div className="flex flex-col flex-1 min-w-0 gap-0.5">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>{emp.name}</p>
-                  <span className="shrink-0 text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>{referenceCode("EMP", emp.id)}</span>
+                  <span className="shrink-0 text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>{referenceCode("employee", emp.id)}</span>
                   {emp.isOriginalOwner && (
                     <span
                       className="shrink-0 text-10 font-bold px-2 py-0.5 rounded-full"
