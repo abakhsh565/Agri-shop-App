@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useDelayedDismiss } from "@/hooks/usePresence";
 
 /** Matches --dur-3, the sheet duration token. */
@@ -7,34 +7,26 @@ import { X, Plus, Trash2 } from "lucide-react";
 import SelectorField from "./SelectorField";
 import type { CropConfig, BusinessSettings } from "@/types";
 import { useT } from "@/lib/i18n";
-import { useAuthStore } from "@/stores/authStore";
+import { loadBusinessSettings, saveBusinessSettings } from "@/lib/reminderEngine";
 
 const PRESET_CROPS = ["Cotton", "Wheat", "Rice", "Sugarcane", "Maize", "Tobacco"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-
-/**
- * Which crops a shop grows is that shop's configuration, so the device-local copy is kept per
- * shop — the same reason `localCache` is keyed by its owner and the group registry by tenant.
- * Under one key for the whole device, a second shop opened the crop list the first shop had
- * configured and would save it back as its own (the database copy is written too, but the sheet
- * reads this one for display).
- */
-function settingsKey(): string {
-  const tenant = useAuthStore.getState().user?.tenantId ?? "none";
-  return `business_settings:${tenant}`;
-}
-
-function loadSettings(): BusinessSettings {
-  try { const raw = localStorage.getItem(settingsKey()); if (raw) return JSON.parse(raw); } catch {}
-  return { crops: [] };
-}
-function saveSettings(s: BusinessSettings) { localStorage.setItem(settingsKey(), JSON.stringify(s)); }
 
 interface Props { onClose: () => void; onSave: () => void; }
 
 export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
   const t = useT();
-  const [settings, setSettings] = useState<BusinessSettings>(loadSettings);
+  /**
+   * The crops and their harvest month/day live in `business_settings` (setting_key `crops`) — the
+   * row `reminderEngine` reads when it schedules a "Before harvest season" reminder. This sheet
+   * used to keep the list in localStorage only, so a harvest period configured here never reached
+   * the engine; it now reads and writes the same row.
+   */
+  const [settings, setSettings] = useState<BusinessSettings>({ crops: [] });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  /** A ref, not the state above: two taps in one task both read the old `saving`. */
+  const savingRef = useRef(false);
   const [customCrop, setCustomCrop] = useState("");
   /** In-flight crop names, keyed by the name they started with. Only used while typing. */
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
@@ -45,6 +37,17 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  // The saved schedule, from the row the reminder engine schedules against.
+  useEffect(() => {
+    let alive = true;
+    void loadBusinessSettings().then((loaded) => {
+      if (!alive) return;
+      setSettings(loaded);
+      setLoading(false);
+    });
+    return () => { alive = false; };
   }, []);
 
   function toggleCrop(name: string) {
@@ -71,8 +74,16 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
     setCustomCrop("");
   }
 
-  function handleSave() {
-    saveSettings(settings);
+  async function handleSave() {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await saveBusinessSettings(settings);
+    } finally {
+      setSaving(false);
+      savingRef.current = false;
+    }
     onSave();
     onClose();
   }
@@ -184,10 +195,18 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
             </div>
           </div>
 
-          {/* Harvest periods — card-based like Add Product variants */}
-          {settings.crops.length > 0 && (
-            <div>
-              <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("settings.harvestPeriods")}</p>
+          {/* Harvest periods — card-based like Add Product variants. Always shown: the section is
+              the answer to "when does this crop come off", and a "Before harvest season" reminder
+              counts back from exactly this month and day. */}
+          <div>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("settings.harvestPeriods")}</p>
+            {loading ? (
+              <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
+            ) : settings.crops.length === 0 ? (
+              <p className="text-12 leading-snug" style={{ color: "var(--text-secondary)" }}>
+                {t("settings.harvestPeriods.empty")}
+              </p>
+            ) : (
               <div className="flex flex-col gap-3">
                 {settings.crops.map(crop => (
                   <div
@@ -254,12 +273,13 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Save button */}
           <button
             onClick={handleSave}
+            disabled={saving}
             className="w-full h-12 rounded-full text-14 font-bold transition-opacity active:opacity-80"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >

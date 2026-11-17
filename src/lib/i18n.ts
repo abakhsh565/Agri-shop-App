@@ -2039,6 +2039,8 @@ export const translations = {
     "chrome.autoSync":          "Auto-syncs on reconnect",
     "settings.cropsQuestion":   "Crops you deal with",
     "settings.harvestPeriods":  "Harvest time",
+    "settings.harvestPeriods.hint":  "Month and day each crop comes off. A \"Before harvest season\" reminder counts back from it.",
+    "settings.harvestPeriods.empty": "Pick a crop above and its harvest month and day can be set here.",
     "settings.month":           "Month",
     // Employees, job & access — business language only, no RBAC terms
     "empList.empty":            "No employees yet",
@@ -7255,6 +7257,8 @@ export const translations = {
     "chrome.autoSync":          "رابطہ بحال ہونے پر خودکار ہم آہنگی",
     "settings.cropsQuestion":   "آپ کون سی فصلیں لیتے ہیں",
     "settings.harvestPeriods":  "فصل کا وقت",
+    "settings.harvestPeriods.hint":  "ہر فصل کا مہینہ اور دن۔ \"فصل سے پہلے\" والا ریمائنڈر اسی تاریخ سے گنتی کرتا ہے۔",
+    "settings.harvestPeriods.empty": "اوپر سے فصل منتخب کریں، پھر یہاں اس کا مہینہ اور دن مقرر کریں۔",
     "settings.month":           "مہینہ",
     // Employees, job & access — business language only, no RBAC terms
     "empList.empty":            "ابھی کوئی ملازم نہیں",

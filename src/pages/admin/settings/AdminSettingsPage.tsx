@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
   AlertTriangle, Bell, Check, ChevronRight, Compass, Fingerprint, Gauge, Globe, Loader2, Lock,
-  LogOut, MessageSquare, Moon, ShieldCheck, Sun, Trash2, UserCog, X,
+  LogOut, MessageSquare, Moon, ShieldCheck, Sprout, Sun, Trash2, UserCog, X,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -385,6 +385,22 @@ export default function AdminSettingsPage() {
                 anything: everything that is *work* — people, stock, roles, crops — opens from
                 the four section groups above. These three are destinations rather than parts
                 of the business, so they sit with the phone's preferences. */}
+            {/*
+              Harvest periods. This row is the way into the crops + harvest month/day editor;
+              without it the sheet had no opener at all (`setShowBusinessSettings` was declared
+              and never called), so a shop could not say when a crop comes off — and a "Before
+              harvest season" reminder has nothing to count back from until it does. The sheet
+              writes the same `business_settings.crops` row the reminder engine schedules
+              against, so the two cannot disagree.
+            */}
+            <ListRow
+              onClick={() => setShowBusinessSettings(true)}
+              icon={Sprout}
+              title={t("settings.harvestPeriods")}
+              meta={t("settings.harvestPeriods.hint")}
+              testId="settings-harvest-periods"
+              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+            />
             {/* When the shop is warned about low stock, and how loudly. The number this
                 sets is the one a new product starts at; a product that has been given its
                 own number on the product form keeps it. */}

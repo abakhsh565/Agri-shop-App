@@ -4,6 +4,8 @@ import { tNow } from "@/lib/i18n";
 import { supabase } from "@/lib/supabase";
 import { pkDate, pkDateFromISO } from "@/lib/pkDate";
 import type { CustomerCropRecord } from "@/lib/recommendationEngine";
+import { useAuthStore } from "@/stores/authStore";
+import { useShopStore } from "@/stores/shopStore";
 
 // ─── Pakistan Business Date Helpers ────────────────────────────────────────────
 
@@ -324,8 +326,14 @@ export async function saveBusinessSettings(settings: BusinessSettings): Promise<
       .update({ setting_value: value, updated_at: new Date().toISOString() })
       .eq("id", existing.id);
   } else {
+    // The row is shop-scoped and `shop_id` is NOT NULL without a default on the databases this
+    // runs against, so an insert that names only the key is refused — PostgREST answered 403 and a
+    // harvest period configured in settings never reached the engine. Name the shop the same way
+    // notifications.ts does: the tenant the session belongs to, then the shop being worked in.
+    const shopId =
+      useAuthStore.getState().user?.tenantId ?? useShopStore.getState().activeShopId ?? null;
     await supabase.from("business_settings")
-      .insert({ setting_key: "crops", setting_value: value });
+      .insert({ setting_key: "crops", setting_value: value, shop_id: shopId });
   }
 }
 
