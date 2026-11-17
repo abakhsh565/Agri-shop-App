@@ -357,12 +357,14 @@ export default function AdminSalesListPage() {
       />
 
       {/* The tab row stays below the title: a track with one raised pill, the way the reference
-          control reads. The labels keep the same 13px type step; the track and the pill are the
-          parts that grew (40→48px track, 36→40px pill, owner's request 2026-11-16). */}
+          control reads. The labels keep the same 13px type step. The track is 48px and the pill
+          40px, so the pill carries a 4px margin on every side instead of touching the track
+          (owner's request, 2026-11-16). The selected pill is the app's black in both themes, as
+          the reference shows — not the ink token, which flips to white in the dark theme. */}
       <div className="px-4 pt-2">
         <div
-          className="flex items-center gap-1 p-1 h-12 rounded-full"
-          style={{ background: "var(--surface-2)" }}
+          className="flex items-center gap-1 rounded-full"
+          style={{ background: "var(--surface-2)", height: 48, padding: 4 }}
           role="group"
           aria-label={t("sales.type")}
         >
@@ -375,11 +377,11 @@ export default function AdminSalesListPage() {
                 onClick={() => setTab(key)}
                 aria-pressed={selected}
                 data-testid={`sales-tab-${key}`}
-                className="flex-1 min-w-0 h-10 rounded-full text-13 font-semibold truncate px-2 transition-colors active:opacity-70"
+                className="flex-1 min-w-0 rounded-full text-13 font-semibold truncate px-2 transition-colors active:opacity-70"
                 style={
                   selected
-                    ? { background: "var(--text-primary)", color: "var(--background)" }
-                    : { background: "transparent", color: "var(--text-secondary)" }
+                    ? { height: 40, background: "#0a0a09", color: "#ffffff" }
+                    : { height: 40, background: "transparent", color: "var(--text-secondary)" }
                 }
               >
                 {label}
