@@ -154,8 +154,11 @@ export default function InvoiceListPage() {
       )}
 
       {visible.length > 0 && (
-        <div className="px-0 pb-6">
-          <ListCard>
+        <div className="pb-6">
+          {/* The card keeps the page's 16px gutter. Full-bleed, its rounded edge was cut by the
+              screen and its figures sat 6px from the border while the tabs above were inset — the
+              one list on the page that did not line up with anything. */}
+          <ListCard className="mx-4">
             {visible.map((inv) => {
               const overdue = isInvoiceOverdue(inv);
               const due = Math.max(inv.total - inv.amount_paid, 0);
