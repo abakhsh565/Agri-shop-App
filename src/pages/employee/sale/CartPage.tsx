@@ -5,6 +5,7 @@ import NavHeader from "@/components/ui/NavHeader";
 import Button from "@/components/ui/Button";
 import DateField from "@/components/ui/DateField";
 import QuantityCounter from "@/components/ui/QuantityCounter";
+import RollingNumber from "@/components/ui/RollingNumber";
 import { useCartStore } from "@/stores/cartStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -333,7 +334,9 @@ export default function CartPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <p className="text-sm font-bold text-foreground">{formatCurrency(item.lineTotal)}</p>
+                    <p className="text-sm font-bold text-foreground">
+                      <RollingNumber text={formatCurrency(item.lineTotal)} />
+                    </p>
                     <QuantityCounter
                       qty={item.qty}
                       onChange={(q) => updateQty(item.variantId, q)}
@@ -506,7 +509,11 @@ export default function CartPage() {
           <div className="border-t border-border my-2" />
           <div className="flex justify-between py-1">
             <span className="text-sm font-bold text-foreground">{t("sale.totalLabel")}</span>
-            <span className="text-sm font-bold text-foreground">{formatCurrency(total)}</span>
+            {/* Changing a line's quantity changes this figure, so it rolls like the stepper's own
+                digits: one motion for every number the shopkeeper moves in the same gesture. */}
+            <span className="text-sm font-bold text-foreground">
+              <RollingNumber text={formatCurrency(total)} />
+            </span>
           </div>
         </div>
       )}

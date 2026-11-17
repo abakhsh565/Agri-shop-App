@@ -701,7 +701,7 @@ export default function AssistantPage() {
             {entries.map((entry, index) => {
               if (entry.kind === "user") {
                 return (
-                  <div key={index} className="flex flex-col items-end gap-2">
+                  <div key={index} className="flex flex-col items-end gap-2 animate-fade-in-up">
                     {entry.photo && (
                       <img
                         src={entry.photo.data}
@@ -723,7 +723,7 @@ export default function AssistantPage() {
 
               if (entry.kind === "finance") {
                 return (
-                  <div key={index} className="max-w-[92%]">
+                  <div key={index} className="max-w-[92%] animate-fade-in-up">
                     <AssistantFinanceCard draft={entry.draft} />
                   </div>
                 );
@@ -733,7 +733,7 @@ export default function AssistantPage() {
                 return (
                   <div
                     key={index}
-                    className="flex items-start gap-3 rounded-[var(--radius-card)] p-3 text-12"
+                    className="flex items-start gap-3 rounded-[var(--radius-card)] p-3 text-12 animate-fade-in-up"
                     style={{
                       background: "var(--error-bg)",
                       border: "1px solid var(--error-border)",
@@ -753,7 +753,7 @@ export default function AssistantPage() {
               const answerNotes = reply.notes.filter((note) => !shownInWidgets.has(note));
               const isSpeaking = speaking?.index === index;
               return (
-                <div key={index} className="flex flex-col gap-2">
+                <div key={index} className="flex flex-col gap-2 animate-fade-in-up">
                   <div className="flex items-start gap-3">
                     <AssistantOrb compact />
                     <div className="min-w-0 flex-1 pt-0.5">

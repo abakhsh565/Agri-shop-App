@@ -34,6 +34,7 @@ import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import RollingNumber from "@/components/ui/RollingNumber";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
 import { netSalesOf, refundsBySale, useReturns } from "@/lib/salesActivity";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
@@ -406,7 +407,9 @@ export default function AdminSalesListPage() {
                 className="text-28 font-bold mt-1 tabular-nums break-words"
                 data-testid={summary.amountTestId}
               >
-                {formatCurrency(summary.amount)}
+                {/* Switching All / Credit / Paid or the window changes this figure: it rolls, like
+                    the dashboard's hero, so the tab and the number move as one gesture. */}
+                <RollingNumber text={formatCurrency(summary.amount)} />
               </p>
               <p
                 className="text-12 font-medium mt-1"
@@ -445,7 +448,7 @@ export default function AdminSalesListPage() {
                 {summary.leftLabel}
               </p>
               <p className="text-17 font-bold mt-1 tabular-nums break-words" data-testid={summary.leftTestId}>
-                {formatCurrency(summary.leftValue)}
+                <RollingNumber text={formatCurrency(summary.leftValue)} />
               </p>
             </div>
             <div className="min-w-0 text-end">
@@ -453,7 +456,7 @@ export default function AdminSalesListPage() {
                 {summary.rightLabel}
               </p>
               <p className="text-17 font-bold mt-1 tabular-nums break-words" data-testid={summary.rightTestId}>
-                {formatCurrency(summary.rightValue)}
+                <RollingNumber text={formatCurrency(summary.rightValue)} />
               </p>
             </div>
           </div>

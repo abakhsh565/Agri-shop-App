@@ -205,6 +205,8 @@
      the compositor and does not repaint a long list on a cheap Android WebView.
      There is no motion token longer than 280ms: at this size anything slower
      reads as lag, not as polish. */
+  --dur-num: 340ms;             /* a digit rolling to its next value */
+  --ease-num: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-1: 120ms;               /* press feedback, colour changes */
   --dur-2: 200ms;               /* toasts, dialogs */
   --dur-3: 280ms;               /* sheets and backdrops */
@@ -1157,6 +1159,39 @@ svg.ds-row-chevron {
 .animate-slide-right  { animation: slideInRight 0.3s ease both; }
 .animate-slide-up     { animation: slideUp    0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
 .animate-pulse-brand  { animation: pulse-brand 2s infinite; }
+
+/* ── Rolling numbers ───────────────────────────────────────────────────────────────
+   The reference's "rolling counter": a changed digit leaves in the direction of the change
+   while the next arrives from the other side, so a figure that updates reads as movement and
+   not as a swap. Only the characters that actually changed animate, which is why 24,182 →
+   24,183 moves one digit instead of the whole number. Widths are tabular, so nothing shifts. */
+.nr {
+  display: inline-flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.nr-cell {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+.nr-tick { display: block; animation: nrTickUp var(--dur-num) var(--ease-num) both; }
+.nr-tick--down { animation-name: nrTickDown; }
+.nr-ghost {
+  position: absolute;
+  inset: 0;
+  animation: nrGhostUp var(--dur-num) var(--ease-num) both;
+}
+.nr-ghost--down { animation-name: nrGhostDown; }
+@keyframes nrTickUp   { from { transform: translateY(75%);  opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes nrTickDown { from { transform: translateY(-75%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes nrGhostUp   { from { transform: none; opacity: 1; } to { transform: translateY(-75%);  opacity: 0; } }
+@keyframes nrGhostDown { from { transform: none; opacity: 1; } to { transform: translateY(75%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .nr-tick, .nr-ghost { animation: none; }
+  /* The ghost is only there to be animated out; static, it would sit on top of the new digit. */
+  .nr-ghost { display: none; }
+}
 
 /* A tab swap in the record-money form: the panel's content settles six pixels up and in.
    Short on purpose — it should read as the same panel answering, not a new screen arriving —

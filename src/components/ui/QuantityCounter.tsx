@@ -1,6 +1,7 @@
 import { Trash2 } from "lucide-react";
 import { useState, useCallback } from "react";
 import { tNow } from "@/lib/i18n";
+import RollingNumber from "@/components/ui/RollingNumber";
 
 interface QuantityCounterProps {
   qty: number;
@@ -85,7 +86,7 @@ export default function QuantityCounter({
           qty <= minQty && deleteOnOne ? tNow("common.remove") : tNow("common.decrease")
         }
         className={`
-          ${btnSize} rounded-full flex items-center justify-center shrink-0 transition-colors
+          ${btnSize} rounded-full flex items-center justify-center shrink-0 transition-colors ds-pressable
           ${qty <= minQty && deleteOnOne
             ? "bg-[#ef4444] text-white"
             : "bg-muted text-foreground"
@@ -124,7 +125,8 @@ export default function QuantityCounter({
           onClick={() => { setIsFocused(true); setInputValue(""); }}
           className={`${inputWidth} h-12 text-center font-bold text-foreground bg-transparent border border-transparent rounded-[var(--radius-tile)] ${isSmall ? "text-base min-w-[2.5rem]" : "text-lg min-w-[3rem]"}`}
         >
-          {displayQty}
+          {/* The reference's rolling counter: + and − move the digit rather than repaint it. */}
+          <RollingNumber text={displayQty} className="justify-center" />
         </button>
       )}
 
@@ -134,7 +136,7 @@ export default function QuantityCounter({
         disabled={!!max && qty >= max}
         aria-label={tNow("common.increase")}
         className={`
-          ${btnSize} rounded-full bg-ink text-ink-fg flex items-center justify-center shrink-0
+          ${btnSize} rounded-full bg-ink text-ink-fg flex items-center justify-center shrink-0 ds-pressable
           disabled:opacity-30
         `}
       >

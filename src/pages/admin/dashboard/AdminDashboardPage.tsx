@@ -26,6 +26,7 @@ import { canSeeDashboard } from "@/lib/tenantContext";
 import { branchKind } from "@/lib/branchKind";
 import { AlertTriangle, CalendarDays, ChevronRight, ChevronDown, PackageX, ShoppingCart, Search, Bell, Truck, Wallet, CheckCircle2, HandCoins, PackagePlus, Store } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
+import RollingNumber from "@/components/ui/RollingNumber";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import QuickAlertsPanel, { type QuickAlertItem } from "@/components/dashboard/QuickAlertsPanel";
@@ -764,8 +765,11 @@ export default function AdminDashboardPage() {
           <p className="ds-section-label mb-1" style={{ color: "var(--brand-dark)" }}>
             {t("admin.totalSales")}
           </p>
-          <p className="text-28 font-semibold leading-none" style={{ color: "var(--text-primary)" }}>
-            {formatRs(heroTotalSales)}
+          {/* The figures on this card are what All / Today / Yesterday change, so they roll to
+              their new value instead of being repainted — the movement is what ties the pill above
+              to the number below it. */}
+          <p className="text-28 font-semibold leading-none" style={{ color: "var(--text-primary)" }} data-testid="home-total-sales">
+            <RollingNumber text={formatRs(heroTotalSales)} />
           </p>
 
           <div className="flex items-end justify-between mt-4">
@@ -774,11 +778,13 @@ export default function AdminDashboardPage() {
                 {t("dashboard.netProfit")}
               </p>
               <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }} data-testid="home-net-profit">
-                {netProfit == null
-                  ? "—"
-                  : netProfit < 0
-                    ? `−${formatRs(Math.abs(netProfit))}`
-                    : formatRs(netProfit)}
+                {netProfit == null ? (
+                  "—"
+                ) : (
+                  <RollingNumber
+                    text={netProfit < 0 ? `−${formatRs(Math.abs(netProfit))}` : formatRs(netProfit)}
+                  />
+                )}
               </p>
             </div>
             <div className="w-px self-stretch mx-3" style={{ background: "var(--divider)" }} />
@@ -787,7 +793,9 @@ export default function AdminDashboardPage() {
                 {t("inline.credit_collect")}
               </p>
               <div className="flex items-center gap-2">
-                <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>{formatRs(money.udhaar)}</p>
+                <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>
+                  <RollingNumber text={formatRs(money.udhaar)} />
+                </p>
                 <p className="text-11 font-semibold" style={{ color: "var(--text-secondary)" }}>
                   {formatRs(overdueAmount)} {t("inline.overdue")}
                 </p>

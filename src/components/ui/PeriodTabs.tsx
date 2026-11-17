@@ -1,4 +1,5 @@
 import { SlidersHorizontal } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n";
 
 /**
@@ -60,19 +61,63 @@ export default function PeriodTabs<K extends string>({
   const t = useT();
   const underline = variant === "underline";
 
+  /**
+   * The selected preset is a raised pill that SLIDES between presets, the way the reference's
+   * Day/Week control does. Painting the background onto whichever button is selected was the same
+   * shape in the same place, but it teleported — and on a screen whose whole purpose is switching
+   * a window, the movement is what tells the eye the figures below changed for a reason.
+   *
+   * Measured rather than assumed: the presets are `flex-1`, their widths change with the label and
+   * the language, and the strip is re-measured when it resizes (rotation, split view, Urdu).
+   */
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (underline) return;
+    const strip = stripRef.current;
+    if (!strip) return;
+    const measure = () => {
+      const buttons = Array.from(strip.querySelectorAll<HTMLButtonElement>("[data-period-key]"));
+      const index = options.findIndex((option) => option.key === value);
+      const el = index >= 0 ? buttons[index] : undefined;
+      setThumb(el ? { left: el.offsetLeft, width: el.offsetWidth } : null);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [value, options, underline]);
+
   return (
     <div className="flex items-center gap-2">
       <div
+        ref={stripRef}
         className={
           underline
             ? "flex-1 flex items-end gap-1 min-w-0 border-b"
-            : "flex-1 flex items-center gap-1 p-1 rounded-full min-w-0"
+            : "flex-1 flex items-center gap-1 p-1 rounded-full min-w-0 relative overflow-hidden"
         }
         style={underline ? { borderColor: "var(--hairline)" } : { background: "var(--tone-sunken)" }}
         role="group"
         aria-label={label}
       >
-        {options.map((option) => {
+        {!underline && thumb && (
+          <span
+            aria-hidden="true"
+            className="absolute rounded-full pointer-events-none"
+            style={{
+              left: thumb.left,
+              width: thumb.width,
+              top: 4,
+              bottom: 4,
+              background: "var(--tone-card)",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+              transition: "left var(--dur-2) var(--ease-out), width var(--dur-2) var(--ease-out)",
+            }}
+          />
+        )}
+        {options.map((option, index) => {
           const selected = value === option.key;
           return (
             <button
@@ -81,10 +126,12 @@ export default function PeriodTabs<K extends string>({
               onClick={() => onChange(option.key)}
               aria-pressed={selected}
               data-testid={`${testIdPrefix}-${option.key}`}
+              data-period-key={option.key}
+              data-period-index={index}
               className={
                 underline
                   ? "flex-1 h-10 px-1 text-13 font-semibold transition-colors truncate border-b-2 -mb-px"
-                  : "flex-1 h-9 px-1 rounded-full text-13 font-semibold transition-colors truncate"
+                  : "flex-1 h-9 px-1 rounded-full text-13 font-semibold transition-colors truncate relative z-10"
               }
               style={
                 underline
@@ -93,9 +140,7 @@ export default function PeriodTabs<K extends string>({
                       color: selected ? "var(--text-primary)" : "var(--text-secondary)",
                       borderColor: selected ? "var(--text-primary)" : "transparent",
                     }
-                  : selected
-                    ? { background: "var(--tone-card)", color: "var(--text-primary)" }
-                    : { background: "transparent", color: "var(--text-secondary)" }
+                  : { background: "transparent", color: selected ? "var(--text-primary)" : "var(--text-secondary)" }
               }
             >
               {option.label}
