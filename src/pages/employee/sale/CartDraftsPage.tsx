@@ -94,10 +94,7 @@ export default function CartDraftsPage() {
                         {draft.customer?.name ?? t("sale.walkIn")}
                       </p>
                       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                        {t("sale.draftSummary", {
-                          items: String(draft.items.length),
-                          units: String(units),
-                        })}
+                        {`${draft.items.length} ${draft.items.length === 1 ? t("sale.packOne") : t("sale.packMany")} · ${units} ${units === 1 ? t("sale.unitOne") : t("common.units")}`}
                         {" · "}
                         {new Date(draft.startedAt).toLocaleTimeString(undefined, {
                           hour: "numeric",

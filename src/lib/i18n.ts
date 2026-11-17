@@ -2779,6 +2779,10 @@ export const translations = {
     "sale.pickVariantsHint":     "Set a quantity on each pack",
     "sale.addedPacks":           "{count} packs added to cart",
     "sale.stagedSummary":        "{packs} packs · {units} units",
+    // A shopkeeper reads this line on every tap, so "1 packs" is not good enough.
+    "sale.packOne":              "pack",
+    "sale.packMany":             "packs",
+    "sale.unitOne":              "unit",
     "sale.pickVariantsEmpty":    "Nothing picked yet",
     // Discount on the review screen (owner, 2026-11-17): a line's or the whole sale's, in % or Rs.
     "sale.discount":             "Discount",
@@ -8232,6 +8236,9 @@ export const translations = {
     "sale.pickVariantsHint": "ہر پیک پر تعداد مقرر کریں",
     "sale.addedPacks": "{count} پیک کارٹ میں شامل ہو گئے",
     "sale.stagedSummary": "{packs} پیک · {units} یونٹ",
+    "sale.packOne": "پیک",
+    "sale.packMany": "پیک",
+    "sale.unitOne": "یونٹ",
     "sale.pickVariantsEmpty": "ابھی کچھ منتخب نہیں",
     "sale.discount": "رعایت",
     "sale.addDiscount": "رعایت شامل کریں",

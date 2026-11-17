@@ -189,10 +189,7 @@ export default function VariantSelectorPage() {
         <div className="flex items-center justify-between mb-2 px-1">
           <p className="text-12" style={{ color: "var(--text-secondary)" }}>
             {stagedUnits > 0
-              ? t("sale.stagedSummary", {
-                  packs: stagedVariants.length,
-                  units: stagedUnits,
-                })
+              ? `${stagedVariants.length} ${stagedVariants.length === 1 ? t("sale.packOne") : t("sale.packMany")} · ${stagedUnits} ${stagedUnits === 1 ? t("sale.unitOne") : t("common.units")}`
               : t("sale.pickVariantsEmpty")}
           </p>
           <p className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
