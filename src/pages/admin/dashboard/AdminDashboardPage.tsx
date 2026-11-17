@@ -772,7 +772,10 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* ── Time-period filter — controls all figures below ── */}
-      <div className="flex gap-2 px-4 pt-3 pb-3 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
+      {/* The pills belong to the search above them, not to the card below (owner, 2026-11-18): the
+          gap above is the bigger one so they read as the search's filter row, and the card follows
+          them tightly so it reads as what the filter produced. */}
+      <div className="flex gap-2 px-4 pt-5 pb-1 overflow-x-auto no-scrollbar" style={{ scrollBehavior: "smooth", WebkitOverflowScrolling: "touch" }}>
         {DATE_PILLS.map(({ key, label }) => (
           <button
             key={key}
@@ -797,7 +800,7 @@ export default function AdminDashboardPage() {
           `sales.view`: a role can be shown the shop's takings without being able to void a
           sale. An owner, and an account whose visibility has not been read yet, see it. */}
       {canSeeDashboard("sales_overview") && (
-      <div className="px-4 pt-5 animate-fade-in-up" data-tour="home:kpis">
+      <div className="px-4 pt-3 animate-fade-in-up" data-tour="home:kpis">
         {/* A green-TINTED plate, not a green block (owner, 2026-11-16): `--brand-tint` is the
             brand at one step over the page, so the card reads green in both themes while the
             only solid green on the screen is the New Sale button. Its labels take
