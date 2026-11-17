@@ -127,14 +127,9 @@ export default function VariantSelectorPage() {
 
       {/* Packs — one card each, a counter on the trailing side */}
       <div className="px-4 pt-4">
-        <div className="flex items-baseline justify-between mb-2">
-          <p className="text-13 font-semibold" style={{ color: "var(--text-secondary)" }}>
-            {t("common.selectSellableUnit")}
-          </p>
-          <p className="text-11" style={{ color: "var(--text-tertiary)" }}>
-            {t("sale.pickVariantsHint")}
-          </p>
-        </div>
+        <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>
+          {t("common.selectSellableUnit")}
+        </p>
 
         <div className="flex flex-col gap-2">
           {product.variants.map((v) => {
@@ -186,16 +181,13 @@ export default function VariantSelectorPage() {
 
       {/* One Add to Cart for every pack that has a number */}
       <div className="p-4 pb-6">
-        <div className="flex items-center justify-between mb-2 px-1">
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-            {stagedUnits > 0
-              ? `${stagedVariants.length} ${stagedVariants.length === 1 ? t("sale.packOne") : t("sale.packMany")} · ${stagedUnits} ${stagedUnits === 1 ? t("sale.unitOne") : t("common.units")}`
-              : t("sale.pickVariantsEmpty")}
-          </p>
-          <p className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
-            {formatCurrency(stagedTotal)}
-          </p>
-        </div>
+        <p className="text-12 mb-2 px-1" style={{ color: "var(--text-secondary)" }}>
+          {stagedUnits > 0
+            ? `${stagedVariants.length} ${stagedVariants.length === 1 ? t("sale.packOne") : t("sale.packMany")} · ${stagedUnits} ${stagedUnits === 1 ? t("sale.unitOne") : t("common.units")}`
+            : t("sale.pickVariantsEmpty")}
+        </p>
+        {/* The amount rides on the button (owner, 2026-11-17): the one control that commits the
+            sale is also the one place the total belongs, instead of a figure floating above it. */}
         <div className="rounded-full overflow-hidden">
           <Button
             fullWidth
@@ -203,7 +195,9 @@ export default function VariantSelectorPage() {
             onClick={handleAdd}
             disabled={stagedVariants.length === 0}
           >
-            {t("sale.addToCart")}
+            {stagedVariants.length > 0
+              ? `${t("sale.addToCart")} · ${formatCurrency(stagedTotal)}`
+              : t("sale.addToCart")}
           </Button>
         </div>
       </div>

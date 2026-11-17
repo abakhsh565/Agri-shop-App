@@ -153,7 +153,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
       onClick={closing ? undefined : dismiss}
     >
       <div
-        className={`w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col ${
+        className={`w-full max-w-[480px] mx-auto rounded-t-[24px] flex flex-col ${
           closing ? "ds-anim-sheet-out" : "ds-anim-sheet-in"
         }`}
         style={{ background: "var(--tone-sheet)", maxHeight: "85vh" }}

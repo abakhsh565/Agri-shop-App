@@ -420,6 +420,23 @@ textarea,
     background-color: var(--field-bg);
     transition: border-color 0.15s, box-shadow 0.15s;
   }
+  /*
+   * A typed number is typed, not stepped (owner, 2026-11-17). The browser's little up/down arrows
+   * sat on top of the value in every quantity and amount field — 48px of phone showing a spinner
+   * nobody asked for — and they are the one part of the control the design cannot style. The
+   * spinner is gone everywhere, including the review screen and the manual quantity in a stepper,
+   * and the field is an ordinary text box that still refuses letters on a numeric keyboard.
+   */
+  :where(input[type="number"]) {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  :where(input[type="number"])::-webkit-outer-spin-button,
+  :where(input[type="number"])::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
   :where(select) {
     border-radius: var(--radius-field);
     height: var(--field-h);

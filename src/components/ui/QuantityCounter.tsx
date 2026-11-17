@@ -88,22 +88,22 @@ export default function QuantityCounter({
   const removing = qty <= minQty && deleteOnOne;
 
   /**
-   * The two ends are deliberately different weights, as in the reference: minus is a raised grey
-   * disc on the surface, plus is the page's ink disc — the one control that ADDS is the one that
-   * reads as a control. `--ink`/`--ink-fg` invert per theme, so the plus is white-on-dark here and
-   * black-on-light in the light theme, and it is never invisible.
+   * The reference's counter (owner, 2026-11-17): one sunken plate holding two equal rounded-square
+   * keys, with the number between them. Both keys carry the same weight because they are the same
+   * kind of control — the earlier ink-filled plus made one of them look like the page's action,
+   * which it is not; the action on this screen is Add to Cart.
    */
-  const btn = isSmall ? "size-9" : "size-10";
-  const glyph = isSmall ? 14 : 16;
+  const btn = isSmall ? "size-9 rounded-[12px]" : "size-11 rounded-[14px]";
+  const glyph = isSmall ? 14 : 17;
 
   return (
     <div
       className={
         boxed
-          ? "flex items-center gap-2 w-full h-[52px] px-1.5 rounded-[14px]"
+          ? "flex items-center justify-between gap-2 w-full h-[60px] p-2 rounded-[18px]"
           : "flex items-center gap-2"
       }
-      style={boxed ? { border: "1px solid var(--divider)" } : undefined}
+      style={boxed ? { background: "var(--tone-card)", border: "1px solid var(--divider)" } : undefined}
     >
       <button
         type="button"
@@ -112,7 +112,7 @@ export default function QuantityCounter({
         // Icon-only (a minus, or a bin at the minimum): with no name a screen reader
         // announces an unlabelled button.
         aria-label={removing ? tNow("common.remove") : tNow("common.decrease")}
-        className={`${btn} rounded-full flex items-center justify-center shrink-0 ds-pressable transition-colors disabled:opacity-30`}
+        className={`${btn} flex items-center justify-center shrink-0 ds-pressable transition-colors disabled:opacity-30`}
         style={
           removing
             ? { background: "var(--error)", color: "#ffffff" }
@@ -169,8 +169,8 @@ export default function QuantityCounter({
         onClick={increment}
         disabled={!!max && qty >= max}
         aria-label={tNow("common.increase")}
-        className={`${btn} rounded-full flex items-center justify-center shrink-0 ds-pressable disabled:opacity-30`}
-        style={{ background: "var(--ink)", color: "var(--ink-fg)" }}
+        className={`${btn} flex items-center justify-center shrink-0 ds-pressable disabled:opacity-30`}
+        style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
       >
         <span className="font-semibold leading-none" style={{ fontSize: glyph }}>
           +
