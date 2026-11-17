@@ -910,8 +910,12 @@ export default function RemindersOverviewPage() {
         what makes Ready, Upcoming, Recently Sent and Group Reminder line up with the tabs.
       */}
       <div className="flex flex-col px-4 pt-4 pb-8 gap-4" style={{ overflowY: "auto", flex: 1 }}>
-        {/* Main tabs — premium segmented control */}
-        <div className="flex items-center gap-1 p-1 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
+        {/* Main tabs.
+
+            Plain labels, not a segmented control: the filled pill with its shadow was the loudest
+            thing on the screen, and it competed with the rows the screen exists to show. Two
+            tabs do not need a plate to be told apart — the active one is green, the other muted. */}
+        <div className="flex items-center gap-6">
           {([
             { key: "today" as const, label: t("actionCenter.today") },
             { key: "groups" as const, label: t("inline.group_reminder") },
@@ -919,11 +923,11 @@ export default function RemindersOverviewPage() {
             <button
               key={tab.key}
               onClick={() => { setMainTab(tab.key); setSubTab(tab.key === "groups" ? "" : (subTab || "critical")); }}
-              className="flex-1 text-center py-2 rounded-[var(--radius-tile)] text-13 font-semibold transition-all flex items-center justify-center gap-1.5"
+              aria-pressed={mainTab === tab.key}
+              className="py-2 text-13 transition-colors"
               style={{
-                color: mainTab === tab.key ? "var(--text-primary)" : "var(--text-secondary)",
-                background: mainTab === tab.key ? "var(--background)" : "transparent",
-                boxShadow: mainTab === tab.key ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                color: mainTab === tab.key ? "var(--brand-dark)" : "var(--text-secondary)",
+                fontWeight: mainTab === tab.key ? 600 : 500,
               }}
             >
               {tab.label}

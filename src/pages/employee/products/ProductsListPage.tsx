@@ -24,7 +24,6 @@ import type { ProductCategory } from "@/types";
 import { useShopStore } from "@/stores/shopStore";
 import { useCatalogueStore } from "@/stores/catalogueStore";
 import { categoryDisplayName, orderedCategories } from "@/lib/catalogue";
-import { referenceCode } from "@/lib/referenceCode";
 import { draftMissingFields, loadProductDrafts, type DraftMissingField } from "@/lib/productDraft";
 import { type I18nKey } from "@/lib/i18n";
 
@@ -331,11 +330,6 @@ export default function ProductsListPage() {
                     <div className="flex flex-col gap-0.5">
                       <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>{p.name}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        {/* The product's name in the shop's own words, then its reference: two
-                            products can share a name, and the shelf label cannot tell them apart. */}
-                        <span className="text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>
-                          {referenceCode("product", p.id)}
-                        </span>
                         <span
                           className="text-10 font-semibold px-1.5 py-0.5 rounded-full"
                           style={{ background: dotColor + "20", color: dotColor }}

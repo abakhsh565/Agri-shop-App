@@ -400,9 +400,19 @@ export default function CartPage() {
             <button
               key={opt.key}
               onClick={() => setPaymentType(opt.key as "full" | "partial")}
-              className={`flex-1 h-11 rounded-full text-sm font-medium transition-colors ${
-                paymentType === opt.key ? "bg-ink text-ink-fg" : "border border-border text-foreground"
-              }`}
+              aria-pressed={paymentType === opt.key}
+              /*
+               * A chosen option is green text in a green outline, not a filled plate. Filled
+               * controls here were the loudest thing above the sale's own total: two of them read
+               * as two primary actions, and on the dark theme they were solid black-on-black.
+               * Selection still has to be obvious at a glance, so the outline carries it.
+               */
+              className="flex-1 h-11 rounded-full text-sm font-medium transition-colors ds-pressable"
+              style={{
+                border: `1px solid ${paymentType === opt.key ? "var(--brand-dark)" : "var(--border)"}`,
+                color: paymentType === opt.key ? "var(--brand-dark)" : "var(--text-primary)",
+                background: "transparent",
+              }}
             >
               {t(opt.labelKey as any)}
             </button>
@@ -446,9 +456,13 @@ export default function CartPage() {
               <button
                 key={opt.key}
                 onClick={() => setPaymentMethod(opt.key as "cash" | "bank_transfer")}
-                className={`flex-1 h-11 rounded-full text-sm font-medium transition-colors ${
-                  paymentMethod === opt.key ? "bg-ink text-ink-fg" : "border border-border text-foreground"
-                }`}
+                aria-pressed={paymentMethod === opt.key}
+                className="flex-1 h-11 rounded-full text-sm font-medium transition-colors ds-pressable"
+                style={{
+                  border: `1px solid ${paymentMethod === opt.key ? "var(--brand-dark)" : "var(--border)"}`,
+                  color: paymentMethod === opt.key ? "var(--brand-dark)" : "var(--text-primary)",
+                  background: "transparent",
+                }}
               >
                 {t(opt.labelKey as any)}
               </button>

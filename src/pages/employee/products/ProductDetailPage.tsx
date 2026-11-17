@@ -13,6 +13,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
+import { referenceCode } from "@/lib/referenceCode";
 import { useShellBase } from "@/lib/useShellBase";
 import { hasPermission } from "@/lib/tenantContext";
 import { rpcDeleteProduct, rpcDeleteProductBarcode, rpcPreviewProductBarcode, rpcSetProductBarcode } from "@/lib/db";
@@ -261,6 +262,13 @@ export default function ProductDetailPage() {
                 so naming it here too read as the same fact stated twice on one card. */}
             <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>
               {product.company}
+            </p>
+            {/* The record's own name, on the record's own page — never on a card in a list, where
+                it competes with the facts the row exists to show. A pack's SKU belongs to the
+                pack, and the barcode below is the product's own printed identity, so this line is
+                the reference code and nothing else. */}
+            <p className="text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>
+              {referenceCode("product", product.id)}
             </p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               {/* The shop's own shelf when the product is filed on one (0259); the fixed kind
