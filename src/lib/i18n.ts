@@ -4300,6 +4300,10 @@ export const translations = {
     "sales.productBtn":              "Product",
     // Customer profile toasts & extras
     "common.notSet":                 "Not set",
+    "customerProfile.cropsUnknownTitle": "Record their crops to see what to sell them",
+    "customerProfile.cropsUnknownBody": "Crops decide what fits: seed at sowing, feed as it grows, spray when it flowers. Tap to add them.",
+    "customerProfile.nothingInSeasonTitle": "Nothing in season for their crops right now",
+    "customerProfile.nothingInSeasonBody": "When a crop's season opens, the products that fit it appear here.",
     "customerProfile.reminderSaved": "Reminder saved",
     "customerProfile.reminderDeleted": "Reminder deleted",
     "customerProfile.reminderSaveFailed": "Failed to save reminder",
@@ -9408,6 +9412,10 @@ export const translations = {
     "sales.productBtn":              "سامان",
     // Customer profile toasts & extras
     "common.notSet":                 "طے نہیں",
+    "customerProfile.cropsUnknownTitle": "کس کی فروخت ہو سکتی ہے، دیکھنے کے لیے فصلیں درج کریں",
+    "customerProfile.cropsUnknownBody": "فصل سے پتا چلتا ہے کیا مناسب ہے: بوتے وقت بیج، بڑھتے وقت کھاد، پھول آنے پر سپرے۔ شامل کرنے کے لیے ٹیپ کریں۔",
+    "customerProfile.nothingInSeasonTitle": "اس وقت اِن کی فصلوں کے لیے کچھ موسم میں نہیں",
+    "customerProfile.nothingInSeasonBody": "جیسے ہی فصل کا موسم کھلتا ہے، موزوں سامان یہاں نظر آئے گا۔",
     "customerProfile.reminderSaved": "یاد دہانی محفوظ ہو گئی",
     "customerProfile.reminderDeleted": "یاد دہانی مٹ گئی",
     "customerProfile.reminderSaveFailed": "یاد دہانی محفوظ نہیں ہو سکی",

@@ -18,6 +18,7 @@ import type { Sale } from "@/types";
 import { Calendar, SlidersHorizontal, Check, ClipboardList } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
+import { referenceCode } from "@/lib/referenceCode";
 import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Tab = "all" | "credit" | "paid";
@@ -396,7 +397,11 @@ export default function SalesListPage() {
                   >
                     <div className="min-w-0">
                       <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                      <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now, t)}</p>
+                      {/* The sale's own name first: one customer can have several sales on the same
+                          day, and a time alone cannot be quoted over the counter. */}
+                      <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                        <span className="tabular-nums">{sale.saleNumber || referenceCode("SL", sale.id)}</span> · {formatSmartDateTime(sale.createdAt, now, t)}
+                      </p>
                     </div>
                   </ListRow>
                   );

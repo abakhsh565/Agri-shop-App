@@ -531,9 +531,13 @@ export default function CustomerProfilePage() {
               </div>
               {/* The due date is written through `update_customer_due_date`, which requires
                   `customers.edit` — so the control follows the same grant instead of being
-                  offered to someone the database will refuse. */}
+                  offered to someone the database will refuse.
+
+                  Not `#5A5A55` on the sunken plate either: a hardcoded grey reads as a disabled
+                  control, and on the dark theme it is barely there at all. An outline in the
+                  theme's own text colour says "available" in both themes. */}
               {canEditCustomers && (
-                <button onClick={() => { setEditDueDate(customer.dueDate || ""); setShowEditDueDate(true); }} className="text-12 font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>
+                <button onClick={() => { setEditDueDate(customer.dueDate || ""); setShowEditDueDate(true); }} className="text-12 font-semibold px-3 py-1.5 rounded-full ds-pressable" style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}>
                   {customer.dueDate ? t("customerProfile.edit") : t("common.save")}
                 </button>
               )}
@@ -543,7 +547,9 @@ export default function CustomerProfilePage() {
           <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--hairline)" }}>
             <div className="flex justify-between items-center mb-2">
               <p className="ds-section-label">{t("customerProfile.reminders")}</p>
-              <button onClick={() => { setEditingConfig(null); setShowReminderConfig(true); }} className="text-12 font-semibold px-3 py-1.5 rounded-full" style={{ background: "var(--surface-2)", color: "#5A5A55" }}>{t("customerProfile.add")}</button>
+              {/* The one action in this card that adds something, so it carries the app's quiet
+                  action plate (`--cta`): dark in both themes, never grey-on-grey. */}
+              <button onClick={() => { setEditingConfig(null); setShowReminderConfig(true); }} className="text-12 font-semibold px-3 py-1.5 rounded-full ds-pressable" style={{ background: "var(--cta)", color: "var(--cta-fg)" }}>{t("customerProfile.add")}</button>
             </div>
             {reminderConfigs.length === 0 ? (
               <p className="text-12 py-1" style={{ color: "var(--text-secondary)" }}>{t("common.noRemindersConfigured")}</p>
@@ -573,7 +579,7 @@ export default function CustomerProfilePage() {
         {/* ═══════════════════════════════════════════
             4. RECOMMENDED PRODUCTS
            ═══════════════════════════════════════════ */}
-        <RecommendedSection customerId={customerId} />
+        <RecommendedSection customerId={customerId} onAddCrops={startEdit} />
         <ListCard>
           <ListRow
             onClick={() => navigate(base + "/customers/" + customerId + "/purchases")}
@@ -771,7 +777,14 @@ export default function CustomerProfilePage() {
    RecommendedSection — products this customer's crop needs now,
    ranked by how they actually buy
    ═══════════════════════════════════════════════════════ */
-function RecommendedSection({ customerId }: { customerId: string | undefined }) {
+function RecommendedSection({
+  customerId,
+  onAddCrops,
+}: {
+  customerId: string | undefined;
+  /** Opens the crop editor: without crops the engine has nothing to reason from. */
+  onAddCrops?: () => void;
+}) {
   if (!customerId) return null;
   const t = useT();
   const customers = useCustomersStore((s) => s.customers);
@@ -797,7 +810,39 @@ function RecommendedSection({ customerId }: { customerId: string | undefined }) 
     products,
     customerCrops: { [customerId]: crops },
   });
-  if (recs.length === 0) return null;
+
+  /*
+   * What the owner can sell this customer is a question the app already answers — the engine has
+   * their crops, their history and the season. Rendering nothing when the answer was "not yet"
+   * made it look as if the app did not know, so the section now says which of the two it is: no
+   * crops recorded (and where to add them), or nothing in season for those crops today.
+   */
+  const sectionTitle = t("products.recommendedFor", { name: customer.name.split(" ")[0] });
+
+  if (crops.length === 0) {
+    return (
+      <ListCard section={sectionTitle}>
+        <ListRow
+          onClick={onAddCrops}
+          testId="recommendations-need-crops"
+          title={t("customerProfile.cropsUnknownTitle")}
+          description={t("customerProfile.cropsUnknownBody")}
+        />
+      </ListCard>
+    );
+  }
+
+  if (recs.length === 0) {
+    return (
+      <ListCard section={sectionTitle}>
+        <ListRow
+          testId="recommendations-none-in-season"
+          title={t("customerProfile.nothingInSeasonTitle")}
+          description={t("customerProfile.nothingInSeasonBody")}
+        />
+      </ListCard>
+    );
+  }
 
   return (
     <ListCard section={t("products.recommendedFor", { name: customer.name.split(" ")[0] })}>

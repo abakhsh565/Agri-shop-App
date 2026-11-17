@@ -325,7 +325,15 @@
      #3a3a34 is ~35/255 off it, so the field still has an edge without becoming a bright
      outline. It reads the same on a sheet, because the edge does not follow the container. */
   --border-control: #3a3a34;
-  --ink: var(--brand);
+  /*
+   * Primary actions are the page's inverse, never the brand.
+   *
+   * `--ink` used to point at the brand in this theme, so the same button was a black plate on the
+   * light theme and a green one on the dark: the "Complete sale" call to action changed colour
+   * with the theme and spent the screen's one accent on a surface. Inverse keeps one language —
+   * the strongest plate on the page — and leaves green for the accent it is meant to be.
+   */
+  --ink: #f2f2ef;
   --ink-fg: #0a0a0a;
   --cta: #1f1f1e;
   --cta-fg: var(--brand);

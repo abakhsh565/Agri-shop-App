@@ -38,6 +38,7 @@ import { groupSalesByDateSections } from "@/lib/salesGrouping";
 import { netSalesOf, refundsBySale, useReturns } from "@/lib/salesActivity";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
 import { useShellBase } from "@/lib/useShellBase";
+import { referenceCode } from "@/lib/referenceCode";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -772,7 +773,11 @@ export default function AdminSalesListPage() {
                   >
                     <div className="min-w-0">
                       <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
-                      <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now, t)}</p>
+                      {/* The shop's own sale number, first: it is what the counter says out loud and
+                          what the receipt prints, and it was only visible after opening the sale. */}
+                      <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                        <span className="tabular-nums">{sale.saleNumber || referenceCode("SL", sale.id)}</span> · {formatSmartDateTime(sale.createdAt, now, t)}
+                      </p>
                       <p className="text-11 font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("saleDetail.soldBy")}: {sale.employeeName}</p>
                     </div>
                   </ListRow>

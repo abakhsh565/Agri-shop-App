@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
@@ -23,7 +23,8 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import type { ProductCategory } from "@/types";
 import { useShopStore } from "@/stores/shopStore";
 import { useCatalogueStore } from "@/stores/catalogueStore";
-import { categoryDisplayName } from "@/lib/catalogue";
+import { categoryDisplayName, orderedCategories } from "@/lib/catalogue";
+import { referenceCode } from "@/lib/referenceCode";
 import { draftMissingFields, loadProductDrafts, type DraftMissingField } from "@/lib/productDraft";
 import { type I18nKey } from "@/lib/i18n";
 
@@ -63,7 +64,13 @@ const DRAFT_FIELD_KEYS: Record<DraftMissingField, I18nKey> = {
  * A SEARCH STARTED ON PRODUCTS & INVENTORY lands here as `?q=`, where searching the shelf
  * actually happens — one search field, one implementation.
  */
-type Filter = "all" | ProductCategory | "draft";
+/**
+ * `all`, one of the shop's own shelves, or the drafts. It used to be the three kinds the app shipped
+ * with (pesticide / seed / fertilizer), which a shop that renamed or added its own shelves never
+ * matched: the chip row was the product's hardcoded model arguing with the catalogue the owner
+ * had actually built.
+ */
+type Filter = string;
 
 export default function ProductsListPage() {
   const navigate = useNavigate();
@@ -83,13 +90,24 @@ export default function ProductsListPage() {
   const [search, setSearch] = useState(() => new URLSearchParams(addressQuery).get("q") ?? "");
   const [filter, setFilter] = useState<Filter>("all");
 
-  const FILTERS: { key: Filter; label: I18nKey }[] = [
-    { key: "all", label: "products.all" },
-    { key: "pesticide", label: "category.pesticide" },
-    { key: "seed", label: "category.seed" },
-    { key: "fertilizer", label: "category.fertilizer" },
-    { key: "draft", label: "draft.chip" },
-  ];
+  /**
+   * The chips are the shelves this shop has, in the shop's own order.
+   *
+   * A product filed under a sub-shelf belongs to its root's chip, so a shop that files "Insect
+   * powder" under "Pesticide" sees every pesticide on one chip instead of a chip per child. A
+   * product filed before shelves existed still carries the old kind, and finds the chip whose
+   * root declares it — so no row is unreachable by any chip. Drafts are offered only when there
+   * is unfinished work, because an empty chip is a control that can do nothing.
+   */
+  const shelfChips = useMemo(() => {
+    const chips: { key: Filter; label: string }[] = [{ key: "all", label: t("products.all") }];
+    for (const { category: root } of orderedCategories(categories)) {
+      if (root.parentId) continue;
+      chips.push({ key: root.id, label: categoryDisplayName(root, t) });
+    }
+    if (drafts.length > 0) chips.push({ key: "draft", label: t("draft.chip") });
+    return chips;
+  }, [categories, drafts.length, t]);
 
   const term = search.trim().toLowerCase();
   /** The row prints the shelf's name, so searching it has to find the row (0259). */
@@ -104,14 +122,16 @@ export default function ProductsListPage() {
     shelfName(categoryId).toLowerCase().includes(term);
 
   const filtered = products.filter((p) => {
-    // The Draft chip is not a category: it hides the shelf and shows the local drafts below.
-    const matchCat =
-      filter === "draft"
-        ? false
-        : filter === "all" ||
-          p.category === filter ||
-          (filter === "pesticide" && p.category === "spray");
-    return matchesSearch(p.name, p.company, p.categoryId) && matchCat;
+    // The Draft chip is not a shelf: it hides the shelf and shows the local drafts below.
+    if (filter === "draft") return false;
+    if (!matchesSearch(p.name, p.company, p.categoryId)) return false;
+    if (filter === "all") return true;
+    const shelf = p.categoryId ? categories.find((c) => c.id === p.categoryId) : undefined;
+    const rootId = shelf ? shelf.parentId ?? shelf.id : null;
+    if (rootId === filter) return true;
+    // Filed before shelves existed: the row still carries the old kind, and the chip's root names it.
+    const chipRoot = categories.find((c) => c.id === filter);
+    return !shelf && chipRoot?.legacyCategory === p.category;
   });
 
   const visibleDrafts = drafts.filter((d) => matchesSearch(d.name, ""));
@@ -211,33 +231,26 @@ export default function ProductsListPage() {
             floating over the list where it covered the last rows and moved with the scroll. Two
             labelled controls, not one labelled and one glyph: a bare icon for creating a shelf
             read as "filters". */}
-        <div className="flex gap-2 px-4 pb-3">
-          {hasPermission("products.create") && (
+        {/* One action on this screen: adding a product. Creating a shelf belongs to the catalogue,
+            which the header button opens — two equally weighted buttons here made "add a shelf"
+            look like the same kind of everyday job as "add a product", and it is not. */}
+        {hasPermission("products.create") && (
+          <div className="px-4 pb-3">
             <button
               onClick={() => navigate(`${base}/inventory/new`)}
               data-testid="products-add-button"
-              className="flex-1 h-11 rounded-full flex items-center justify-center gap-2 text-13 font-bold active:scale-[0.98] transition-transform"
-              style={{ background: "#262626", color: "var(--brand)" }}
+              className="w-full h-11 rounded-full flex items-center justify-center gap-2 text-13 font-bold active:scale-[0.98] transition-transform"
+              style={{ background: "var(--cta)", color: "var(--cta-fg)" }}
             >
               <Plus size={17} strokeWidth={2.5} /> {t("products.addButton")}
             </button>
-          )}
-          {hasPermission("products.edit") && (
-            <button
-              onClick={() => navigate(`${base}/inventory/categories/new`)}
-              data-testid="products-add-category"
-              className="flex-1 h-11 rounded-full flex items-center justify-center gap-2 text-13 font-bold active:scale-[0.98] transition-transform"
-              style={{ background: "var(--surface-2)", color: "var(--brand-dark)", border: "1px solid var(--divider)" }}
-            >
-              <Plus size={17} strokeWidth={2.5} /> {t("addProduct.addCategory")}
-            </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* One chip per way of looking at the shelf: the three categories it files products
             under, plus the unfinished work that is not on it yet. */}
         <div className="flex gap-2 px-4 pb-3 overflow-x-auto">
-          {FILTERS.map(({ key, label }) => (
+          {shelfChips.map(({ key, label }) => (
             <button
               key={key}
               type="button"
@@ -249,7 +262,7 @@ export default function ProductsListPage() {
                 color: filter === key ? "#0a0a0a" : "var(--text-secondary)",
               }}
             >
-              {t(label)}
+              {label}
             </button>
           ))}
         </div>
@@ -318,6 +331,11 @@ export default function ProductsListPage() {
                     <div className="flex flex-col gap-0.5">
                       <p className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>{p.name}</p>
                       <div className="flex items-center gap-2 mt-0.5">
+                        {/* The product's name in the shop's own words, then its reference: two
+                            products can share a name, and the shelf label cannot tell them apart. */}
+                        <span className="text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>
+                          {referenceCode("INV", p.id)}
+                        </span>
                         <span
                           className="text-10 font-semibold px-1.5 py-0.5 rounded-full"
                           style={{ background: dotColor + "20", color: dotColor }}
