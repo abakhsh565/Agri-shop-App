@@ -85,14 +85,18 @@ export default function CartPage() {
   if (items.length === 0 && !completingRef.current) return null;
 
   const total = subtotal();
+  /**
+   * A walk-in sale is paid at the counter — there is no account to owe the difference and nobody
+   * to remind, so credit is not offered at all until a customer is added. */
+  const isWalkIn = !customer;
   const parsedAmount = amountReceived === "" ? null : Number(amountReceived);
-  const amountPaid = paymentType === "full" ? total : Math.min(parsedAmount ?? 0, total);
+  const amountPaid = isWalkIn || paymentType === "full" ? total : Math.min(parsedAmount ?? 0, total);
   const creditAfterSale = (customer?.outstandingBalance ?? 0) + (paymentType === "full" ? 0 : total - amountPaid);
   const creditHealth = customer ? getCreditHealth(creditAfterSale, customer.creditLimit) : "good" as const;
   const creditOverLimit = customer ? customer.creditLimit > 0 && creditAfterSale > customer.creditLimit : false;
 
   // Credit lifecycle enforcement flags
-  const hasCreditPortion = paymentType === "partial" && total - amountPaid > 0;
+  const hasCreditPortion = !isWalkIn && paymentType === "partial" && total - amountPaid > 0;
   const creditLimitNotSet = hasCreditPortion && customer && customer.creditLimit <= 0;
   const dueDateNotSet = hasCreditPortion && !dueDate;
   const creditSaleBlocked = hasCreditPortion && (creditLimitNotSet || dueDateNotSet || creditOverLimit);
@@ -144,7 +148,9 @@ export default function CartPage() {
   async function handleCompleteSale() {
     if (completingRef.current) return;
     if (!items.length) { addToast(t("sale.addAtLeastOne"), "warning"); return; }
-    if (!customer) { addToast(t("sale.selectCustomerFirst"), "warning"); navigate(`${base}/sale`, { state: { fromCart: true } }); return; }
+    // No customer is a walk-in, not a missing step: it completes as a paid sale. Credit is the
+    // only thing that needs the account, and the payment-type control that offers it is not drawn
+    // when the cart has no customer.
     if (paymentType === "partial" && amountTouched && parsedAmount !== null && parsedAmount < 0) { addToast(t("sale.amountCannotBeNegative"), "warning"); return; }
 
     completingRef.current = true;
@@ -153,12 +159,14 @@ export default function CartPage() {
     try {
       const outstandingBalance = total - amountPaid;
       const sale = await createSale({
+        // A walk-in has no account: the sale is stored with no customer id, and the name is the
+        // label the till prints, not a record the shop can chase for money.
         idempotencyKey: submissionKeyRef.current,
-        dueDate: dueDate || undefined,
-        customerId: customer!.id,
-        customerName: customer!.name,
-        customerPhone: customer!.phone,
-        customerAddress: customer!.address,
+        dueDate: isWalkIn ? undefined : dueDate || undefined,
+        customerId: customer?.id ?? "",
+        customerName: customer?.name ?? t("sale.walkIn"),
+        customerPhone: customer?.phone,
+        customerAddress: customer?.address,
         employeeId: user?.id ?? "",
         employeeName: user?.name ?? t("employees.active"),
         items: items.map((it) => ({
@@ -178,7 +186,7 @@ export default function CartPage() {
         amountPaid,
         outstandingBalance,
         paymentMethod,
-        paymentType,
+        paymentType: isWalkIn ? "full" : paymentType,
       });
       // Check for low stock after sale — a per-VARIANT condition, because that is
       // the level sales deduct from. The store still holds pre-sale quantities, so
@@ -239,11 +247,13 @@ export default function CartPage() {
               <Plus size={18} style={{ color: "var(--text-secondary)" }} />
             </div>
             <div className="text-start">
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("sale.selectCustomerPrompt")}</p>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("sale.requiredBeforeSale")}</p>
+              {/* No customer is a sale, not a missing step: it completes as a walk-in, paid at the
+                  counter. A customer is only needed when the sale turns into credit. */}
+              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{t("sale.walkIn")}</p>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{t("sale.walkInHint")}</p>
             </div>
           </div>
-          <span className="text-xs font-semibold" style={{ color: "var(--brand-dark)" }}>{t("sale.choose")}</span>
+          <span className="text-xs font-semibold" style={{ color: "var(--brand-dark)" }}>{t("sale.addCustomer")}</span>
         </button>
       ) : (
         <>
@@ -392,7 +402,8 @@ export default function CartPage() {
         </div>
       </div>
 
-      {/* Payment type */}
+      {/* Payment type — only when there is an account: a walk-in is paid in full by definition. */}
+      {!isWalkIn && (
       <div className="px-4 pt-5">
         <p className="ds-section-label text-foreground mb-3">{t("sale.paymentType")}</p>
         <div className="flex gap-2">
@@ -419,6 +430,7 @@ export default function CartPage() {
           ))}
         </div>
       </div>
+      )}
 
       {/* Amount received for partial — directly under the payment choice it belongs to, so
           "half now" reads as one decision: how much, then when it is due. */}
@@ -501,24 +513,21 @@ export default function CartPage() {
 
       {/* Complete Sale — instead of Proceed to Review */}
       <div className="p-4 pb-6">
-        {!customer ? (
-          <Button
-            onClick={() => navigate(`${base}/sale`, { state: { fromCart: true } })}
-            className="w-full"
-          >
-            {t("sale.selectCustomerContinue")}
-          </Button>
-        ) : (
-          <Button
-            onClick={handleCompleteSale}
-            disabled={completing || items.length === 0 || creditSaleBlocked}
-            className="w-full"
-          >
-            {completing ? t("sale.processing") : creditSaleBlocked && hasCreditPortion
-              ? creditLimitNotSet ? t("sale.setCreditLimitFirst") : dueDateNotSet ? t("sale.selectDueDateFirst") : t("sale.overCreditLimit")
-              : t("sale.completeSaleWith").replace("{amount}", formatCurrency(total))}
-          </Button>
-        )}
+        {/*
+         * One button, both cases. It used to be "Select customer & continue" until a customer was
+         * chosen, which made a walk-in sale impossible to finish: the goods were on the counter and
+         * the till asked for an account. Credit still needs the customer — that is what
+         * `creditSaleBlocked` refuses, and it can only be true with a customer in the cart.
+         */}
+        <Button
+          onClick={handleCompleteSale}
+          disabled={completing || items.length === 0 || creditSaleBlocked}
+          className="w-full"
+        >
+          {completing ? t("sale.processing") : creditSaleBlocked && hasCreditPortion
+            ? creditLimitNotSet ? t("sale.setCreditLimitFirst") : dueDateNotSet ? t("sale.selectDueDateFirst") : t("sale.overCreditLimit")
+            : t("sale.completeSaleWith").replace("{amount}", formatCurrency(total))}
+        </Button>
       </div>
 
       {/* Setting a limit is one small decision, so it gets its own sheet instead of a field

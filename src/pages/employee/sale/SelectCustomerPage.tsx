@@ -11,7 +11,7 @@ import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
 import { withReturn } from "@/lib/dependencyGraph";
 import type { Customer } from "@/types";
-import { Plus } from "lucide-react"
+import { Plus, UserRound } from "lucide-react"
 import { SkeletonList } from "@/components/ui/Skeleton";
 
 export default function SelectCustomerPage() {
@@ -31,8 +31,8 @@ export default function SelectCustomerPage() {
       c.phone.includes(search))
   );
 
-  function select(c: Customer) {
-    setCustomer(c);
+  function continueWith(customer: Customer | null) {
+    setCustomer(customer);
     // If coming from cart, go back to cart; otherwise go to products
     const state = window.history.state?.usr;
     if (state?.fromCart) {
@@ -41,6 +41,8 @@ export default function SelectCustomerPage() {
       navigate(`${base}/sale/products`);
     }
   }
+
+  const select = (c: Customer) => continueWith(c);
 
   // Coming back from creating a customer mid-sale: the new record is already chosen,
   // so the flow continues to the products step instead of asking for the same
@@ -70,7 +72,29 @@ export default function SelectCustomerPage() {
         />
       </div>
 
-      <div className="px-4">
+      {/* Walk-in sits above the list, not after it: it is the one choice that needs no search,
+          and a customer who is not on this phone should not require scrolling past forty names. */}
+      <div className="px-4 pt-1">
+        <button
+          onClick={() => continueWith(null)}
+          className="w-full flex items-center gap-3 p-3.5 rounded-[var(--radius-tile)] text-start ds-pressable"
+          style={{ background: "var(--surface-2)" }}
+          data-testid="sale-walk-in"
+        >
+          <div
+            className="size-10 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: "var(--surface-3, var(--muted))" }}
+          >
+            <UserRound size={18} style={{ color: "var(--text-secondary)" }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-foreground">{t("sale.walkIn")}</p>
+            <p className="text-xs text-caption">{t("sale.walkInHint")}</p>
+          </div>
+        </button>
+      </div>
+
+      <div className="px-4 pt-4">
         <p className="ds-section-label text-foreground mb-2">{t("sale.recentCustomers")}</p>
       </div>
 

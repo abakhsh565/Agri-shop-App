@@ -129,6 +129,10 @@ import SelectCustomerPage from "@/pages/employee/sale/SelectCustomerPage";
 import BrowseProductsPage from "@/pages/employee/sale/BrowseProductsPage";
 import VariantSelectorPage from "@/pages/employee/sale/VariantSelectorPage";
 import CartPage from "@/pages/employee/sale/CartPage";
+import InvoiceListPage from "@/pages/admin/invoices/InvoiceListPage";
+import InvoiceFormPage from "@/pages/admin/invoices/InvoiceFormPage";
+import InvoiceDetailPage from "@/pages/admin/invoices/InvoiceDetailPage";
+import InvoicePrintPage from "@/pages/admin/invoices/InvoicePrintPage";
 import SaleSuccessPage from "@/pages/employee/sale/SaleSuccessPage";
 const SalesListPage = React.lazy(() => import("@/pages/employee/sales/SalesListPage"));
 const CustomersListPage = React.lazy(() => import("@/pages/employee/customers/CustomersListPage"));
@@ -295,6 +299,13 @@ export const router = createBrowserRouter([
           { path: "sale/success", element: <SaleSuccessPage /> },
           { path: "sales",      element: <AdminSalesListPage /> },
           { path: "sales/:saleId", element: <SaleDetailView /> },
+          // The shop's bill book. Reading follows sales.view, writing follows sales.create —
+          // the same grants as the sale that produces the goods on the bill (0319/0320).
+          { path: "invoices", element: <InvoiceListPage /> },
+          { path: "invoices/new", element: <InvoiceFormPage /> },
+          { path: "invoices/:invoiceId", element: <InvoiceDetailPage /> },
+          { path: "invoices/:invoiceId/edit", element: <InvoiceFormPage /> },
+          { path: "invoices/:invoiceId/print", element: <InvoicePrintPage /> },
           { path: "sales/:saleId/return", element: <AdminReturnSelectItemsPage /> },
           { path: "sales/:saleId/return/confirm", element: <AdminReturnConfirmPage /> },
           { path: "sales/:saleId/return/success", element: <AdminReturnSuccessPage /> },
