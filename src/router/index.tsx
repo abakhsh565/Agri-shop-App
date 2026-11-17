@@ -60,6 +60,7 @@ import AddCompanyPage from "@/pages/admin/companies/AddCompanyPage";
 import CompanyDetailPage, { SupplierDetailRedirect } from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
 import SecuritySettingsPage from "@/pages/admin/settings/SecuritySettingsPage";
+import AppPermissionsPage from "@/pages/admin/settings/AppPermissionsPage";
 import PreferencesPage from "@/pages/admin/settings/PreferencesPage";
 import ProfileDetailsPage from "@/pages/admin/settings/ProfileDetailsPage";
 import SectionHubPage from "@/pages/admin/settings/SectionHubPage";
@@ -378,6 +379,9 @@ export const router = createBrowserRouter([
           { path: "settings",   element: <AdminSettingsPage /> },
           { path: "settings/profile", element: <ProfileDetailsPage /> },
           { path: "settings/security", element: <SecuritySettingsPage /> },
+          // What the app asks the phone for, and what Android has answered (0322-era capability
+          // registry, see src/lib/appPermissions.ts).
+          { path: "settings/permissions", element: <AppPermissionsPage /> },
           { path: "settings/preferences", element: <PreferencesPage /> },
           // One hub per menu section: the jobs inside Sales, Finance, Branches and the rest,
           // listed from the same catalogue the menu itself reads (`lib/settingsHub`).

@@ -20,6 +20,16 @@
  *
  * 1. CAMERA — unchanged, and still optional for the hardware.
  *
+ * 1c. Location. `navigator.geolocation` in the WebView only reaches Android when the app
+ *    declares these; Capacitor forwards the page's request to the system dialog, and without the
+ *    declaration the pin was a button that did nothing, with no dialog to refuse. Coarse ships
+ *    with fine because Android 12+ lets the user choose, and a shop pin does not need GPS
+ *    precision. Both location features are optional: the app runs without a mapped shop.
+ *
+ * 1d. The MLKit barcode model, bundled into the APK. Without this meta-data the scanner depends
+ *    on a silent Play-services download at first scan, which is exactly where a new install on a
+ *    shop's Wi-Fi with no internet sits on "Starting camera".
+ *
  * 2. The app's own scheme, `agrishop://login?phone=…&shop=…`. This is what makes an
  *    invitation link open the app rather than a browser, and it needs no domain, no hosting
  *    and no verification. It is the only link that can reach the app on a phone today.
@@ -95,6 +105,55 @@ if (xml.includes('android.permission.USE_BIOMETRIC')) {
   ].join('\n');
   xml = xml.replace(/(<manifest[^>]*>)/, '$1\n' + bio + '\n');
   console.log('Biometric permission injected');
+}
+
+// ── 1b2. Microphone pair ──────────────────────────────────────────────────────
+//
+// RECORD_AUDIO is injected with the native speech plugin (inject-native-speech.cjs). The
+// WebView's audio capture also asks for MODIFY_AUDIO_SETTINGS, and with only the first declared
+// the bundle denied the microphone even after the user allowed it.
+if (xml.includes('android.permission.MODIFY_AUDIO_SETTINGS')) {
+  console.log('Audio settings permission already present');
+} else {
+  xml = xml.replace(
+    /(<manifest[^>]*>)/,
+    '$1\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />',
+  );
+  console.log('Audio settings permission injected');
+}
+
+// ── 1c. Location ───────────────────────────────────────────────────────────────
+//
+// The map picker calls navigator.geolocation. In a Capacitor WebView that request is only
+// answered when the host app itself holds the permission, so the manifest is the difference
+// between a working "use my location" and a button that returns an error with no dialog shown.
+if (xml.includes('android.permission.ACCESS_FINE_LOCATION')) {
+  console.log('Location permissions already present');
+} else {
+  const loc = [
+    '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
+    '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
+    '    <uses-feature android:name="android.hardware.location" android:required="false" />',
+    '    <uses-feature android:name="android.hardware.location.gps" android:required="false" />',
+  ].join('\n');
+  xml = xml.replace(/(<manifest[^>]*>)/, '$1\n' + loc + '\n');
+  console.log('Location permissions injected');
+}
+
+// ── 1d. Barcode model, so the first scan works offline ────────────────────────
+if (xml.includes('com.google.mlkit.vision.DEPENDENCIES')) {
+  console.log('MLKit barcode dependency already declared');
+} else {
+  const meta =
+    '        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode" />';
+  // Any <application> attribute set is fine as the anchor: the meta-data is a child, and the
+  // generated tag always opens on its own line.
+  xml = xml.replace(/(<application(?:\s[^>]*)?>)/, `$1\n${meta}`);
+  if (!xml.includes('com.google.mlkit.vision.DEPENDENCIES')) {
+    console.error('Could not find <application> to place the MLKit barcode meta-data.');
+    process.exit(1);
+  }
+  console.log('MLKit barcode dependency injected');
 }
 
 // ── 2. The app's own scheme ────────────────────────────────────────────────────
