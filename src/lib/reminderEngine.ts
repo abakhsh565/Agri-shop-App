@@ -322,9 +322,13 @@ export async function saveBusinessSettings(settings: BusinessSettings): Promise<
     .maybeSingle();
   const value = JSON.stringify(settings.crops);
   if (existing) {
-    await supabase.from("business_settings")
+    // The result is checked, not dropped: a refused update used to resolve like a successful one,
+    // so the sheet closed as if the harvest periods had been saved and the reminder kept counting
+    // back from the old date. A caller that cannot persist must be able to say so.
+    const { error } = await supabase.from("business_settings")
       .update({ setting_value: value, updated_at: new Date().toISOString() })
       .eq("id", existing.id);
+    if (error) throw new Error(`business_settings update failed: ${error.message}`);
   } else {
     // The row is shop-scoped and `shop_id` is NOT NULL without a default on the databases this
     // runs against, so an insert that names only the key is refused — PostgREST answered 403 and a
@@ -332,8 +336,9 @@ export async function saveBusinessSettings(settings: BusinessSettings): Promise<
     // notifications.ts does: the tenant the session belongs to, then the shop being worked in.
     const shopId =
       useAuthStore.getState().user?.tenantId ?? useShopStore.getState().activeShopId ?? null;
-    await supabase.from("business_settings")
+    const { error } = await supabase.from("business_settings")
       .insert({ setting_key: "crops", setting_value: value, shop_id: shopId });
+    if (error) throw new Error(`business_settings insert failed: ${error.message}`);
   }
 }
 

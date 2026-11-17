@@ -8,6 +8,7 @@ import SelectorField from "./SelectorField";
 import type { CropConfig, BusinessSettings } from "@/types";
 import { useT } from "@/lib/i18n";
 import { loadBusinessSettings, saveBusinessSettings } from "@/lib/reminderEngine";
+import { useUIStore } from "@/stores/uiStore";
 
 const PRESET_CROPS = ["Cotton", "Wheat", "Rice", "Sugarcane", "Maize", "Tobacco"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -16,6 +17,7 @@ interface Props { onClose: () => void; onSave: () => void; }
 
 export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
   const t = useT();
+  const addToast = useUIStore((s) => s.addToast);
   /**
    * The crops and their harvest month/day live in `business_settings` (setting_key `crops`) — the
    * row `reminderEngine` reads when it schedules a "Before harvest season" reminder. This sheet
@@ -80,6 +82,11 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
     setSaving(true);
     try {
       await saveBusinessSettings(settings);
+    } catch {
+      // Nothing was written, so nothing may be reported as saved: the sheet stays open with the
+      // owner's edits in it, and the failure is said out loud instead of a silent close.
+      addToast(t("settings.harvestPeriods.saveFailed"), "error");
+      return;
     } finally {
       setSaving(false);
       savingRef.current = false;
@@ -111,9 +118,16 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
     }));
   }
 
+  /**
+   * The app's field shape, not a raw input: a bare <input> inherits the browser's square border and
+   * a square focus ring, which is what made "Add custom crop" and the crop name look like two
+   * foreign boxes inside a sheet full of rounded fields.
+   */
   const fieldStyle = {
     background: "var(--field-bg)",
     color: "var(--text-primary)",
+    borderRadius: 24,
+    border: "none",
   };
 
   const labelCls = "ds-section-label mb-2 block";
@@ -182,7 +196,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                 onChange={(e) => setCustomCrop(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") addCustomCrop(); }}
                 placeholder={t("bizSettings.addCropPlaceholder")}
-                className="flex-1 h-12 px-4 text-13 outline-none"
+                className="flex-1 h-12 px-4 text-13 outline-none rounded-full"
                 style={{ ...fieldStyle }}
               />
               <button
@@ -229,7 +243,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                           }
                         }}
                         aria-label={t("bizSettings.renameCrop")}
-                        className="flex-1 h-12 px-2.5 text-14 font-semibold outline-none me-2"
+                        className="flex-1 h-12 px-4 text-14 font-semibold outline-none me-2 rounded-full"
                         style={{ ...fieldStyle }}
                       />
                       <button

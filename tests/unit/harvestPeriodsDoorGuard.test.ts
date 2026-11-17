@@ -59,6 +59,28 @@ describe("harvest periods — the door, the store, and the shop", () => {
     );
   });
 
+  it("a refused write fails loudly instead of closing as if it saved", () => {
+    const engine = read("src/lib/reminderEngine.ts");
+    // Every write in saveBusinessSettings must inspect its result; a dropped error resolves like a
+    // successful save, which closes the sheet and leaves the reminder counting from the old date.
+    const save = /export async function saveBusinessSettings[\s\S]*?\n}/.exec(engine);
+    expect(save, "saveBusinessSettings is gone").toBeTruthy();
+    const writes = save![0].match(/\.(update|insert)\(/g) ?? [];
+    const checked = save![0].match(/if \(error\) throw/g) ?? [];
+    expect(writes.length, "the save no longer writes anything").toBeGreaterThan(0);
+    expect(checked.length, "a write in saveBusinessSettings drops its error").toBe(writes.length);
+
+    const sheet = read("src/components/ui/BusinessSettingsSheet.tsx");
+    expect(sheet, "the sheet does not report a failed save").toContain(
+      "settings.harvestPeriods.saveFailed",
+    );
+    expect(sheet, "the sheet cannot show a toast, so a failure is invisible").toContain("addToast(");
+    expect(
+      /catch\s*\{[\s\S]{0,320}?saveFailed[\s\S]{0,160}?return;/.test(sheet),
+      "the sheet does not keep the form open (return) when the save is refused",
+    ).toBe(true);
+  });
+
   it("a harvest-anchored reminder resolves its date from the crop's month and day", () => {
     const engine = read("src/lib/reminderEngine.ts");
     expect(engine, "the harvest anchor stopped reading the crop config").toContain(
