@@ -146,14 +146,15 @@ export default function VariantSelectorPage() {
       {/* Quantity */}
       <div className="px-4 pt-3.5">
         <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>{t("admin.quantity")}</p>
-        <div className="flex items-center justify-between rounded-[var(--radius-tile)] h-[52px] px-4" style={{ border: "1px solid var(--divider)" }}>
-          <QuantityCounter
-            qty={qty}
-            onChange={setQty}
-            max={maxUnits > 0 ? maxUnits : undefined}
-            step={selectedVariant?.qtyStep ?? 1}
-          />
-        </div>
+        {/* The reference control, its own box and its own inset — the page's row used to be the
+            border and the stepper only filled it, so the minus and plus sat on the frame. */}
+        <QuantityCounter
+          boxed
+          qty={qty}
+          onChange={setQty}
+          max={maxUnits > 0 ? maxUnits : undefined}
+          step={selectedVariant?.qtyStep ?? 1}
+        />
         {selectedVariant && (
           <p className="text-xs mt-2" style={{ color: "var(--text-secondary)" }}>
             {stockStatusLabel(selectedVariant)} ·
@@ -166,14 +167,18 @@ export default function VariantSelectorPage() {
 
       {/* Add to Cart */}
       <div className="p-4 pb-6">
-        <Button
-          fullWidth
-          size="lg"
-          onClick={handleAdd}
-          disabled={!selectedVariant || isOOS}
-        >
-          {t("sale.addToCart")}
-        </Button>
+        {/* The reference's CTA is a full pill; the wrapper rounds the button's own corners to it
+            without changing the shared Button for every other screen. */}
+        <div className="rounded-full overflow-hidden">
+          <Button
+            fullWidth
+            size="lg"
+            onClick={handleAdd}
+            disabled={!selectedVariant || isOOS}
+          >
+            {t("sale.addToCart")}
+          </Button>
+        </div>
       </div>
     </div>
   );

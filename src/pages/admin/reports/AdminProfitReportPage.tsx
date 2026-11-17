@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, ReceiptText } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
+import RollingNumber from "@/components/ui/RollingNumber";
 import NavHeader from "@/components/ui/NavHeader";
 import PeriodTabs from "@/components/ui/PeriodTabs";
 import DateRangeSheet from "@/components/ui/DateRangeSheet";
@@ -208,9 +209,13 @@ export default function AdminProfitReportPage() {
             style={{ color: "var(--brand-dark)" }}
             data-testid="profit-net"
           >
-            {display.kind === "unknown"
-              ? t("profit.addCostToSeeProfit")
-              : `${display.kind === "atLeast" ? "≥ " : ""}${money(display.amount)}`}
+            {display.kind === "unknown" ? (
+              t("profit.addCostToSeeProfit")
+            ) : (
+              <RollingNumber
+                text={`${display.kind === "atLeast" ? "≥ " : ""}${money(display.amount)}`}
+              />
+            )}
           </p>
           <p className="text-10 mt-1" style={{ color: "var(--text-secondary)" }}>
             {t("profit.netProfitHint")}
@@ -243,7 +248,7 @@ export default function AdminProfitReportPage() {
               {t("sales.revenue")}
             </p>
             <p className="text-18 font-bold mt-1 tabular-nums break-words">
-              {salesReady ? money(summary.revenue) : "—"}
+              <RollingNumber text={salesReady ? money(summary.revenue) : "—"} />
             </p>
             <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>
               {t("profit.revenueHint")}
@@ -258,7 +263,9 @@ export default function AdminProfitReportPage() {
               {t("reports.costOfGoods")}
             </p>
             <p className="text-18 font-bold mt-1 tabular-nums break-words">
-              {salesReady && summary.unknownLines < summary.lines ? money(summary.cogs) : "—"}
+              <RollingNumber
+                text={salesReady && summary.unknownLines < summary.lines ? money(summary.cogs) : "—"}
+              />
             </p>
             <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>
               {t("profit.costHint")}

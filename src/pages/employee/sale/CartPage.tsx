@@ -335,7 +335,7 @@ export default function CartPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <p className="text-sm font-bold text-foreground">
-                      <RollingNumber text={formatCurrency(item.lineTotal)} />
+                      <RollingNumber value={item.lineTotal} format={formatCurrency} />
                     </p>
                     <QuantityCounter
                       qty={item.qty}
@@ -512,7 +512,7 @@ export default function CartPage() {
             {/* Changing a line's quantity changes this figure, so it rolls like the stepper's own
                 digits: one motion for every number the shopkeeper moves in the same gesture. */}
             <span className="text-sm font-bold text-foreground">
-              <RollingNumber text={formatCurrency(total)} />
+              <RollingNumber value={total} format={formatCurrency} />
             </span>
           </div>
         </div>

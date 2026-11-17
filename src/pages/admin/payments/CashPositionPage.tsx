@@ -9,6 +9,7 @@ import {
   Share2,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
+import RollingNumber from "@/components/ui/RollingNumber";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
 import Sheet from "@/components/ui/Sheet";
@@ -331,7 +332,7 @@ export default function CashPositionPage() {
                   style={{ color: "var(--brand-dark)" }}
                   data-testid="cash-position-expected"
                 >
-                  {formatCurrency(expected)}
+                  <RollingNumber text={formatCurrency(expected)} />
                 </p>
               ) : (
                 <Skeleton w="140px" h="26px" />
@@ -360,7 +361,7 @@ export default function CashPositionPage() {
                   className="text-18 font-bold tabular-nums mt-0.5 break-words"
                   data-testid="cash-position-recorded"
                 >
-                  {count ? formatCurrency(count.counted) : "—"}
+                  <RollingNumber text={count ? formatCurrency(count.counted) : "—"} />
                 </p>
               )}
             </div>
@@ -390,7 +391,7 @@ export default function CashPositionPage() {
                 style={{ color: flows.received > 0 ? "var(--success)" : "var(--text-primary)" }}
                 data-testid="cash-position-received"
               >
-                {entries ? formatCurrency(flows.received) : "—"}
+                <RollingNumber text={entries ? formatCurrency(flows.received) : "—"} />
               </p>
             </div>
             <div className="min-w-0 text-end">
@@ -403,7 +404,7 @@ export default function CashPositionPage() {
                 style={{ color: flows.paid > 0 ? "var(--error)" : "var(--text-primary)" }}
                 data-testid="cash-position-paid"
               >
-                {entries ? formatCurrency(flows.paid) : "—"}
+                <RollingNumber text={entries ? formatCurrency(flows.paid) : "—"} />
               </p>
             </div>
           </div>
@@ -555,7 +556,9 @@ export default function CashPositionPage() {
         closeButton={false}
       >
         <div className="px-4 pb-4">
-          <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
+          {/* The reference's field label is a sentence, not a section caps line: one field in a
+              sheet is a form, and a form labels the thing you type, not the section you are in. */}
+          <p className="text-13 font-medium mb-2" style={{ color: "var(--text-secondary)" }}>
             {t("admin.countedCash")}
           </p>
           <input
@@ -569,16 +572,23 @@ export default function CashPositionPage() {
             placeholder="0"
             aria-label={t("admin.countedCash")}
             data-testid="cash-position-count-input"
-            className="w-full h-12 rounded-[var(--radius-tile)] px-3 text-18 font-bold tabular-nums outline-none"
-            style={{ background: "var(--field-bg)", color: "var(--text-primary)" }}
+            className="w-full h-11 rounded-[12px] px-3.5 text-16 tabular-nums outline-none transition-colors"
+            style={{
+              background: "var(--field-bg)",
+              color: "var(--text-primary)",
+              // The one field in the sheet is the thing in focus, so its brand ring is drawn from
+              // the moment the sheet opens rather than waiting for a tap the user already made.
+              border: "1.5px solid var(--brand)",
+            }}
           />
           <div className="flex gap-2 mt-4">
             <button
               type="button"
               onClick={() => setCashOpen(false)}
               disabled={savingCash}
-              className="flex-1 h-12 rounded-[var(--radius-tile)] text-13 font-bold active:opacity-70 disabled:opacity-50"
-              style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+              className="flex-1 h-11 rounded-[12px] text-13 font-semibold ds-pressable disabled:opacity-50"
+
+              style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
             >
               {t("common.cancel")}
             </button>
@@ -587,7 +597,7 @@ export default function CashPositionPage() {
               onClick={() => void saveCount()}
               disabled={savingCash}
               data-testid="cash-position-save"
-              className="flex-1 h-12 rounded-[var(--radius-tile)] text-13 font-bold active:opacity-70 disabled:opacity-50"
+              className="flex-1 h-11 rounded-[12px] text-13 font-semibold ds-pressable disabled:opacity-50"
               style={{ background: "#2c2c2a", color: "var(--brand)" }}
             >
               {savingCash ? t("common.saving") : t("admin.saveReconciliation")}

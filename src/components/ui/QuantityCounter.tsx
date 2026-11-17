@@ -11,12 +11,25 @@ interface QuantityCounterProps {
   deleteOnOne?: boolean;
   onDelete?: () => void;
   size?: "sm" | "md";
+  /**
+   * The reference's standalone control: its own hairline box, 4px inset, minus and plus at the two
+   * ends. On for a stepper that stands alone under a "Quantity" label (the product page); off inside
+   * a row that already has an edge (a cart line, a return line).
+   */
+  boxed?: boolean;
 }
 
 function clampAndRound(value: number, min: number, max: number | undefined, step: number): number {
   const rounded = Math.round(value / step) * step;
   const clamped = Math.max(min, max ? Math.min(rounded, max) : rounded);
   return Math.round(clamped * 1000) / 1000; // avoid floating point drift
+}
+
+/** 3 → "3", 1.5 → "1.5", 0.25 → "0.25" — decimals only when the unit has them. */
+function formatQty(value: number, step: number): string {
+  if (step >= 1) return String(Math.round(value));
+  const fixed = value.toFixed(step <= 0.25 ? 2 : 1);
+  return fixed.replace(/\.?0+$/, "");
 }
 
 export default function QuantityCounter({
@@ -27,6 +40,7 @@ export default function QuantityCounter({
   deleteOnOne = false,
   onDelete,
   size = "md",
+  boxed = false,
 }: QuantityCounterProps) {
   const isSmall = size === "sm";
   const minQty = step;
@@ -64,39 +78,45 @@ export default function QuantityCounter({
     }
   }
 
-  // 48px tall, like every other field in the app: a stepper is something you type into, and it
-  // used to be the one control that answered a thumb tap with 32px.
-  const btnSize = isSmall ? "w-9 h-12 text-sm" : "w-11 h-12 text-base";
+  const removing = qty <= minQty && deleteOnOne;
 
-  // Format qty display: show decimals only if step < 1
-  const displayQty = step < 1
-    ? qty.toFixed(step <= 0.25 ? 2 : 1).replace(/\.?0+$/, "")
-    : String(Math.round(qty));
-
-  const inputWidth = isSmall ? "w-12" : "w-14";
+  /**
+   * The two ends are deliberately different weights, as in the reference: minus is a raised grey
+   * disc on the surface, plus is the page's ink disc — the one control that ADDS is the one that
+   * reads as a control. `--ink`/`--ink-fg` invert per theme, so the plus is white-on-dark here and
+   * black-on-light in the light theme, and it is never invisible.
+   */
+  const btn = isSmall ? "size-9" : "size-10";
+  const glyph = isSmall ? 14 : 16;
 
   return (
-    <div className="flex items-center gap-3">
+    <div
+      className={
+        boxed
+          ? "flex items-center gap-2 w-full h-[52px] px-1.5 rounded-[14px]"
+          : "flex items-center gap-2"
+      }
+      style={boxed ? { border: "1px solid var(--divider)" } : undefined}
+    >
       <button
         type="button"
         onClick={decrement}
         // Icon-only (a minus, or a bin at the minimum): with no name a screen reader
         // announces an unlabelled button.
-        aria-label={
-          qty <= minQty && deleteOnOne ? tNow("common.remove") : tNow("common.decrease")
+        aria-label={removing ? tNow("common.remove") : tNow("common.decrease")}
+        className={`${btn} rounded-full flex items-center justify-center shrink-0 ds-pressable transition-colors`}
+        style={
+          removing
+            ? { background: "var(--error)", color: "#ffffff" }
+            : { background: "var(--surface-2)", color: "var(--text-primary)" }
         }
-        className={`
-          ${btnSize} rounded-full flex items-center justify-center shrink-0 transition-colors ds-pressable
-          ${qty <= minQty && deleteOnOne
-            ? "bg-[#ef4444] text-white"
-            : "bg-muted text-foreground"
-          }
-        `}
       >
-        {qty <= minQty && deleteOnOne ? (
-          <Trash2 size={isSmall ? 12 : 14} />
+        {removing ? (
+          <Trash2 size={glyph - 2} />
         ) : (
-          <span className="font-bold leading-none">−</span>
+          <span className="font-semibold leading-none" style={{ fontSize: glyph }}>
+            −
+          </span>
         )}
       </button>
 
@@ -117,16 +137,22 @@ export default function QuantityCounter({
           max={max}
           step={step}
           autoFocus
-          className={`${inputWidth} h-12 text-center font-bold text-foreground bg-card border border-transparent rounded-[var(--radius-tile)] outline-none focus:border-[var(--brand)] ${isSmall ? "text-base" : "text-lg"}`}
+          className={`${boxed ? "flex-1" : isSmall ? "w-12" : "w-14"} h-12 text-center font-bold text-foreground bg-card rounded-[var(--radius-tile)] outline-none ${isSmall ? "text-base" : "text-lg"}`}
+          style={{ border: "1.5px solid var(--brand)" }}
         />
       ) : (
         <button
           type="button"
-          onClick={() => { setIsFocused(true); setInputValue(""); }}
-          className={`${inputWidth} h-12 text-center font-bold text-foreground bg-transparent border border-transparent rounded-[var(--radius-tile)] ${isSmall ? "text-base min-w-[2.5rem]" : "text-lg min-w-[3rem]"}`}
+          onClick={() => {
+            setIsFocused(true);
+            setInputValue("");
+          }}
+          className={`${boxed ? "flex-1" : isSmall ? "w-12" : "w-14"} h-12 text-center font-bold text-foreground bg-transparent rounded-[var(--radius-tile)] ${isSmall ? "text-base" : "text-16"}`}
         >
-          {/* The reference's rolling counter: + and − move the digit rather than repaint it. */}
-          <RollingNumber text={displayQty} className="justify-center" />
+          {/* The reference's rolling counter: + and − move the digit rather than repaint it. A
+              digit roll, not a count-up — one step of a stepper must land immediately, so only the
+              characters that changed move, over 340ms. */}
+          <RollingNumber text={formatQty(qty, step)} className="justify-center" />
         </button>
       )}
 
@@ -135,12 +161,12 @@ export default function QuantityCounter({
         onClick={increment}
         disabled={!!max && qty >= max}
         aria-label={tNow("common.increase")}
-        className={`
-          ${btnSize} rounded-full bg-ink text-ink-fg flex items-center justify-center shrink-0 ds-pressable
-          disabled:opacity-30
-        `}
+        className={`${btn} rounded-full flex items-center justify-center shrink-0 ds-pressable disabled:opacity-30`}
+        style={{ background: "var(--ink)", color: "var(--ink-fg)" }}
       >
-        <span className="font-bold leading-none">+</span>
+        <span className="font-semibold leading-none" style={{ fontSize: glyph }}>
+          +
+        </span>
       </button>
     </div>
   );

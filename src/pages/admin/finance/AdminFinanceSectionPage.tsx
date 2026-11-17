@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import RollingNumber from "@/components/ui/RollingNumber";
 import {
   ArrowDownUp,
   Banknote,
@@ -180,7 +181,10 @@ function PlateRow({ cells, divided }: { cells: Cell[]; divided: boolean }) {
     >
       {cells.map((cell) => (
         <div key={cell.id} className="min-w-0" data-testid={`finance-figure-${cell.id}`}>
-          <p className="text-18 font-semibold leading-none tabular-nums break-words">{cell.value}</p>
+          {/* Money on this plate moves when the window does, so it counts rather than swaps. */}
+          <p className="text-18 font-semibold leading-none tabular-nums break-words">
+            <RollingNumber text={cell.value} />
+          </p>
           <p className="text-13 mt-2" style={{ color: "var(--text-secondary)" }}>{cell.label}</p>
           <p
             className="text-12 mt-1 font-semibold tabular-nums break-words"
@@ -250,7 +254,9 @@ function FlatRow({
         )}
       </span>
       {value != null && (
-        <span className="text-14 shrink-0 tabular-nums" style={{ color: "var(--text-secondary)" }}>{value}</span>
+        <span className="text-14 shrink-0 tabular-nums" style={{ color: "var(--text-secondary)" }}>
+          {typeof value === "string" ? <RollingNumber text={value} /> : value}
+        </span>
       )}
       <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
     </button>
