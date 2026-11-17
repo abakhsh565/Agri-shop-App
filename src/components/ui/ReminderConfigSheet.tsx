@@ -4,7 +4,7 @@ import { useDelayedDismiss } from "@/hooks/usePresence";
 /** Matches --dur-3, the sheet duration token. */
 const SHEET_MS = 280;
 import { X } from "lucide-react";
-import SelectorField from "./SelectorField";
+import InlineSelect from "./InlineSelect";
 import DateField from "./DateField";
 import { useT } from "@/lib/i18n";
 import type { ReminderConfig, ReminderRepeat, ReminderEnds, ReminderAnchor } from "@/types";
@@ -135,8 +135,8 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="px-5 pb-6 flex flex-col gap-5 overflow-y-auto" style={{ flex: 1 }}>
+        {/* Scrollable body — minHeight 0 so it is the part that scrolls, never the footer. */}
+        <div className="px-5 pb-4 flex flex-col gap-5 overflow-y-auto" style={{ flex: 1, minHeight: 0 }}>
 
           {/* Start reminders */}
           <div>
@@ -152,7 +152,8 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
               />
               <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("reminder.days")}</span>
               <div className="flex-1">
-                <SelectorField
+                {/* In place, not a second overlay: four short answers resolve under the field. */}
+                <InlineSelect
                   value={local.anchor}
                   options={[
                     { value: "after_credit", label: t("reminder.afterCreditGiven") },
@@ -161,9 +162,9 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                     { value: "before_harvest", label: t("reminder.beforeHarvestFull") },
                   ]}
                   placeholder={t("reminder.afterCreditGiven")}
-                  title={t("reminder.startReminders")}
+                  label={t("reminder.startReminders")}
+                  testId="reminder-anchor"
                   onChange={(v) => update("anchor", v as ReminderAnchor)}
-                  showTile={false}
                 />
               </div>
             </div>
@@ -172,7 +173,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {/* Repeat */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("reminder.repeat")}</p>
-            <SelectorField
+            <InlineSelect
               value={local.repeat}
               options={[
                 { value: "once", label: t("reminder.oneTimeReminder") },
@@ -180,9 +181,9 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 { value: "escalate", label: t("reminder.escalatingSeq") },
               ]}
               placeholder={t("reminder.oneTimeReminder")}
-              title={t("reminder.repeat")}
+              label={t("reminder.repeat")}
+              testId="reminder-repeat"
               onChange={(v) => setRepeat(v as ReminderRepeat)}
-              showTile={false}
             />
           </div>
 
@@ -200,16 +201,16 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                   style={fieldStyle}
                 />
                 <div className="w-[116px]">
-                  <SelectorField
+                  <InlineSelect
                     value={local.intervalUnit}
                     options={[
                       { value: "days", label: t("reminder.days") },
                       { value: "weeks", label: t("reminder.weeks") },
                     ]}
                     placeholder={t("reminder.days")}
-                    title={t("reminder.repeat")}
+                    label={t("reminder.repeat")}
+                    testId="reminder-interval-unit"
                     onChange={(v) => update("intervalUnit", v as "days" | "weeks")}
-                    showTile={false}
                   />
                 </div>
               </div>
@@ -244,7 +245,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {/* Ends */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("reminder.ends")}</p>
-            <SelectorField
+            <InlineSelect
               value={local.ends}
               options={[
                 { value: "paid", label: t("reminder.untilPaid") },
@@ -252,9 +253,9 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 { value: "count", label: t("reminder.afterCount") },
               ]}
               placeholder={t("reminder.untilPaid")}
-              title={t("reminder.ends")}
+              label={t("reminder.ends")}
+              testId="reminder-ends"
               onChange={(v) => update("ends", v as ReminderEnds)}
-              showTile={false}
             />
           </div>
 
@@ -291,11 +292,21 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
             {buildSummary(local, t)}
           </div>
 
-          {/* Save button */}
+        </div>
+
+        {/*
+          Fixed footer. The action used to sit inside the scrolling flex body, so it was a flex item
+          that shrank as the escalation rows grew — the button was a different height depending on
+          how many steps were showing. Here it is outside the scroll area and its height is pinned.
+        */}
+        <div
+          className="px-5 pt-3 pb-4 shrink-0"
+          style={{ borderTop: "1px solid var(--divider)", background: "var(--tone-sheet)" }}
+        >
           <button
             onClick={() => onSave({ ...local, id: local.id || "new-" + Date.now(), enabled: true })}
             disabled={escalationInvalid}
-            className="w-full h-12 rounded-full text-14 font-bold transition-opacity active:opacity-80 disabled:opacity-50"
+            className="w-full h-12 min-h-12 rounded-full text-14 font-bold transition-opacity active:opacity-80 disabled:opacity-50"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
             {t("reminder.saveSchedule")}
