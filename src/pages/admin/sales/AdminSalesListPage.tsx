@@ -65,7 +65,7 @@ function SummaryProgress({ label, pct, testId }: { label: string; pct: number; t
       </div>
       <div
         className="mt-2 h-1 rounded-full overflow-hidden"
-        style={{ background: "var(--divider)" }}
+        style={{ background: "var(--tone-sunken)" }}
         role="progressbar"
         aria-label={label}
         aria-valuemin={0}
@@ -75,7 +75,7 @@ function SummaryProgress({ label, pct, testId }: { label: string; pct: number; t
       >
         <div
           className="h-full rounded-full"
-          style={{ width: `${pct}%`, background: "var(--text-secondary)", transition: "width var(--dur-3) var(--ease-out)" }}
+          style={{ width: `${pct}%`, background: "var(--brand)", transition: "width var(--dur-3) var(--ease-out)" }}
         />
       </div>
     </div>
@@ -356,11 +356,12 @@ export default function AdminSalesListPage() {
         }
       />
 
-      {/* The tab row stays below the title. The control is 8px shorter than before, but the
-          labels keep the same 13px type step; only the track and pill heights come down. */}
+      {/* The tab row stays below the title: a track with one raised pill, the way the reference
+          control reads. The labels keep the same 13px type step; the track and the pill are the
+          parts that grew (40→48px track, 36→40px pill, owner's request 2026-11-16). */}
       <div className="px-4 pt-2">
         <div
-          className="flex items-center gap-1 p-0.5 h-10 rounded-full"
+          className="flex items-center gap-1 p-1 h-12 rounded-full"
           style={{ background: "var(--surface-2)" }}
           role="group"
           aria-label={t("sales.type")}
@@ -374,7 +375,7 @@ export default function AdminSalesListPage() {
                 onClick={() => setTab(key)}
                 aria-pressed={selected}
                 data-testid={`sales-tab-${key}`}
-                className="flex-1 min-w-0 h-9 rounded-full text-13 font-semibold truncate px-2 transition-colors active:opacity-70"
+                className="flex-1 min-w-0 h-10 rounded-full text-13 font-semibold truncate px-2 transition-colors active:opacity-70"
                 style={
                   selected
                     ? { background: "var(--text-primary)", color: "var(--background)" }
@@ -442,7 +443,7 @@ export default function AdminSalesListPage() {
 
           {/* The two amounts that make up the headline. Half the row each, so neither is tucked
               under the other's label; the same pair in every tab state. */}
-          <div className="grid grid-cols-2 gap-4 mt-4 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
+          <div className="grid grid-cols-2 gap-4 mt-4">
             <div className="min-w-0">
               <p className="text-11" style={{ color: "var(--text-secondary)" }}>
                 {summary.leftLabel}

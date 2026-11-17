@@ -100,7 +100,7 @@ export default function VariantSelectorPage() {
   }
 
   return (
-    <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
+    <div className="flex flex-col w-full min-h-full pb-32" style={{ background: "var(--background)" }}>
       <StatusBar />
       <NavHeader title={t("sale.productDetails")} />
 
@@ -179,8 +179,13 @@ export default function VariantSelectorPage() {
 
       <div className="flex-1 min-h-4" />
 
-      {/* One Add to Cart for every pack that has a number */}
-      <div className="p-4 pb-6">
+      {/* One Add to Cart for every pack that has a number, pinned to the bottom of the phone: it
+          is the commit for this screen, so it stays under the thumb however long the pack list
+          runs rather than sitting wherever the list happens to end (owner, 2026-11-17). */}
+      <div
+        className="fixed start-0 end-0 bottom-0 max-w-[480px] mx-auto p-4 pb-6"
+        style={{ background: "var(--background)", borderTop: "1px solid var(--divider)" }}
+      >
         <p className="text-12 mb-2 px-1" style={{ color: "var(--text-secondary)" }}>
           {stagedUnits > 0
             ? `${stagedVariants.length} ${stagedVariants.length === 1 ? t("sale.packOne") : t("sale.packMany")} · ${stagedUnits} ${stagedUnits === 1 ? t("sale.unitOne") : t("common.units")}`
