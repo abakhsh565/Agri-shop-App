@@ -4466,6 +4466,7 @@ export const translations = {
     "common.nothingToChoose": "Nothing here yet",
     "bizSettings.addCropPlaceholder": "Add custom crop...",
     "bizSettings.renameCrop": "Crop name",
+    "bizSettings.removeCrop": "Remove crop",
 
     // Approve / reject wording, shared by the credit-request screens (the shop-request
     // review dashboard is gone; registrations are handled in Supabase).
@@ -9566,6 +9567,7 @@ export const translations = {
     "common.nothingToChoose": "یہاں ابھی کچھ نہیں",
     "bizSettings.addCropPlaceholder": "نئی فصل لکھیں...",
     "bizSettings.renameCrop": "فصل کا نام",
+    "bizSettings.removeCrop": "فصل ہٹائیں",
 
     // Approve / reject wording, shared by the credit-request screens (the shop-request
     // review dashboard is gone; registrations are handled in Supabase).

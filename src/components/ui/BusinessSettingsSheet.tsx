@@ -3,7 +3,7 @@ import { useDelayedDismiss } from "@/hooks/usePresence";
 
 /** Matches --dur-3, the sheet duration token. */
 const SHEET_MS = 280;
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2, Pencil } from "lucide-react";
 import SelectorField from "./SelectorField";
 import type { CropConfig, BusinessSettings } from "@/types";
 import { useT } from "@/lib/i18n";
@@ -30,6 +30,9 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
   /** A ref, not the state above: two taps in one task both read the old `saving`. */
   const savingRef = useRef(false);
   const [customCrop, setCustomCrop] = useState("");
+  /** Which chip is being renamed in place, and what is typed so far. */
+  const [editingCrop, setEditingCrop] = useState<string | null>(null);
+  const [chipDraft, setChipDraft] = useState("");
   /** In-flight crop names, keyed by the name they started with. Only used while typing. */
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
   const { closing, dismiss } = useDelayedDismiss(onClose, SHEET_MS);
@@ -59,6 +62,16 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
       const dm = name === "Cotton" ? 8 : name === "Wheat" ? 4 : name === "Rice" ? 10 : name === "Sugarcane" ? 3 : 7;
       return { ...prev, crops: [...prev.crops, { name, harvestMonth: dm, harvestDay: 1 }] };
     });
+  }
+
+  /**
+   * Removing a crop from the shop's list, whichever way it was added: a preset chip and a crop
+   * typed into "Add custom crop" are the same row in `settings.crops`, so both must be deletable
+   * from the same place — the chip that shows them.
+   */
+  function removeCrop(name: string) {
+    setEditingCrop((current) => (current === name ? null : current));
+    setSettings(prev => ({ ...prev, crops: prev.crops.filter(c => c.name !== name) }));
   }
 
   function updateHarvestMonth(name: string, month: number) {
@@ -170,23 +183,77 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("settings.cropsQuestion")}</p>
             <div className="flex flex-wrap gap-2">
-              {PRESET_CROPS.map(crop => {
-                const active = selectedNames.includes(crop);
+              {/* Chosen crops first — each one carries its own rename and remove, so the list can
+                  be edited where it is read instead of only in the harvest cards below. */}
+              {settings.crops.map(({ name }) => {
+                const editing = editingCrop === name;
                 return (
-                  <button
-                    key={crop}
-                    onClick={() => toggleCrop(crop)}
-                    className="h-10 px-4 rounded-full text-13 font-medium transition-colors"
-                    style={{
-                      background: active ? "var(--brand)" : "var(--surface-2)",
-                      color: active ? "#0a0a0a" : "var(--text-secondary)",
-                      border: active ? "none" : "1px solid var(--divider)",
-                    }}
+                  <div
+                    key={name}
+                    className="flex items-center gap-1 h-10 ps-4 pe-1 rounded-full"
+                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                    data-testid={`crop-chip-${name}`}
                   >
-                    {crop}
-                  </button>
+                    {editing ? (
+                      <input
+                        autoFocus
+                        value={chipDraft}
+                        onChange={(e) => setChipDraft(e.target.value)}
+                        onBlur={() => { commitRename(name, chipDraft); setEditingCrop(null); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            commitRename(name, chipDraft);
+                            setEditingCrop(null);
+                          }
+                          if (e.key === "Escape") setEditingCrop(null);
+                        }}
+                        aria-label={t("bizSettings.renameCrop")}
+                        className="h-8 w-[112px] bg-transparent text-13 font-medium outline-none"
+                        style={{ color: "#0a0a0a" }}
+                      />
+                    ) : (
+                      <span className="text-13 font-medium">{name}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setEditingCrop(name); setChipDraft(name); }}
+                      aria-label={`${t("bizSettings.renameCrop")}: ${name}`}
+                      data-testid={`crop-chip-edit-${name}`}
+                      className="size-7 rounded-full flex items-center justify-center ds-pressable"
+                      style={{ background: "rgba(0,0,0,0.14)" }}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeCrop(name)}
+                      aria-label={`${t("bizSettings.removeCrop")}: ${name}`}
+                      data-testid={`crop-chip-remove-${name}`}
+                      className="size-7 rounded-full flex items-center justify-center ds-pressable"
+                      style={{ background: "rgba(0,0,0,0.14)" }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
                 );
               })}
+
+              {/* The presets that are not chosen yet: one tap adds them. */}
+              {PRESET_CROPS.filter(crop => !selectedNames.includes(crop)).map(crop => (
+                <button
+                  key={crop}
+                  onClick={() => toggleCrop(crop)}
+                  className="h-10 px-4 rounded-full text-13 font-medium transition-colors"
+                  style={{
+                    background: "var(--surface-2)",
+                    color: "var(--text-secondary)",
+                    border: "1px solid var(--divider)",
+                  }}
+                >
+                  {crop}
+                </button>
+              ))}
             </div>
 
             {/* Add custom crop */}
