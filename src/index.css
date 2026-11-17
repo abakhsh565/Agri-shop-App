@@ -1208,6 +1208,7 @@ svg.ds-row-chevron {
   .nr-tick, .nr-ghost { animation: none; }
   /* The ghost is only there to be animated out; static, it would sit on top of the new digit. */
   .nr-ghost { display: none; }
+  .ds-switch-knob { animation: none; }
 }
 
 /* A tab swap in the record-money form: the panel's content settles six pixels up and in.
@@ -1244,6 +1245,35 @@ svg.ds-row-chevron {
 .ds-anim-backdrop-out { animation: backdropOut var(--dur-2) ease-out both; }
 .ds-anim-toast-in   { animation: toastIn     var(--dur-2) var(--ease-out) both; }
 .ds-anim-toast-out  { animation: toastOut    var(--dur-2) var(--ease-out) both; }
+/* The switch's knob leans into its direction of travel, so the state change reads as one
+   object moving rather than a colour swap with a dot that teleports. */
+.ds-switch-knob {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  top: 2px;
+  left: 2px;
+  border-radius: 999px;
+}
+.ds-switch-knob[data-on="true"] {
+  transform: translateX(18px);
+  animation: dsSwitchOn 380ms cubic-bezier(0.34, 1.24, 0.5, 1) both;
+}
+.ds-switch-knob[data-on="false"] {
+  transform: translateX(0);
+  animation: dsSwitchOff 380ms cubic-bezier(0.34, 1.24, 0.5, 1) both;
+}
+@keyframes dsSwitchOn {
+  0%   { transform: translateX(0) scale(1); }
+  45%  { transform: translateX(9px) scale(1.45); }
+  100% { transform: translateX(18px) scale(1); }
+}
+@keyframes dsSwitchOff {
+  0%   { transform: translateX(18px) scale(1); }
+  45%  { transform: translateX(9px) scale(1.45); }
+  100% { transform: translateX(0) scale(1); }
+}
+
 /* NOT `both`. A filling animation on `opacity` stays "in effect" after it finishes, which
    makes this wrapper a PERMANENT stacking context at `z-index: auto`. The bottom tab bar is
    a `fixed` later sibling with `z-index: auto` too, so both landed in the same painting

@@ -157,9 +157,8 @@ export default function QuantityCounter({
           }}
           className={`${boxed ? "flex-1" : isSmall ? "w-12" : "w-14"} h-12 text-center font-bold text-foreground bg-transparent rounded-[var(--radius-tile)] ${isSmall ? "text-base" : "text-16"}`}
         >
-          {/* The reference's rolling counter: + and − move the digit rather than repaint it. A
-              digit roll, not a count-up — one step of a stepper must land immediately, so only the
-              characters that changed move, over 340ms. */}
+          {/* + and − move the digit rather than repaint it: one step of a stepper must land
+              immediately, so only the characters that changed roll, and only over 340ms. */}
           <RollingNumber text={formatQty(qty, step)} className="justify-center" />
         </button>
       )}

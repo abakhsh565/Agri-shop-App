@@ -5,8 +5,8 @@ import NavHeader from "@/components/ui/NavHeader";
 import Button from "@/components/ui/Button";
 import DateField from "@/components/ui/DateField";
 import QuantityCounter from "@/components/ui/QuantityCounter";
-import RollingNumber from "@/components/ui/RollingNumber";
 import { useCartStore } from "@/stores/cartStore";
+import RollingNumber from "@/components/ui/RollingNumber";
 import { useSalesStore } from "@/stores/salesStore";
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, getCreditHealth, getCreditHealthColor } from "@/lib/formatters";
@@ -619,8 +619,8 @@ export default function CartPage() {
           <div className="border-t border-border my-2" />
           <div className="flex justify-between py-1">
             <span className="text-sm font-bold text-foreground">{t("sale.totalLabel")}</span>
-            {/* Changing a line's quantity changes this figure, so it rolls like the stepper's own
-                digits: one motion for every number the shopkeeper moves in the same gesture. */}
+            {/* Changing a line's quantity changes this figure, so its digits roll with the
+                counter's: one motion for every number the shopkeeper moves in the same gesture. */}
             <span className="text-sm font-bold text-foreground">
               <RollingNumber value={total} format={formatCurrency} />
             </span>

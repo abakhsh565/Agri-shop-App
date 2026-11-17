@@ -1,23 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 /**
- * A figure that counts to its next value instead of swapping.
+ * A figure whose changed digits roll into place.
  *
- * WHY IT EXISTS. Two behaviours, one component, because both answer the same question — "did the
- * number under my finger change?":
+ * ONE ANIMATION, EVERY FIGURE. The app shows money in a dozen places — the home card's total,
+ * the Sales summary, the profit headline, the cart's line totals — and they used to move in two
+ * different ways: a spent-600ms count-up on the ones driven by a number, and a digit roll on the
+ * ones handed a formatted string. Two motions for the same kind of figure meant the app felt like
+ * it was animating for two different reasons. This is the roll only: when the value changes, each
+ * digit that changed travels out while the next travels in from the other side, over ~340ms.
  *
- * · `value` + `format` — the money path. The figure tweens from where it was to where it is now
- *   over ~600ms, so All → Today → Yesterday on the dashboard counts down from Rs. 157,000 to
- *   Rs. 5,000 instead of blinking. This is the reference's counter, applied to totals.
- * · `text` — the string path, for a figure that only exists already-formatted. Only the digits
- *   that changed roll, so a quantity's ones column moves on its own.
+ * WHY NOT THE COUNT-UP. A total that ticks 157,000 → 5,000 spends six hundred milliseconds
+ * displaying numbers that were never true, and every screen had to wait for it before it could be
+ * read. The roll lands on the real figure immediately — the movement decorates the change instead
+ * of delaying it.
  *
- * WHAT IT NEVER DOES. It does not invent a number or a currency: `format` is always the app's own
- * `formatCurrency`/`formatRs`, and the dash used for "no figure yet" is drawn as it is.
+ * Digits are matched from the RIGHT, so `Rs. 5,000` → `Rs. 12,500` keeps its units column in
+ * place, and only the characters that actually changed move. Widths stay tabular, so nothing
+ * shifts while it happens.
  *
- * Accessibility and motion: the whole thing is `aria-hidden` behind one readable copy of the same
- * text, so a screen reader hears "Rs. 24,182" once. Both behaviours are off under
- * `prefers-reduced-motion`.
+ * Accessibility and motion: the whole thing is `aria-hidden` behind one readable copy of the
+ * final text, so a screen reader hears "Rs. 24,182" once, and `prefers-reduced-motion` removes the
+ * movement (index.css).
  */
 export default function RollingNumber({
   text,
@@ -28,75 +32,24 @@ export default function RollingNumber({
 }: {
   /** The formatted figure, for a value that only exists as a string. */
   text?: string;
-  /** The figure itself. With `format`, the number counts up/down to it. */
+  /** The figure itself. With `format`, it is formatted here and rolled the same way. */
   value?: number;
   format?: (value: number) => string;
   className?: string;
   style?: React.CSSProperties;
 }) {
-  const numeric = value != null && format != null;
-  const target = numeric ? (value as number) : null;
-  const [shown, setShown] = useState(target ?? 0);
-  const settled = useRef(target ?? 0);
-
-  useEffect(() => {
-    if (target == null) return;
-    const from = settled.current;
-    if (from === target) return;
-
-    const reduce =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      settled.current = target;
-      setShown(target);
-      return;
-    }
-
-    const started = performance.now();
-    const duration = 620;
-    let frame = 0;
-    const step = (now: number) => {
-      const progress = Math.min(1, (now - started) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setShown(from + (target - from) * eased);
-      if (progress < 1) {
-        frame = requestAnimationFrame(step);
-      } else {
-        settled.current = target;
-      }
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [target]);
+  const label = text ?? (value != null && format ? format(Math.round(value)) : "");
 
   /**
    * The outgoing text is STATE, not a ref updated in an effect. With a ref, the very next
    * re-render of the page already saw the new value as "previous", so the outgoing digit left the
    * DOM a frame into its exit and the counter looked like it had simply repainted.
-   *
-   * Both branches keep their hooks above every `return`, so the hook order cannot change with the
-   * props.
    */
-  const label = text ?? "";
   const [state, setState] = useState({ shown: label, previous: label, nonce: 0 });
   if (state.shown !== label) {
     setState({ shown: label, previous: state.shown, nonce: state.nonce + 1 });
   }
 
-  if (numeric) {
-    const formatted = (format as (n: number) => string)(Math.round(shown));
-    return (
-      <span className={className} style={style}>
-        <span className="sr-only">{(format as (n: number) => string)(target as number)}</span>
-        <span className="nr" aria-hidden="true" style={{ fontVariantNumeric: "tabular-nums" }}>
-          {formatted}
-        </span>
-      </span>
-    );
-  }
-
-  // Digits are matched from the RIGHT: Rs. 5,000 → Rs. 12,500 keeps its units column in place.
   const before = state.shown === label ? state.previous : state.shown;
   const shift = label.length - before.length;
 

@@ -824,7 +824,14 @@ export default function AdminDashboardPage() {
                 {t("dashboard.netProfit")}
               </p>
               <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }} data-testid="home-net-profit">
-                {netProfit == null ? "—" : netProfit < 0 ? `−${formatRs(Math.abs(netProfit))}` : formatRs(netProfit)}
+                {netProfit == null ? (
+                  "—"
+                ) : (
+                  <RollingNumber
+                    value={Math.abs(netProfit)}
+                    format={(figure) => (netProfit < 0 ? "−" : "") + formatRs(figure)}
+                  />
+                )}
               </p>
             </div>
             <div className="w-px self-stretch mx-3" style={{ background: "var(--divider)" }} />
@@ -834,7 +841,7 @@ export default function AdminDashboardPage() {
               </p>
               <div className="flex items-center gap-2">
                 <p className="text-16 font-semibold" style={{ color: "var(--text-primary)" }}>
-                  {formatRs(money.udhaar)}
+                  <RollingNumber value={money.udhaar} format={formatRs} />
                 </p>
                 <p className="text-11 font-semibold" style={{ color: "var(--text-secondary)" }}>
                   {formatRs(overdueAmount)} {t("inline.overdue")}
