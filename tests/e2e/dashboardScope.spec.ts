@@ -301,7 +301,6 @@ async function readActiveBranch(page: Page): Promise<string> {
   return branchId;
 }
 
-/**
 test.describe('Locked dashboard scope: figures reconcile with the database', () => {
   test.afterAll(async () => {
     // The figures are asserted against the DB, so leave the QA base as it was found.

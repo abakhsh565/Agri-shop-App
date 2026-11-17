@@ -200,8 +200,12 @@ describe('Destructive Safety — Customer Archive/Restore', () => {
     const r = await admin(`SELECT is_archived FROM customers WHERE id = '${T.customerB}'`);
     rec('Archive customer with sales — is_archived', 'true', String(r.rows[0]?.is_archived), r.rows[0]?.is_archived === true ? 'PASS' : 'FAIL');
 
-    // Sales should still exist
-    const sales = await admin(`SELECT COUNT(*) as cnt FROM sales WHERE customer_id = '${T.customerB}'`);
+    // Sales should still exist. Ask about the sale this test created, not "every sale belonging to
+    // customer B": the QA database is shared with the E2E lanes and with any app running against
+    // staging, so an exact count of a fixture customer's sales fails on rows this test never made
+    // (measured: "expected 1, got 2" on run 43959491625 with 523 other tests green). The invariant
+    // is that archiving preserves the sale — so the row that must survive is the one above.
+    const sales = await admin(`SELECT COUNT(*) as cnt FROM sales WHERE id = '${T.saleA}'`);
     rec('Archived customer — sales preserved', '1', String(sales.rows[0]?.cnt), Number(sales.rows[0]?.cnt) === 1 ? 'PASS' : 'FAIL');
 
     // Restore
