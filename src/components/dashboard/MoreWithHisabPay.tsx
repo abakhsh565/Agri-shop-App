@@ -65,6 +65,17 @@ interface ShopAction {
  */
 const ACTIONS: ShopAction[] = [
   {
+    /* First, because it is the paperwork the owner asked for by name: a bill for a customer, a
+       supplier, a member of staff, or somebody with no record at all. */
+    id: "invoices",
+    icon: ReceiptText,
+    labelKey: "shopAction.invoices",
+    group: "money",
+    to: "/admin/invoices",
+    permission: "sales.view",
+    keywords: ["invoice", "bill", "billing", "parchi", "بل", "انوائس"],
+  },
+  {
     id: "daily-cash",
     icon: Banknote,
     labelKey: "shopAction.dailyCash",

@@ -32,7 +32,6 @@ export default function SupplierCreditPage({ mode }: { mode: "pending" | "overdu
   const companies = useCompaniesStore((s) => s.companies);
   const ready = useCompaniesStore((s) => s.ready);
   const load = useCompaniesStore((s) => s.load);
-  const branch = useShopStore((s) => s.activeBranchName);
 
   useEffect(() => { if (!ready) void load(); }, [ready, load]);
 
@@ -65,7 +64,7 @@ export default function SupplierCreditPage({ mode }: { mode: "pending" | "overdu
         return {
           id: c.id,
           name: c.name,
-          meta: branch ? `${branch} · ${when}` : when,
+          meta: when,
           amount: c.outstandingPayable,
           stateLabel: late ? t("payable.overdue") : t("creditList.notYetDue"),
           stateColor: late ? "var(--error)" : "var(--text-secondary)",
@@ -75,7 +74,7 @@ export default function SupplierCreditPage({ mode }: { mode: "pending" | "overdu
       .sort((a, b) => (overdue ? b.days - a.days : a.days - b.days) || b.amount - a.amount);
     // `isLate` is derived from the same two values the filter reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companies, todayISO, overdue, branch, t]);
+  }, [companies, todayISO, overdue, t]);
 
   const bookTotal = companies.reduce((sum, c) => sum + Math.max(0, c.outstandingPayable), 0);
 
@@ -83,7 +82,7 @@ export default function SupplierCreditPage({ mode }: { mode: "pending" | "overdu
     <CreditListScreen
       title={overdue ? t("creditList.overdueSuppliers") : t("creditList.pendingSuppliers")}
       backTo={`${base}/settings/overview/suppliers`}
-      scope={t("creditList.scope", { branch: branch ?? t("hub.inventory.selectedBranch") })}
+      scope={t("creditList.scope")}
       summaryTitle={t("creditList.outstandingPayable")}
       totalLabel={t("payable.totalOutstanding")}
       totalValue={bookTotal}

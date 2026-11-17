@@ -35,7 +35,6 @@ export default function AdminEmployeeActivityPage() {
   const ready = useEmployeesStore((s) => s.ready);
   const load = useEmployeesStore((s) => s.load);
   const activeBranchId = useShopStore((s) => s.activeBranchId);
-  const activeBranchName = useShopStore((s) => s.activeBranchName);
 
   const [query, setQuery] = useState("");
   const [teamIds, setTeamIds] = useState<Set<string> | null>(null);
@@ -110,11 +109,6 @@ export default function AdminEmployeeActivityPage() {
         <p className="text-12" style={{ color: "var(--text-secondary)" }}>
           {t("people.activityPickerHint")}
         </p>
-        {activeBranchName && (
-          <p className="text-10 mt-1" style={{ color: "var(--text-tertiary)" }}>
-            {activeBranchName}
-          </p>
-        )}
       </div>
 
       <div className="px-4 pb-3">

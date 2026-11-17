@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import RollingNumber from "@/components/ui/RollingNumber";
+import BranchSwitchChip from "@/components/shop/BranchSwitchChip";
 import {
   ArrowDownUp,
   Banknote,
@@ -7,7 +9,6 @@ import {
   BellRing,
   Building2,
   CalendarRange,
-  ChevronDown,
   ChevronRight,
   Download,
   HandCoins,
@@ -180,14 +181,17 @@ function PlateRow({ cells, divided }: { cells: Cell[]; divided: boolean }) {
     >
       {cells.map((cell) => (
         <div key={cell.id} className="min-w-0" data-testid={`finance-figure-${cell.id}`}>
-          <p className="text-18 font-semibold leading-none tabular-nums break-words">{cell.value}</p>
+          {/* Money on this plate moves when the window does, so it counts rather than swaps. */}
+          <p className="text-18 font-semibold leading-none tabular-nums break-words">
+            <RollingNumber text={cell.value} />
+          </p>
           <p className="text-13 mt-2" style={{ color: "var(--text-secondary)" }}>{cell.label}</p>
           <p
             className="text-12 mt-1 font-semibold tabular-nums break-words"
             style={{ color: cell.tone }}
             data-testid={`finance-figure-note-${cell.id}`}
           >
-            {cell.note}
+            <RollingNumber text={cell.note} />
           </p>
         </div>
       ))}
@@ -250,7 +254,9 @@ function FlatRow({
         )}
       </span>
       {value != null && (
-        <span className="text-14 shrink-0 tabular-nums" style={{ color: "var(--text-secondary)" }}>{value}</span>
+        <span className="text-14 shrink-0 tabular-nums" style={{ color: "var(--text-secondary)" }}>
+          {typeof value === "string" ? <RollingNumber text={value} /> : value}
+        </span>
       )}
       <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
     </button>
@@ -719,16 +725,12 @@ export default function AdminFinanceSectionPage() {
             {scopeLine}
           </p>
         </div>
-        <button
-          type="button"
+        <BranchSwitchChip
+          branchName={activeBranchName ?? t("sales.thisBranch")}
           onClick={() => openSwitcher()}
-          data-testid="finance-branch-switch"
-          className="shrink-0 flex items-center gap-1 h-8 mt-0.5 ps-2.5 pe-2 rounded-full text-13 font-semibold active:opacity-70"
-          style={{ background: "var(--tone-card)", color: "var(--text-primary)" }}
-        >
-          <span className="max-w-[7.5rem] truncate">{activeBranchName ?? t("sales.thisBranch")}</span>
-          <ChevronDown size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-        </button>
+          testId="finance-branch-switch"
+          className="mt-0.5"
+        />
       </div>
 
       <div className="px-4 pt-4">

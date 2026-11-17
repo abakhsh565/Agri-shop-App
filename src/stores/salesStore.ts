@@ -24,6 +24,7 @@ interface SaleItemRow {
   unit_size: number | null;
   base_unit: string | null;
   line_total: number;
+  discount: number | null;
   cogs_amount: number | null;
 }
 
@@ -64,6 +65,7 @@ function itemFromRow(r: SaleItemRow): SaleItem {
     unitSize: Number(r.unit_size ?? 1),
     baseUnit: r.base_unit ?? "piece",
     lineTotal: Number(r.line_total),
+    discount: Number(r.discount ?? 0),
     cogsAmount: r.cogs_amount == null ? undefined : Number(r.cogs_amount),
   };
 }
@@ -79,9 +81,13 @@ function saleFromRow(r: SaleRow): Sale {
     employeeId: r.employee_id ?? "",
     employeeName: r.employee_name,
     items: (r.sale_items ?? []).map(itemFromRow),
-    subtotal: Number(r.total_amount),
+    // `total_amount` is what the customer owed, after the bill's discount. The subtotal is what
+    // the rows came to, so the two figures a reader expects (goods, then what came off) both
+    // exist on the sale instead of one of them living only in the database.
+    subtotal: Number(r.total_amount) + Number(r.discount ?? 0),
     taxAmount: 0,
     totalAmount: Number(r.total_amount),
+    discount: Number(r.discount ?? 0),
     amountPaid: Number(r.amount_paid),
     outstandingBalance: Number(r.amount_due),
     paymentType: r.payment_type,
@@ -108,6 +114,8 @@ export interface NewSaleInput {
   subtotal: number;
   taxAmount: number;
   totalAmount: number;
+  /** Money taken off the whole sale, in rupees. Lines carry their own discount already. */
+  discount?: number;
   amountPaid: number;
   outstandingBalance: number;
   paymentType: Sale["paymentType"];
@@ -217,7 +225,14 @@ export const useSalesStore = create<SalesState>((set, get) => ({
   },
 
   createSale: async (input) => {
-    const computedTotal = input.items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
+    // Each line already carries its net (qty × price less that line's discount); the bill's own
+    // discount comes off the sum. The database recomputes both, so this copy only has to agree
+    // with it for the optimistic row and the notification.
+    const computedTotal = Math.max(
+      0,
+      input.items.reduce((s, it) => s + (it.lineTotal ?? it.unitPrice * it.qty), 0) -
+        (input.discount ?? 0),
+    );
     const computedPaid = input.amountPaid ?? 0;
     const paymentLabel = input.paymentType === "full" ? "Paid" : "Credit";
 
@@ -232,6 +247,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       paymentType: input.paymentType,
       paymentMethod: input.paymentMethod,
       amountPaid: input.amountPaid,
+      discount: input.discount ?? 0,
       note: input.note,
       dueDate: input.dueDate,
       items: input.items.map((it) => ({
@@ -243,6 +259,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
         unitPrice: it.unitPrice,
         unitSize: it.unitSize,
         baseUnit: it.baseUnit,
+        discount: it.discount ?? 0,
       })),
     };
 
@@ -279,9 +296,10 @@ export const useSalesStore = create<SalesState>((set, get) => ({
           id: "local-" + i,
           saleId: result.id,
         })),
-        subtotal: result.totalAmount ?? computedTotal,
+        subtotal: (result.totalAmount ?? computedTotal) + (input.discount ?? 0),
         taxAmount: 0,
         totalAmount: result.totalAmount ?? computedTotal,
+        discount: input.discount ?? 0,
         amountPaid: result.amountPaid ?? computedPaid,
         outstandingBalance: result.outstandingBalance ?? (computedTotal - computedPaid),
         paymentType: input.paymentType,
@@ -323,9 +341,10 @@ export const useSalesStore = create<SalesState>((set, get) => ({
             id: `local-${i}`,
             saleId: tempId,
           })),
-          subtotal: computedTotal,
+          subtotal: computedTotal + (input.discount ?? 0),
           taxAmount: 0,
           totalAmount: computedTotal,
+          discount: input.discount ?? 0,
           amountPaid: computedPaid,
           outstandingBalance: computedTotal - computedPaid,
           paymentType: input.paymentType,

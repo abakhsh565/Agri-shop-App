@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, ReceiptText } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
+import RollingNumber from "@/components/ui/RollingNumber";
 import NavHeader from "@/components/ui/NavHeader";
 import PeriodTabs from "@/components/ui/PeriodTabs";
+import BranchSwitchChip from "@/components/shop/BranchSwitchChip";
 import DateRangeSheet from "@/components/ui/DateRangeSheet";
 import Button from "@/components/ui/Button";
 import Sheet from "@/components/ui/Sheet";
 import ListRow from "@/components/ui/ListRow";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useReturnTo } from "@/lib/useReturnTo";
@@ -18,6 +19,7 @@ import { lineCogs, profitDisplay, summariseSales, type LiveCostLookup } from "@/
 import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useBranchPeriodReport } from "@/lib/branchReports";
+import { useShopStore } from "@/stores/shopStore";
 
 /**
  * What the period kept, after the goods it sold are paid for.
@@ -67,6 +69,12 @@ export default function AdminProfitReportPage() {
   const navigate = useNavigate();
   // The Reports hub is this screen's parent, and the hub passes itself when it opens the tile.
   const returnTo = useReturnTo(base === "/admin" ? `${base}/reports/directory` : `${base}/reports`);
+
+  // The branch this screen is measured in: chosen with the same switcher Finance uses, so the
+  // answer on the page and the branch in the header can never be two different places.
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
+  const activeBranchName = useShopStore((s) => s.activeBranchName);
+  const openSwitcher = useShopStore((s) => s.openSwitcher);
 
   const sales = useSalesStore((s) => s.sales);
   const salesReady = useSalesStore((s) => s.ready);
@@ -129,19 +137,52 @@ export default function AdminProfitReportPage() {
 
   // The same window, per branch, resolved at the database. The table below is this answer, not
   // a regrouping of `periodSales` — see the file header.
-  const { rows: branchRows, failed: branchFailed } = useBranchPeriodReport(rangeFrom, rangeTo);
+  const { rows: branchRows, failed: branchFailed } = useBranchPeriodReport(
+    rangeFrom,
+    rangeTo,
+    activeBranchId ?? undefined,
+  );
+  /*
+   * One branch, the one the switcher is standing in. The report used to draw every readable
+   * branch as a comparison list under the figures; the branch is now chosen at the top with the
+   * same switcher as Finance, and the page shows that branch's numbers rather than asking the
+   * reader to find their own row (owner, 2026-11-17).
+   */
+  const activeRow = branchRows?.find((row) => row.isCurrent) ?? null;
+  const listSales = activeRow?.listSales ?? null;
+  const discounts = activeRow?.discounts ?? null;
+  const charged = activeRow?.grossSales ?? null;
+  const netSales = activeRow?.netSales ?? null;
+  const returns = activeRow?.returns ?? null;
+  const cogs = activeRow?.cogs ?? null;
+  const profitFigure = activeRow?.profit ?? (display.kind === "exact" ? display.amount : null);
+  const marginPct =
+    charged != null && charged > 0 && profitFigure != null
+      ? Math.round((profitFigure / charged) * 100)
+      : null;
+  const saleCount = periodSales.length;
+  const averageSale = charged != null && saleCount > 0 ? charged / saleCount : null;
 
   const productRows = useMemo<ProductProfit[]>(() => {
     const byName = new Map<string, ProductProfit>();
     for (const sale of periodSales) {
+      /*
+       * A bill-level discount belongs to the sale, not to one line, so it is shared out across the
+       * lines in proportion to what each line was worth. Without this the products here added up
+       * to the ticketed total while the branch above reported what was charged — two profits for
+       * one period, differing by exactly the discount given (owner, 2026-11-17).
+       */
+      const lineNet = sale.items.reduce((sum, item) => sum + item.lineTotal, 0);
+      const billDiscount = sale.discount ?? 0;
       for (const item of sale.items) {
         const name = item.productName || item.variantName;
         if (!name) continue;
         const entry =
           byName.get(name) ??
           { name, qty: 0, revenue: 0, cost: 0, unknownLines: 0, profit: 0, margin: 0 };
+        const share = lineNet > 0 && billDiscount > 0 ? (item.lineTotal / lineNet) * billDiscount : 0;
         entry.qty += item.qty;
-        entry.revenue += item.lineTotal;
+        entry.revenue += item.lineTotal - share;
         const cost = lineCogs(item, liveCost);
         if (cost == null) entry.unknownLines += 1;
         else entry.cost += cost;
@@ -179,6 +220,18 @@ export default function AdminProfitReportPage() {
       <StatusBar />
       <NavHeader title={t("profit.title")} backTo={returnTo} />
 
+      {/* The branch every figure on this page belongs to, chosen here instead of listed below
+          (owner, 2026-11-17). It sits under the title, centred, so it reads as the scope of the
+          screen rather than as one more control in a row of them. */}
+      <div className="flex justify-center px-4 pt-1">
+        <BranchSwitchChip
+          branchName={activeBranchName ?? t("sales.thisBranch")}
+          onClick={() => openSwitcher()}
+          testId="profit-branch-switch"
+          maxWidth="max-w-full"
+        />
+      </div>
+
       <div className="px-4 pt-2">
         <PeriodTabs
           options={periodOptions}
@@ -196,7 +249,7 @@ export default function AdminProfitReportPage() {
           explains is separated by tone, never by a border. */}
       <div className="px-4 pt-3">
         <div
-          className="rounded-[var(--radius-card)] p-4"
+          className="rounded-[var(--radius-card)] p-5"
           style={{ background: "var(--brand-light)" }}
           data-testid="profit-hero"
         >
@@ -208,150 +261,94 @@ export default function AdminProfitReportPage() {
             style={{ color: "var(--brand-dark)" }}
             data-testid="profit-net"
           >
-            {display.kind === "unknown"
-              ? t("profit.addCostToSeeProfit")
-              : `${display.kind === "atLeast" ? "≥ " : ""}${money(display.amount)}`}
+            {profitFigure == null ? (
+              "—"
+            ) : (
+              <RollingNumber
+                text={`${(activeRow?.unknownLines ?? 0) > 0 ? "≥ " : ""}${money(profitFigure)}`}
+                animateOnMount
+              />
+            )}
           </p>
-          <p className="text-10 mt-1" style={{ color: "var(--text-secondary)" }}>
-            {t("profit.netProfitHint")}
-          </p>
-
-          {display.kind === "exact" && summary.revenue > 0 && (
-            <p className="text-10 mt-1" style={{ color: "var(--text-secondary)" }}>
-              {/* The number is wrapped so Urdu cannot move the % to the left of it: the label is
-                  RTL, the figure is not. */}
-              {t("profit.margin")} <span dir="ltr">{display.margin}%</span>
-            </p>
-          )}
-          {display.kind !== "exact" && (
-            <p className="text-10 mt-1" style={{ color: "var(--text-secondary)" }}>
-              {display.kind === "unknown"
-                ? t("profit.addCostToSeeProfit")
-                : t("profit.costMissingOn", { count: String(display.unknownLines) })}
+          {/* Two facts, not two explanations: the margin the figure represents and the size of the
+              period it came from. A shop owner reads "19% · 12 sales · avg Rs. 1,646" at a glance;
+              the old sentence underneath said what profit was, which the label already said. */}
+          <div className="flex items-center gap-2 flex-wrap mt-2">
+            {marginPct != null && (
+              <span
+                className="text-11 font-semibold px-2 py-0.5 rounded-full tabular-nums"
+                style={{ background: "var(--tone-card)", color: "var(--brand-dark)" }}
+                dir="ltr"
+              >
+                {marginPct}%
+              </span>
+            )}
+            <span className="text-11 tabular-nums" style={{ color: "var(--text-secondary)" }}>
+              <RollingNumber
+                text={t("profit.salesMeta", {
+                  count: String(saleCount),
+                  average: averageSale == null ? "—" : money(averageSale),
+                })}
+              />
+            </span>
+          </div>
+          {(activeRow?.unknownLines ?? 0) > 0 && (
+            <p className="text-10 mt-1.5" style={{ color: "var(--text-secondary)" }}>
+              {t("profit.costMissingOn", { count: String(activeRow?.unknownLines ?? 0) })}
             </p>
           )}
         </div>
 
-        {/* The two halves of the headline, side by side, as the board draws them. */}
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          <div
-            className="rounded-[var(--radius-card)] p-3.5 min-w-0"
-            style={{ background: "var(--tone-card)" }}
-            data-testid="profit-revenue"
-          >
-            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-              {t("sales.revenue")}
-            </p>
-            <p className="text-18 font-bold mt-1 tabular-nums break-words">
-              {salesReady ? money(summary.revenue) : "—"}
-            </p>
-            <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-              {t("profit.revenueHint")}
-            </p>
-          </div>
-          <div
-            className="rounded-[var(--radius-card)] p-3.5 min-w-0"
-            style={{ background: "var(--tone-card)" }}
-            data-testid="profit-cogs"
-          >
-            <p className="text-11" style={{ color: "var(--text-secondary)" }}>
-              {t("reports.costOfGoods")}
-            </p>
-            <p className="text-18 font-bold mt-1 tabular-nums break-words">
-              {salesReady && summary.unknownLines < summary.lines ? money(summary.cogs) : "—"}
-            </p>
-            <p className="text-10 mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-              {t("profit.costHint")}
-            </p>
-          </div>
+        {/*
+         * What the headline was built from, in the order it is built: the goods were ticketed at
+         * one figure, some of it was given away, returns came off, and the cost of the goods is
+         * known. Four figures, four labels, no explanations — each one is a word a shop owner
+         * already uses.
+         */}
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <StatTile
+            testId="profit-list-sales"
+            label={t("profit.listSales")}
+            value={listSales == null ? "—" : money(listSales)}
+          />
+          <StatTile
+            testId="profit-discounts"
+            label={t("profit.discountsGiven")}
+            value={discounts == null ? "—" : `−${money(discounts)}`}
+            tone="warn"
+          />
+          <StatTile
+            testId="profit-revenue"
+            label={t("sales.netSales")}
+            value={netSales == null ? "—" : money(netSales)}
+          />
+          <StatTile
+            testId="profit-cogs"
+            label={t("reports.costOfGoods")}
+            value={cogs == null ? "—" : money(cogs)}
+          />
         </div>
+        {branchFailed && (
+          <p className="text-11 mt-2" style={{ color: "var(--text-secondary)" }}>
+            {t("profit.branchReadFailed")}
+          </p>
+        )}
+        {returns != null && returns > 0 && (
+          <p className="text-11 mt-2" style={{ color: "var(--text-secondary)" }}>
+            <RollingNumber text={`${t("hub.sales.returns")} −${money(returns)}`} />
+          </p>
+        )}
       </div>
 
-      {/* Which branches kept the money in this window, read per branch at the database. */}
-      <div className="px-4 pt-2">
-        <div
-          className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--tone-card)" }}
-          data-testid="profit-by-branch"
-        >
-          <p className="text-14 font-bold">{t("profit.byBranch")}</p>
-          <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            {t("profit.byBranchHint")}
-          </p>
-
-          {branchFailed ? (
-            <p className="text-12 mt-3" style={{ color: "var(--text-secondary)" }}>
-              {t("profit.branchReadFailed")}
-            </p>
-          ) : branchRows === null ? (
-            <div className="flex flex-col gap-3 mt-3" aria-busy="true">
-              <Skeleton w="100%" h="34px" />
-              <Skeleton w="100%" h="34px" />
-            </div>
-          ) : branchRows.length === 0 ? (
-            <p className="text-12 mt-3" style={{ color: "var(--text-secondary)" }}>
-              {t("profit.noBranchInScope")}
-            </p>
-          ) : (
-            <div className="flex flex-col gap-3 mt-3">
-              {branchRows.map((row) => (
-                <div key={row.branchId} data-testid={`profit-branch-${row.branchId}`}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-13 font-semibold truncate min-w-0">
-                      {row.branchName}
-                      {row.isCurrent && (
-                        <span className="text-10 font-normal ms-1.5" style={{ color: "var(--text-tertiary)" }}>
-                          {t("reports.thisBranch")}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-13 font-bold tabular-nums shrink-0">
-                      {row.profit == null
-                        ? "—"
-                        : `${row.unknownLines > 0 ? "≥ " : ""}${money(row.profit)}`}
-                    </p>
-                  </div>
-                  <div
-                    className="flex items-baseline justify-between gap-3 mt-0.5"
-                    style={{ color: "var(--text-tertiary)" }}
-                  >
-                    <p className="text-10 truncate min-w-0">
-                      {t("sales.revenue")} {row.grossSales == null ? "—" : money(row.grossSales)}
-                      {" · "}
-                      {row.unknownLines > 0
-                        ? t("profit.unknownCostLine")
-                        : `${t("reports.costOfGoods")} ${row.cogs == null ? "—" : money(row.cogs)}`}
-                    </p>
-                    {row.netSales != null && row.returns != null && (
-                      <p className="text-10 tabular-nums shrink-0">
-                        {t("sales.netSales")} {money(row.netSales)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {branchRows && branchRows.some((row) => row.unknownLines > 0) && (
-            <p className="text-10 mt-2" style={{ color: "var(--text-tertiary)" }}>
-              {t("profit.costMissingSomeBranches")}
-            </p>
-          )}
-        </div>
-      </div>
 
       {/* Which products kept the money, from the sale lines this branch can read. */}
-      <div className="px-4 pt-2">
+      <div className="px-4 pt-4">
         <div
           className="rounded-[var(--radius-card)] p-4"
           style={{ background: "var(--tone-card)" }}
           data-testid="profit-by-product"
         >
           <p className="text-14 font-bold">{t("profit.byProduct")}</p>
-          <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            {t("profit.byProductHint")}
-          </p>
 
           {!salesReady ? (
             <p className="text-12 mt-3" style={{ color: "var(--text-secondary)" }}>—</p>
@@ -366,8 +363,9 @@ export default function AdminProfitReportPage() {
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="text-13 font-semibold truncate min-w-0">{product.name}</p>
                     <p className="text-13 font-bold tabular-nums shrink-0">
-                      {product.unknownLines > 0 ? "≥ " : ""}
-                      {money(product.profit)}
+                      <RollingNumber
+                        text={`${product.unknownLines > 0 ? "≥ " : ""}${money(product.profit)}`}
+                      />
                     </p>
                   </div>
                   <div
@@ -375,10 +373,13 @@ export default function AdminProfitReportPage() {
                     style={{ color: "var(--text-tertiary)" }}
                   >
                     <p className="text-10 truncate min-w-0">
-                      {t("sales.revenue")} {money(product.revenue)} ·{" "}
-                      {product.unknownLines === 0
-                        ? `${t("reports.costOfGoods")} ${money(product.cost)}`
-                        : t("profit.unknownCostLine")}
+                      <RollingNumber
+                        text={`${t("sales.revenue")} ${money(product.revenue)} · ${
+                          product.unknownLines === 0
+                            ? `${t("reports.costOfGoods")} ${money(product.cost)}`
+                            : t("profit.unknownCostLine")
+                        }`}
+                      />
                     </p>
                     {product.unknownLines === 0 && (
                       <p className="text-10 tabular-nums shrink-0">{product.margin}%</p>
@@ -452,10 +453,7 @@ export default function AdminProfitReportPage() {
         closeButton={false}
       >
         <div className="px-4 pb-2">
-          <p className="text-12" style={{ color: "var(--text-secondary)" }}>
-            {t("profit.breakdownHint")}
-          </p>
-          <p className="text-10 mt-1" style={{ color: "var(--text-tertiary)" }}>
+          <p className="text-11" style={{ color: "var(--text-tertiary)" }}>
             {periodLine}
           </p>
 
@@ -465,16 +463,20 @@ export default function AdminProfitReportPage() {
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="text-13 font-semibold truncate min-w-0">{product.name}</p>
                   <p className="text-13 font-bold tabular-nums shrink-0">
-                    {product.unknownLines > 0 ? "≥ " : ""}
-                    {money(product.profit)}
+                    <RollingNumber
+                      text={`${product.unknownLines > 0 ? "≥ " : ""}${money(product.profit)}`}
+                    />
                   </p>
                 </div>
                 <div className="flex items-baseline justify-between gap-3 mt-0.5">
                   <p className="text-10 truncate min-w-0" style={{ color: "var(--text-tertiary)" }}>
-                    {t("sales.revenue")} {money(product.revenue)} ·{" "}
-                    {product.unknownLines === 0
-                      ? `${t("reports.costOfGoods")} ${money(product.cost)}`
-                      : t("profit.unknownCostLine")}
+                    <RollingNumber
+                      text={`${t("sales.revenue")} ${money(product.revenue)} · ${
+                        product.unknownLines === 0
+                          ? `${t("reports.costOfGoods")} ${money(product.cost)}`
+                          : t("profit.unknownCostLine")
+                      }`}
+                    />
                   </p>
                   <p className="text-10 tabular-nums shrink-0" style={{ color: "var(--text-tertiary)" }}>
                     {t("sales.soldQty", { count: product.qty.toLocaleString("en-PK") })}
@@ -491,6 +493,41 @@ export default function AdminProfitReportPage() {
           )}
         </div>
       </Sheet>
+    </div>
+  );
+}
+
+/**
+ * One figure the headline was built from. Label, amount, nothing else: four of these in a 2×2
+ * grid replace four tiles that each carried a sentence explaining themselves (owner, 2026-11-17).
+ */
+function StatTile({
+  label,
+  value,
+  testId,
+  tone,
+}: {
+  label: string;
+  value: string;
+  testId: string;
+  /** Discounts are money that was not kept, so they read in the warning colour. */
+  tone?: "warn";
+}) {
+  return (
+    <div
+      className="rounded-[var(--radius-card)] p-4 min-w-0"
+      style={{ background: "var(--tone-card)" }}
+      data-testid={testId}
+    >
+      <p className="text-11" style={{ color: "var(--text-secondary)" }}>
+        {label}
+      </p>
+      <p
+        className="text-18 font-bold mt-1.5 tabular-nums break-words"
+        style={tone === "warn" ? { color: "var(--warning-text, var(--text-primary))" } : undefined}
+      >
+        <RollingNumber text={value} />
+      </p>
     </div>
   );
 }

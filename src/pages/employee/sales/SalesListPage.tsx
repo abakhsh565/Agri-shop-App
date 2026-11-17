@@ -7,6 +7,7 @@ import DateField from "@/components/ui/DateField";
 import ListRow from "@/components/ui/ListRow";
 import PullToRefresh from "@/components/ui/PullToRefresh";
 import { formatCurrency, formatSmartDateTime } from "@/lib/formatters";
+import RollingNumber from "@/components/ui/RollingNumber";
 import { pkToday, pkYesterday, pkDateFromISO, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
 import { useT } from "@/lib/i18n";
 import { useThemeStore } from "@/stores/themeStore";
@@ -166,7 +167,7 @@ export default function SalesListPage() {
           {summaryLabel}
         </p>
         <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
-          {formatCurrency(total)}
+          <RollingNumber value={total} format={formatCurrency} animateOnMount />
         </p>
       </div>
 

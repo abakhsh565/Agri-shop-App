@@ -102,14 +102,33 @@
      PIN dot. Light fills them black; dark fills them brand. One token pair replaces the
      old `.dark .bg-black { background: var(--brand) }` / `.dark .text-white` shim, which
      also applied to text that was never on a black surface. */
-  --ink: #000000;
+  /* Not #000. On the dark theme the strongest plate is a LIGHT BLACK one step above the page
+     (#1a1a1a on #0d0d0c); the light theme paired that with absolute black, which read as a slab
+     dropped onto a warm off-white page rather than the same system inverted. #1a1a1a is that same
+     "light black" one step below the page, and it is the tone the owner's CTAs already use. */
+  --ink: #1a1a1a;
   --ink-fg: #ffffff;
+  /* The segmented tab's pill. Light fills it WHITE on the pale track — the owner's Profit-screen
+     tab ("light grey bg, white active tab") — because a black pill is the dark theme's answer,
+     not the light one. Dark keeps the black pill, which reads correctly on a near-black track. */
+  --seg-pill: #ffffff;
+  --seg-pill-fg: var(--text-primary);
+  --seg-pill-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.08);
+  /* A count inside the selected pill. On a white pill white ink would vanish, so the badge is a
+     wash of the text colour instead of a wash of white. */
+  --seg-badge-bg: rgba(0, 0, 0, 0.07);
+  --seg-badge-fg: var(--text-primary);
   /* Quiet dark action — the owner's CTA (Figma 2081-921, 2087-1765). A dark-grey control
      that sits a step above the page instead of a solid brand fill: the primary action is the
      darkest thing on the screen, with a brand-green label. Light fills it near-black, dark
      fills it one step above the card so it still reads as a button on #0d0d0c. */
-  --cta: #1a1a1a;
-  --cta-fg: var(--brand);
+  /* The quiet dark action is the DARK theme's idea: a plate one step off the page with a brand
+     label. On the light theme it was a black slab — the strongest thing on a warm off-white
+     screen, which is not what a "quiet" action is. It is now the light counterpart of that same
+     step: a pale plate with a dark brand label, so the page keeps its tone and the button still
+     reads as the action (owner, 2026-11-18: "pure black bg button on white theme"). */
+  --cta: #e9e9e4;
+  --cta-fg: var(--brand-dark);
   /* Caption/hint text. Light and dark greys were never aligned: light read
      `--text-secondary`, dark `--muted-foreground`. Same token, same relationship. */
   --caption: var(--text-secondary);
@@ -205,6 +224,8 @@
      the compositor and does not repaint a long list on a cheap Android WebView.
      There is no motion token longer than 280ms: at this size anything slower
      reads as lag, not as polish. */
+  --dur-num: 340ms;             /* a digit rolling to its next value */
+  --ease-num: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-1: 120ms;               /* press feedback, colour changes */
   --dur-2: 200ms;               /* toasts, dialogs */
   --dur-3: 280ms;               /* sheets and backdrops */
@@ -325,8 +346,21 @@
      #3a3a34 is ~35/255 off it, so the field still has an edge without becoming a bright
      outline. It reads the same on a sheet, because the edge does not follow the container. */
   --border-control: #3a3a34;
-  --ink: var(--brand);
+  /*
+   * Primary actions are the page's inverse, never the brand.
+   *
+   * `--ink` used to point at the brand in this theme, so the same button was a black plate on the
+   * light theme and a green one on the dark: the "Complete sale" call to action changed colour
+   * with the theme and spent the screen's one accent on a surface. Inverse keeps one language —
+   * the strongest plate on the page — and leaves green for the accent it is meant to be.
+   */
+  --ink: #f2f2ef;
   --ink-fg: #0a0a0a;
+  --seg-pill: #0a0a09;
+  --seg-pill-fg: #ffffff;
+  --seg-pill-shadow: none;
+  --seg-badge-bg: rgba(255, 255, 255, 0.22);
+  --seg-badge-fg: #ffffff;
   --cta: #1f1f1e;
   --cta-fg: var(--brand);
   --caption: var(--text-tertiary);
@@ -410,6 +444,23 @@ textarea,
     background-color: var(--field-bg);
     transition: border-color 0.15s, box-shadow 0.15s;
   }
+  /*
+   * A typed number is typed, not stepped (owner, 2026-11-17). The browser's little up/down arrows
+   * sat on top of the value in every quantity and amount field — 48px of phone showing a spinner
+   * nobody asked for — and they are the one part of the control the design cannot style. The
+   * spinner is gone everywhere, including the review screen and the manual quantity in a stepper,
+   * and the field is an ordinary text box that still refuses letters on a numeric keyboard.
+   */
+  :where(input[type="number"]) {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  :where(input[type="number"])::-webkit-outer-spin-button,
+  :where(input[type="number"])::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
   :where(select) {
     border-radius: var(--radius-field);
     height: var(--field-h);
@@ -1150,6 +1201,40 @@ svg.ds-row-chevron {
 .animate-slide-up     { animation: slideUp    0.28s cubic-bezier(0.32, 0.72, 0, 1) both; }
 .animate-pulse-brand  { animation: pulse-brand 2s infinite; }
 
+/* ── Rolling numbers ───────────────────────────────────────────────────────────────
+   The reference's "rolling counter": a changed digit leaves in the direction of the change
+   while the next arrives from the other side, so a figure that updates reads as movement and
+   not as a swap. Only the characters that actually changed animate, which is why 24,182 →
+   24,183 moves one digit instead of the whole number. Widths are tabular, so nothing shifts. */
+.nr {
+  display: inline-flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+.nr-cell {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+.nr-tick { display: block; animation: nrTickUp var(--dur-num) var(--ease-num) both; }
+.nr-tick--down { animation-name: nrTickDown; }
+.nr-ghost {
+  position: absolute;
+  inset: 0;
+  animation: nrGhostUp var(--dur-num) var(--ease-num) both;
+}
+.nr-ghost--down { animation-name: nrGhostDown; }
+@keyframes nrTickUp   { from { transform: translateY(75%);  opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes nrTickDown { from { transform: translateY(-75%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes nrGhostUp   { from { transform: none; opacity: 1; } to { transform: translateY(-75%);  opacity: 0; } }
+@keyframes nrGhostDown { from { transform: none; opacity: 1; } to { transform: translateY(75%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .nr-tick, .nr-ghost { animation: none; }
+  /* The ghost is only there to be animated out; static, it would sit on top of the new digit. */
+  .nr-ghost { display: none; }
+  .ds-switch-knob { animation: none; }
+}
+
 /* A tab swap in the record-money form: the panel's content settles six pixels up and in.
    Short on purpose — it should read as the same panel answering, not a new screen arriving —
    and the reduced-motion block above collapses it with every other animation. */
@@ -1184,6 +1269,35 @@ svg.ds-row-chevron {
 .ds-anim-backdrop-out { animation: backdropOut var(--dur-2) ease-out both; }
 .ds-anim-toast-in   { animation: toastIn     var(--dur-2) var(--ease-out) both; }
 .ds-anim-toast-out  { animation: toastOut    var(--dur-2) var(--ease-out) both; }
+/* The switch's knob leans into its direction of travel, so the state change reads as one
+   object moving rather than a colour swap with a dot that teleports. */
+.ds-switch-knob {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  top: 2px;
+  left: 2px;
+  border-radius: 999px;
+}
+.ds-switch-knob[data-on="true"] {
+  transform: translateX(18px);
+  animation: dsSwitchOn 380ms cubic-bezier(0.34, 1.24, 0.5, 1) both;
+}
+.ds-switch-knob[data-on="false"] {
+  transform: translateX(0);
+  animation: dsSwitchOff 380ms cubic-bezier(0.34, 1.24, 0.5, 1) both;
+}
+@keyframes dsSwitchOn {
+  0%   { transform: translateX(0) scale(1); }
+  45%  { transform: translateX(9px) scale(1.45); }
+  100% { transform: translateX(18px) scale(1); }
+}
+@keyframes dsSwitchOff {
+  0%   { transform: translateX(18px) scale(1); }
+  45%  { transform: translateX(9px) scale(1.45); }
+  100% { transform: translateX(0) scale(1); }
+}
+
 /* NOT `both`. A filling animation on `opacity` stays "in effect" after it finishes, which
    makes this wrapper a PERMANENT stacking context at `z-index: auto`. The bottom tab bar is
    a `fixed` later sibling with `z-index: auto` too, so both landed in the same painting

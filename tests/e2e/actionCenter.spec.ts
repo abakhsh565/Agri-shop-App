@@ -131,18 +131,18 @@ test('3. Action Center page loads with tabs', async ({ page }) => {
   // controls. Reading body text once after a fixed sleep raced hydration under
   // full-suite load and saw a 25-character body (an empty shell) even though the
   // page and its tabs do render — the same condition passes in isolation.
-  await expect(page.getByRole('button', { name: /^Actions/ }).first(), 'main "Actions" tab did not render').toBeVisible();
+  await expect(page.getByRole('button', { name: /^Today/ }).first(), 'main "Today" tab did not render').toBeVisible();
   await expect(page.getByRole('button', { name: /Critical/ }).first(), '"Critical" tab did not render').toBeVisible();
-  await expect(page.getByRole('button', { name: /Warning/ }).first(), '"Warning" tab did not render').toBeVisible();
-  await expect(page.getByRole('button', { name: /Info/ }).first(), '"Info" tab did not render').toBeVisible();
+  await expect(page.getByRole('button', { name: /Follow up/ }).first(), '"Follow up" tab did not render').toBeVisible();
+  await expect(page.getByRole('button', { name: /Upcoming/ }).first(), '"Upcoming" tab did not render').toBeVisible();
 
   const content = await page.textContent('body');
   const pageLoaded = !content?.includes('page not found') && !content?.includes('404');
-  const hasTabs = content?.includes('Critical') || content?.includes('Warning') || content?.includes('Info') || content?.includes('Actions');
+  const hasTabs = content?.includes('Critical') || content?.includes('Follow up') || content?.includes('Upcoming') || content?.includes('Today');
 
   evidence.push(recordEvidence(
     'Action Center loads',
-    'Page loads with signal tabs (Actions / Critical / Warning / Info) rendered',
+    'Page loads with the merged Today tab and its sub-tabs (Critical / Follow up / Upcoming) rendered',
     `Tabs rendered: ${hasTabs}, Page OK: ${pageLoaded}, Content length: ${content?.length || 0}`,
     (hasTabs && pageLoaded) ? 'PASS' : 'FAIL',
     'browser → Action Center route → rendered tab elements'
@@ -153,9 +153,9 @@ test('3. Action Center page loads with tabs', async ({ page }) => {
   expect(pageLoaded).toBeTruthy();
 });
 
-// ─── Test 4: Sub-tabs (Critical, Warning, Info) are visible ─────────────
+// ─── Test 4: Sub-tabs (Critical, Follow up, Upcoming) are visible ───────
 
-test('4. Sub-tabs Critical, Warning, Info are visible', async ({ page }) => {
+test('4. Sub-tabs Critical, Follow up, Upcoming are visible', async ({ page }) => {
   const evidence: TestEvidence[] = [];
 
   await loginAsAdmin(page);
@@ -163,27 +163,27 @@ test('4. Sub-tabs Critical, Warning, Info are visible', async ({ page }) => {
 
   // Same hydration race as test 3 — wait for the controls instead of sampling text.
   await expect(page.getByRole('button', { name: /Critical/ }).first(), '"Critical" sub-tab did not render').toBeVisible();
-  await expect(page.getByRole('button', { name: /Warning/ }).first(), '"Warning" sub-tab did not render').toBeVisible();
-  await expect(page.getByRole('button', { name: /Info/ }).first(), '"Info" sub-tab did not render').toBeVisible();
+  await expect(page.getByRole('button', { name: /Follow up/ }).first(), '"Follow up" sub-tab did not render').toBeVisible();
+  await expect(page.getByRole('button', { name: /Upcoming/ }).first(), '"Upcoming" sub-tab did not render').toBeVisible();
 
   const body = await page.textContent('body');
 
   const hasCritical = body?.includes('Critical') ?? false;
-  const hasWarning = body?.includes('Warning') ?? false;
-  const hasInfo = body?.includes('Info') ?? false;
+  const hasFollowUp = body?.includes('Follow up') ?? false;
+  const hasUpcoming = body?.includes('Upcoming') ?? false;
 
   evidence.push(recordEvidence(
     'Sub-tabs visible',
-    'Critical, Warning, Info tabs exist',
-    `Critical: ${hasCritical}, Warning: ${hasWarning}, Info: ${hasInfo}`,
-    (hasCritical && hasWarning && hasInfo) ? 'PASS' : 'FAIL',
+    'Critical, Follow up, Upcoming tabs exist',
+    `Critical: ${hasCritical}, Follow up: ${hasFollowUp}, Upcoming: ${hasUpcoming}`,
+    (hasCritical && hasFollowUp && hasUpcoming) ? 'PASS' : 'FAIL',
     'browser → Action Center → sub-tab nav'
   ));
 
   writeEvidenceReport(evidence, test.info());
   expect(hasCritical).toBeTruthy();
-  expect(hasWarning).toBeTruthy();
-  expect(hasInfo).toBeTruthy();
+  expect(hasFollowUp).toBeTruthy();
+  expect(hasUpcoming).toBeTruthy();
 });
 
 // ─── Test 5: Critical tab shows signals from QA data ────────────────────
@@ -220,58 +220,58 @@ test('5. Critical tab shows signals from real QA data', async ({ page }) => {
 
 // ─── Test 6: Tab switching works ────────────────────────────────────────
 
-test('6. Tab switching between Critical/Warning/Info works', async ({ page }) => {
+test('6. Tab switching between Critical/Follow up/Upcoming works', async ({ page }) => {
   const evidence: TestEvidence[] = [];
 
   await loginAsAdmin(page);
   await page.goto(ADMIN_ALERTS, { waitUntil: 'networkidle' });
   await page.waitForTimeout(2000);
 
-  // Find and click Warning tab
-  const warningTab = page.locator('button:has-text("Warning")').first();
-  if (await warningTab.isVisible()) {
-    await warningTab.click();
+  // Find and click the merged Follow up tab
+  const followUpTab = page.getByRole('button', { name: /^Follow up/ }).first();
+  if (await followUpTab.isVisible()) {
+    await followUpTab.click();
     await page.waitForTimeout(500);
-    const bodyAfterWarning = await page.textContent('body');
-    const warningActive = bodyAfterWarning?.includes('Warning');
+    const bodyAfterFollowUp = await page.textContent('body');
+    const followUpActive = bodyAfterFollowUp?.includes('Follow up');
 
     evidence.push(recordEvidence(
-      'Warning tab switch',
-      'Clicking Warning tab shows warning signals',
-      `Warning tab visible and active: ${!!warningActive}`,
-      warningActive ? 'PASS' : 'FAIL',
-      'browser → click Warning tab → render'
+      'Follow up tab switch',
+      'Clicking Follow up shows the merged chase list (reminders + warning signals)',
+      `Follow up tab visible and active: ${!!followUpActive}`,
+      followUpActive ? 'PASS' : 'FAIL',
+      'browser → click Follow up tab → render'
     ));
   } else {
     evidence.push(recordEvidence(
-      'Warning tab switch',
-      'Warning tab button found and clickable',
-      'Warning tab not found',
+      'Follow up tab switch',
+      'Follow up tab button found and clickable',
+      'Follow up tab not found',
       'UNTESTABLE',
       'browser'
     ));
   }
 
-  // Find and click Info tab
-  const infoTab = page.locator('button:has-text("Info")').first();
-  if (await infoTab.isVisible()) {
-    await infoTab.click();
+  // Find and click Upcoming tab
+  const upcomingTab = page.getByRole('button', { name: /^Upcoming/ }).first();
+  if (await upcomingTab.isVisible()) {
+    await upcomingTab.click();
     await page.waitForTimeout(500);
-    const bodyAfterInfo = await page.textContent('body');
-    const infoActive = bodyAfterInfo?.includes('Info');
+    const bodyAfterUpcoming = await page.textContent('body');
+    const upcomingActive = bodyAfterUpcoming?.includes('Upcoming');
 
     evidence.push(recordEvidence(
-      'Info tab switch',
-      'Clicking Info tab shows info signals',
-      `Info tab visible and active: ${!!infoActive}`,
-      infoActive ? 'PASS' : 'FAIL',
-      'browser → click Info tab → render'
+      'Upcoming tab switch',
+      'Clicking Upcoming shows the scheduled reminders',
+      `Upcoming tab visible and active: ${!!upcomingActive}`,
+      upcomingActive ? 'PASS' : 'FAIL',
+      'browser → click Upcoming tab → render'
     ));
   } else {
     evidence.push(recordEvidence(
-      'Info tab switch',
-      'Info tab button found and clickable',
-      'Info tab not found',
+      'Upcoming tab switch',
+      'Upcoming tab button found and clickable',
+      'Upcoming tab not found',
       'UNTESTABLE',
       'browser'
     ));
@@ -530,7 +530,7 @@ test('10. Credit request E2E: create → critical signal → approve → signal 
 
 // ─── Test 11: Follow-ups tab loads ──────────────────────────────────────
 
-test('11. Follow-ups tab loads with Ready/Upcoming/Recently Sent sections', async ({ page }) => {
+test('11. Today tab loads with Follow up/Upcoming/Recently Sent sections', async ({ page }) => {
   const evidence: TestEvidence[] = [];
 
   await loginAsAdmin(page);

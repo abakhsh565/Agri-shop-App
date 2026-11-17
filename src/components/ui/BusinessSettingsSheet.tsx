@@ -1,41 +1,38 @@
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useDelayedDismiss } from "@/hooks/usePresence";
 
 /** Matches --dur-3, the sheet duration token. */
 const SHEET_MS = 280;
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2, Pencil } from "lucide-react";
 import SelectorField from "./SelectorField";
 import type { CropConfig, BusinessSettings } from "@/types";
 import { useT } from "@/lib/i18n";
-import { useAuthStore } from "@/stores/authStore";
+import { loadBusinessSettings, saveBusinessSettings } from "@/lib/reminderEngine";
+import { useUIStore } from "@/stores/uiStore";
 
 const PRESET_CROPS = ["Cotton", "Wheat", "Rice", "Sugarcane", "Maize", "Tobacco"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-
-/**
- * Which crops a shop grows is that shop's configuration, so the device-local copy is kept per
- * shop — the same reason `localCache` is keyed by its owner and the group registry by tenant.
- * Under one key for the whole device, a second shop opened the crop list the first shop had
- * configured and would save it back as its own (the database copy is written too, but the sheet
- * reads this one for display).
- */
-function settingsKey(): string {
-  const tenant = useAuthStore.getState().user?.tenantId ?? "none";
-  return `business_settings:${tenant}`;
-}
-
-function loadSettings(): BusinessSettings {
-  try { const raw = localStorage.getItem(settingsKey()); if (raw) return JSON.parse(raw); } catch {}
-  return { crops: [] };
-}
-function saveSettings(s: BusinessSettings) { localStorage.setItem(settingsKey(), JSON.stringify(s)); }
 
 interface Props { onClose: () => void; onSave: () => void; }
 
 export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
   const t = useT();
-  const [settings, setSettings] = useState<BusinessSettings>(loadSettings);
+  const addToast = useUIStore((s) => s.addToast);
+  /**
+   * The crops and their harvest month/day live in `business_settings` (setting_key `crops`) — the
+   * row `reminderEngine` reads when it schedules a "Before harvest season" reminder. This sheet
+   * used to keep the list in localStorage only, so a harvest period configured here never reached
+   * the engine; it now reads and writes the same row.
+   */
+  const [settings, setSettings] = useState<BusinessSettings>({ crops: [] });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  /** A ref, not the state above: two taps in one task both read the old `saving`. */
+  const savingRef = useRef(false);
   const [customCrop, setCustomCrop] = useState("");
+  /** Which chip is being renamed in place, and what is typed so far. */
+  const [editingCrop, setEditingCrop] = useState<string | null>(null);
+  const [chipDraft, setChipDraft] = useState("");
   /** In-flight crop names, keyed by the name they started with. Only used while typing. */
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
   const { closing, dismiss } = useDelayedDismiss(onClose, SHEET_MS);
@@ -47,6 +44,17 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
     return () => { document.body.style.overflow = ""; };
   }, []);
 
+  // The saved schedule, from the row the reminder engine schedules against.
+  useEffect(() => {
+    let alive = true;
+    void loadBusinessSettings().then((loaded) => {
+      if (!alive) return;
+      setSettings(loaded);
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, []);
+
   function toggleCrop(name: string) {
     setSettings(prev => {
       const exists = prev.crops.find(c => c.name === name);
@@ -54,6 +62,16 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
       const dm = name === "Cotton" ? 8 : name === "Wheat" ? 4 : name === "Rice" ? 10 : name === "Sugarcane" ? 3 : 7;
       return { ...prev, crops: [...prev.crops, { name, harvestMonth: dm, harvestDay: 1 }] };
     });
+  }
+
+  /**
+   * Removing a crop from the shop's list, whichever way it was added: a preset chip and a crop
+   * typed into "Add custom crop" are the same row in `settings.crops`, so both must be deletable
+   * from the same place — the chip that shows them.
+   */
+  function removeCrop(name: string) {
+    setEditingCrop((current) => (current === name ? null : current));
+    setSettings(prev => ({ ...prev, crops: prev.crops.filter(c => c.name !== name) }));
   }
 
   function updateHarvestMonth(name: string, month: number) {
@@ -71,8 +89,21 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
     setCustomCrop("");
   }
 
-  function handleSave() {
-    saveSettings(settings);
+  async function handleSave() {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await saveBusinessSettings(settings);
+    } catch {
+      // Nothing was written, so nothing may be reported as saved: the sheet stays open with the
+      // owner's edits in it, and the failure is said out loud instead of a silent close.
+      addToast(t("settings.harvestPeriods.saveFailed"), "error");
+      return;
+    } finally {
+      setSaving(false);
+      savingRef.current = false;
+    }
     onSave();
     onClose();
   }
@@ -100,9 +131,16 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
     }));
   }
 
+  /**
+   * The app's field shape, not a raw input: a bare <input> inherits the browser's square border and
+   * a square focus ring, which is what made "Add custom crop" and the crop name look like two
+   * foreign boxes inside a sheet full of rounded fields.
+   */
   const fieldStyle = {
     background: "var(--field-bg)",
     color: "var(--text-primary)",
+    borderRadius: 24,
+    border: "none",
   };
 
   const labelCls = "ds-section-label mb-2 block";
@@ -115,7 +153,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
       onClick={closing ? undefined : dismiss}
     >
       <div
-        className={`w-full max-w-[390px] mx-auto rounded-t-[24px] flex flex-col ${
+        className={`w-full max-w-[480px] mx-auto rounded-t-[24px] flex flex-col ${
           closing ? "ds-anim-sheet-out" : "ds-anim-sheet-in"
         }`}
         style={{ background: "var(--tone-sheet)", maxHeight: "85vh" }}
@@ -145,23 +183,77 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("settings.cropsQuestion")}</p>
             <div className="flex flex-wrap gap-2">
-              {PRESET_CROPS.map(crop => {
-                const active = selectedNames.includes(crop);
+              {/* Chosen crops first — each one carries its own rename and remove, so the list can
+                  be edited where it is read instead of only in the harvest cards below. */}
+              {settings.crops.map(({ name }) => {
+                const editing = editingCrop === name;
                 return (
-                  <button
-                    key={crop}
-                    onClick={() => toggleCrop(crop)}
-                    className="h-10 px-4 rounded-full text-13 font-medium transition-colors"
-                    style={{
-                      background: active ? "var(--brand)" : "var(--surface-2)",
-                      color: active ? "#0a0a0a" : "var(--text-secondary)",
-                      border: active ? "none" : "1px solid var(--divider)",
-                    }}
+                  <div
+                    key={name}
+                    className="flex items-center gap-1 h-10 ps-4 pe-1 rounded-full"
+                    style={{ background: "var(--brand)", color: "#0a0a0a" }}
+                    data-testid={`crop-chip-${name}`}
                   >
-                    {crop}
-                  </button>
+                    {editing ? (
+                      <input
+                        autoFocus
+                        value={chipDraft}
+                        onChange={(e) => setChipDraft(e.target.value)}
+                        onBlur={() => { commitRename(name, chipDraft); setEditingCrop(null); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            commitRename(name, chipDraft);
+                            setEditingCrop(null);
+                          }
+                          if (e.key === "Escape") setEditingCrop(null);
+                        }}
+                        aria-label={t("bizSettings.renameCrop")}
+                        className="h-8 w-[112px] bg-transparent text-13 font-medium outline-none"
+                        style={{ color: "#0a0a0a" }}
+                      />
+                    ) : (
+                      <span className="text-13 font-medium">{name}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setEditingCrop(name); setChipDraft(name); }}
+                      aria-label={`${t("bizSettings.renameCrop")}: ${name}`}
+                      data-testid={`crop-chip-edit-${name}`}
+                      className="size-7 rounded-full flex items-center justify-center ds-pressable"
+                      style={{ background: "rgba(0,0,0,0.14)" }}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeCrop(name)}
+                      aria-label={`${t("bizSettings.removeCrop")}: ${name}`}
+                      data-testid={`crop-chip-remove-${name}`}
+                      className="size-7 rounded-full flex items-center justify-center ds-pressable"
+                      style={{ background: "rgba(0,0,0,0.14)" }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
                 );
               })}
+
+              {/* The presets that are not chosen yet: one tap adds them. */}
+              {PRESET_CROPS.filter(crop => !selectedNames.includes(crop)).map(crop => (
+                <button
+                  key={crop}
+                  onClick={() => toggleCrop(crop)}
+                  className="h-10 px-4 rounded-full text-13 font-medium transition-colors"
+                  style={{
+                    background: "var(--surface-2)",
+                    color: "var(--text-secondary)",
+                    border: "1px solid var(--divider)",
+                  }}
+                >
+                  {crop}
+                </button>
+              ))}
             </div>
 
             {/* Add custom crop */}
@@ -171,7 +263,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                 onChange={(e) => setCustomCrop(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") addCustomCrop(); }}
                 placeholder={t("bizSettings.addCropPlaceholder")}
-                className="flex-1 h-12 px-4 text-13 outline-none"
+                className="flex-1 h-12 px-4 text-13 outline-none rounded-full"
                 style={{ ...fieldStyle }}
               />
               <button
@@ -184,10 +276,18 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
             </div>
           </div>
 
-          {/* Harvest periods — card-based like Add Product variants */}
-          {settings.crops.length > 0 && (
-            <div>
-              <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("settings.harvestPeriods")}</p>
+          {/* Harvest periods — card-based like Add Product variants. Always shown: the section is
+              the answer to "when does this crop come off", and a "Before harvest season" reminder
+              counts back from exactly this month and day. */}
+          <div>
+            <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("settings.harvestPeriods")}</p>
+            {loading ? (
+              <p className="text-12" style={{ color: "var(--text-secondary)" }}>{t("common.loading")}</p>
+            ) : settings.crops.length === 0 ? (
+              <p className="text-12 leading-snug" style={{ color: "var(--text-secondary)" }}>
+                {t("settings.harvestPeriods.empty")}
+              </p>
+            ) : (
               <div className="flex flex-col gap-3">
                 {settings.crops.map(crop => (
                   <div
@@ -210,7 +310,7 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                           }
                         }}
                         aria-label={t("bizSettings.renameCrop")}
-                        className="flex-1 h-12 px-2.5 text-14 font-semibold outline-none me-2"
+                        className="flex-1 h-12 px-4 text-14 font-semibold outline-none me-2 rounded-full"
                         style={{ ...fieldStyle }}
                       />
                       <button
@@ -254,12 +354,13 @@ export default function BusinessSettingsSheet({ onClose, onSave }: Props) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Save button */}
           <button
             onClick={handleSave}
+            disabled={saving}
             className="w-full h-12 rounded-full text-14 font-bold transition-opacity active:opacity-80"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >

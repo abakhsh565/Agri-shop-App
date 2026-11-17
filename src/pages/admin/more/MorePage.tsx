@@ -16,6 +16,7 @@ import {
   LogOut,
   MessageSquare,
   Package,
+  ReceiptText,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
@@ -159,6 +160,15 @@ export default function AdminMorePage() {
       id: "business",
       headingKey: "more.group.business",
       rows: [
+        {
+          // The shop's own paperwork, next to the registers it is written from.
+          id: "invoices",
+          icon: ReceiptText,
+          labelKey: "nav.invoices",
+          descriptionKey: "more.hint.invoices",
+          to: `${base}/invoices`,
+          show: hasPermission("sales.view"),
+        },
         {
           id: "customers",
           icon: Users,

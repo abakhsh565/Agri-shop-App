@@ -11,6 +11,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import { useNavigate } from "react-router-dom";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useThemeStore } from "@/stores/themeStore";
@@ -26,6 +27,7 @@ import { useUIStore } from "@/stores/uiStore";
 export default function SecuritySettingsPage() {
   const t = useT();
   const base = useShellBase();
+  const navigate = useNavigate();
   const language = useThemeStore((s) => s.language);
   const { addToast } = useUIStore();
 
@@ -78,6 +80,21 @@ export default function SecuritySettingsPage() {
               {t("securityDemo.protectionHint")}
             </p>
           </div>
+        </div>
+
+        {/* The phone's own permissions belong on this screen: they are what the app may use, and
+            a dialog dismissed with "don't ask again" was previously invisible everywhere. */}
+        <div className="mt-5">
+          <ListCard section={t("appPerm.section")}>
+            <ListRow
+              icon={Smartphone}
+              title={t("appPerm.title")}
+              meta={t("appPerm.rowMeta")}
+              trailing={<span className="ds-row-value">{t("appPerm.open")}</span>}
+              onClick={() => navigate(`${base}/settings/permissions`)}
+              testId="app-permissions-row"
+            />
+          </ListCard>
         </div>
 
         <div className="mt-5">

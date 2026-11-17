@@ -33,7 +33,6 @@ export default function InventoryAlertsPage() {
   const navigate = useNavigate();
   const products = useProductsStore((s) => s.products);
   const ready = useProductsStore((s) => s.ready);
-  const branch = useShopStore((s) => s.activeBranchName);
 
   const items = stockItems(products);
   const out = items.filter((item) => item.status === "out_of_stock");
@@ -103,7 +102,6 @@ export default function InventoryAlertsPage() {
                 icon={item.status === "out_of_stock" ? Package : AlertTriangle}
                 title={item.productName}
                 line={`${item.variantName} · ${item.qty} ${unitWord(item.baseUnit, t)}`}
-                note={branch ?? undefined}
                 statusLabel={getStockStatusLabel(item.status, t)}
                 statusColor={getStockStatusColor(item.status)}
                 onClick={() => navigate(`${base}/inventory/${item.productId}/adjust`)}
@@ -114,7 +112,7 @@ export default function InventoryAlertsPage() {
           <div className="px-4 pt-4 flex items-center gap-2">
             <Boxes size={14} style={{ color: "var(--text-tertiary)" }} />
             <p className="text-11" style={{ color: "var(--text-tertiary)" }}>
-              {t("alerts.stockScopeNote", { branch: branch ?? t("hub.inventory.selectedBranch") })}
+              {t("alerts.stockScopeNote")}
             </p>
           </div>
         </div>

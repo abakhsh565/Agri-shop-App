@@ -51,7 +51,6 @@ export default function EmployeesListPage() {
   const employees = useEmployeesStore((s) => s.employees);
   const ready = useEmployeesStore((s) => s.ready);
   const activeBranchId = useShopStore((s) => s.activeBranchId);
-  const activeBranchName = useShopStore((s) => s.activeBranchName);
   const canManage = hasPermission("employees.manage");
 
   /**
@@ -131,11 +130,6 @@ export default function EmployeesListPage() {
     >
       <StatusBar />
       <NavHeader title={t("admin.employees")} />
-      {activeBranchName && (
-        <p className="text-10 text-center pb-2" style={{ color: "var(--text-secondary)" }}>
-          {activeBranchName}
-        </p>
-      )}
 
       <div className="flex flex-col px-4 gap-3 pb-24">
         {/* Invitations, above the team rather than inside it: the number beside the

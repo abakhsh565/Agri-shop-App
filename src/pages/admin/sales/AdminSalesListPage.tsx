@@ -34,10 +34,12 @@ import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import RollingNumber from "@/components/ui/RollingNumber";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
 import { netSalesOf, refundsBySale, useReturns } from "@/lib/salesActivity";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
 import { useShellBase } from "@/lib/useShellBase";
+import SegmentedTabs from "@/components/ui/SegmentedTabs";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -64,7 +66,7 @@ function SummaryProgress({ label, pct, testId }: { label: string; pct: number; t
       </div>
       <div
         className="mt-2 h-1 rounded-full overflow-hidden"
-        style={{ background: "var(--divider)" }}
+        style={{ background: "var(--tone-sunken)" }}
         role="progressbar"
         aria-label={label}
         aria-valuemin={0}
@@ -74,7 +76,7 @@ function SummaryProgress({ label, pct, testId }: { label: string; pct: number; t
       >
         <div
           className="h-full rounded-full"
-          style={{ width: `${pct}%`, background: "var(--text-secondary)", transition: "width var(--dur-3) var(--ease-out)" }}
+          style={{ width: `${pct}%`, background: "var(--brand)", transition: "width var(--dur-3) var(--ease-out)" }}
         />
       </div>
     </div>
@@ -355,36 +357,19 @@ export default function AdminSalesListPage() {
         }
       />
 
-      {/* The tab row stays below the title. The control is 8px shorter than before, but the
-          labels keep the same 13px type step; only the track and pill heights come down. */}
+      {/* The tab row stays below the title: a track with one raised pill, the way the reference
+          control reads. The labels keep the same 13px type step. The track is 48px and the pill
+          40px, so the pill carries a 4px margin on every side instead of touching the track
+          (owner's request, 2026-11-16). The selected pill is the app's black in both themes, as
+          the reference shows — not the ink token, which flips to white in the dark theme. */}
       <div className="px-4 pt-2">
-        <div
-          className="flex items-center gap-1 p-0.5 h-10 rounded-full"
-          style={{ background: "var(--surface-2)" }}
-          role="group"
-          aria-label={t("sales.type")}
-        >
-          {TABS.map(({ key, label }) => {
-            const selected = tab === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                aria-pressed={selected}
-                data-testid={`sales-tab-${key}`}
-                className="flex-1 min-w-0 h-9 rounded-full text-13 font-semibold truncate px-2 transition-colors active:opacity-70"
-                style={
-                  selected
-                    ? { background: "var(--text-primary)", color: "var(--background)" }
-                    : { background: "transparent", color: "var(--text-secondary)" }
-                }
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedTabs
+          items={TABS}
+          value={tab}
+          onChange={setTab}
+          ariaLabel={t("sales.type")}
+          itemTestId={(key) => `sales-tab-${key}`}
+        />
       </div>
 
       {/* One flat period card, with the reading chosen above: label, headline, the line that
@@ -406,14 +391,16 @@ export default function AdminSalesListPage() {
                 className="text-28 font-bold mt-1 tabular-nums break-words"
                 data-testid={summary.amountTestId}
               >
-                {formatCurrency(summary.amount)}
+                {/* Switching All / Credit / Paid or the window changes this figure: it rolls, like
+                    the dashboard's hero, so the tab and the number move as one gesture. */}
+                <RollingNumber value={summary.amount} format={formatCurrency} animateOnMount />
               </p>
               <p
                 className="text-12 font-medium mt-1"
                 data-testid={summary.subTestId}
                 style={{ color: "var(--text-secondary)" }}
               >
-                {summary.subline}
+                <RollingNumber text={summary.subline} />
               </p>
             </div>
             <button
@@ -439,13 +426,13 @@ export default function AdminSalesListPage() {
 
           {/* The two amounts that make up the headline. Half the row each, so neither is tucked
               under the other's label; the same pair in every tab state. */}
-          <div className="grid grid-cols-2 gap-4 mt-4 pt-3" style={{ borderTop: "1px solid var(--divider)" }}>
+          <div className="grid grid-cols-2 gap-4 mt-4">
             <div className="min-w-0">
               <p className="text-11" style={{ color: "var(--text-secondary)" }}>
                 {summary.leftLabel}
               </p>
               <p className="text-17 font-bold mt-1 tabular-nums break-words" data-testid={summary.leftTestId}>
-                {formatCurrency(summary.leftValue)}
+                <RollingNumber value={summary.leftValue} format={formatCurrency} />
               </p>
             </div>
             <div className="min-w-0 text-end">
@@ -453,7 +440,7 @@ export default function AdminSalesListPage() {
                 {summary.rightLabel}
               </p>
               <p className="text-17 font-bold mt-1 tabular-nums break-words" data-testid={summary.rightTestId}>
-                {formatCurrency(summary.rightValue)}
+                <RollingNumber value={summary.rightValue} format={formatCurrency} />
               </p>
             </div>
           </div>
@@ -756,7 +743,7 @@ export default function AdminSalesListPage() {
                     trailing={
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <span className="text-14 font-bold" style={{ color: "var(--text-primary)" }}>
-                          {formatCurrency(sale.totalAmount)}
+                          <RollingNumber text={formatCurrency(sale.totalAmount)} />
                         </span>
                         {sale.paymentType !== "full" ? (
                           <span className="text-10 font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>

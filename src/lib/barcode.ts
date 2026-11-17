@@ -143,8 +143,13 @@ export async function scanFromCamera(labels: ScannerLabels): Promise<ScanResult 
     const { BarcodeScanner, BarcodeFormat } = await import("@capacitor-mlkit/barcode-scanning");
     const supported = await BarcodeScanner.isSupported();
     if (supported) {
-      const permission = await BarcodeScanner.requestPermissions();
-      if (permission.camera === "granted") {
+      // Ask only when the camera is not already allowed. `requestPermissions()` on an already
+      // granted camera is a no-op on Android, but calling it on every scan also meant a refused
+      // permission re-opened the dialog path each time; the registry remembers the answer and the
+      // Settings screen owns the "open Android settings" story.
+      const { requestCamera } = await import("@/lib/appPermissions");
+      const permission = await requestCamera();
+      if (permission === "granted") {
         // Race scan against 10s timeout — if MLKit hangs, fall through to web scanner
         const scanPromise = BarcodeScanner.scan({
           formats: [

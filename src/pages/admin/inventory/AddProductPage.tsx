@@ -9,7 +9,8 @@ import InlineSelect from "@/components/ui/InlineSelect";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import LogoTile from "@/components/ui/LogoTile";
 import Checkbox from "@/components/ui/Checkbox";
-import { backToSelf, dependencyHint, readReturnTo } from "@/lib/dependencyGraph";
+import { backToSelf, dependencyHint, readReturnTo, withReturn } from "@/lib/dependencyGraph";
+import { hasPermission } from "@/lib/tenantContext";
 import { useShellBase } from "@/lib/useShellBase";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -28,6 +29,7 @@ import {
   unitGroupForBaseUnit,
 } from "@/lib/classification";
 import { Plus, Trash2, Lock, RefreshCw } from "lucide-react";
+import NumberStepper from "@/components/ui/NumberStepper";
 import ScanButton from "@/components/ui/ScanButton";
 import { DEFAULT_STOCK_ALERT_SETTINGS, loadStockAlertSettings, type StockAlertSettings } from "@/lib/stockAlerts";
 import { markupPercent, sellingFromMarkup } from "@/lib/profit";
@@ -751,10 +753,22 @@ export default function AddProductPage() {
   const labelCls = "text-11 font-medium mb-1.5";
   const cellLabel = labelCls;
   const herePath = isEdit ? `${base}/inventory/${productId}/edit` : `${base}/inventory/new`;
+  const selfReturnTo = backToSelf(herePath, returnTo, `${base}/products`);
   const supplierHint = dependencyHint("supplier", t, {
     base,
-    returnTo: backToSelf(herePath, returnTo, `${base}/products`),
+    returnTo: selfReturnTo,
   });
+  /**
+   * Creating the next shelf from inside the form, not only when none exists. The picker offered
+   * this as an empty-state escape; a shop that already had shelves was expected to leave the
+   * half-filled product, go to Catalogue, add one there and come back to it.
+   */
+  const categoryCreateAction = hasPermission("products.edit")
+    ? {
+        label: t("addProduct.addCategory"),
+        onClick: () => navigate(withReturn(`${base}/inventory/categories/new`, selfReturnTo)),
+      }
+    : undefined;
 
   /**
    * The shelves and units, as the pickers offer them.
@@ -941,7 +955,9 @@ export default function AddProductPage() {
                      be a dead end: the user was told nothing was available and had to leave,
                      create one, and come back to a cleared form. */
                   emptyLabel={supplierHint.title}
-                  emptyAction={
+                  /* Always shown, under the search: whether the shop has one supplier or a
+                     hundred, the way to add the next one sits in the same place. */
+                  action={
                     supplierHint.action
                       ? { label: supplierHint.action.label, onClick: () => navigate(supplierHint.action!.to) }
                       : undefined
@@ -1012,6 +1028,7 @@ export default function AddProductPage() {
                 options={categoryOptions}
                 label={t("inline.category")}
                 testId="product-category"
+                action={categoryCreateAction}
                 onChange={(id) => {
                   classificationTouched.current = true;
                   setCategoryId(id);
@@ -1229,15 +1246,13 @@ export default function AddProductPage() {
                     </button>
                   </div>
                 ) : (
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={p.stockQty}
+                  <NumberStepper
+                    value={Number(p.stockQty) || 0}
                     min={0}
-                    onChange={(e) => setPack(i, { stockQty: unsigned(e.target.value) })}
-                    data-testid={`product-pack-stock-${i}`}
-                    className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
-                    style={fieldStyle}
+                    width={148}
+                    ariaLabel={t("addProduct.itemsLabel")}
+                    inputTestId={`product-pack-stock-${i}`}
+                    onChange={(v) => setPack(i, { stockQty: String(v) })}
                   />
                 )}
               </div>
@@ -1250,17 +1265,13 @@ export default function AddProductPage() {
                   <p className="text-12 font-semibold" style={{ color: "var(--text-primary)" }}>{t("addProduct.stockAlerts")}</p>
                   <div className="flex items-center gap-1.5">
                     <span className="text-12 shrink-0" style={{ color: "var(--text-secondary)" }}>{t("addProduct.minLeft")}</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={p.lowStockThreshold}
+                    <NumberStepper
+                      value={Number(p.lowStockThreshold) || 0}
                       min={0}
-                      onChange={(e) => setPack(i, { lowStockThreshold: unsigned(e.target.value) })}
-                      data-testid={`product-pack-warn-${i}`}
-                      /* Same type size as every other input on the screen: a number typed
-                         here is the same kind of thing as a number typed above. */
-                      className="w-16 h-12 rounded-[var(--radius-tile)] px-2 text-sm text-center outline-none"
-                      style={fieldStyle}
+                      width={112}
+                      ariaLabel={`${t("addProduct.stockAlerts")} — ${t("addProduct.minLeft")}`}
+                      inputTestId={`product-pack-warn-${i}`}
+                      onChange={(v) => setPack(i, { lowStockThreshold: String(v) })}
                     />
                     <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("addProduct.itemsWord")}</span>
                   </div>
