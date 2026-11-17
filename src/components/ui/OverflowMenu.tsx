@@ -1,5 +1,7 @@
 import { useState, type ComponentType } from "react";
 import { MoreVertical } from "lucide-react";
+import Sheet from "@/components/ui/Sheet";
+import ListRow from "@/components/ui/ListRow";
 import { tNow } from "@/lib/i18n";
 
 /**
@@ -11,9 +13,15 @@ import { tNow } from "@/lib/i18n";
  * They now live behind the three dots beside the title, which is where a phone user already looks
  * for them, and the page keeps its body for the record itself (owner, 2026-11-17).
  *
- * One implementation for every screen: the toggle, the dismissal surface, the placement and the
- * divider between rows are decided here, so product and customer (and whatever comes next) cannot
- * drift into three slightly different menus.
+ * A BOTTOM SHEET, NOT A DROPDOWN (owner, 2026-11-17). Every other three-dot control in the app —
+ * the section screens' `SectionActionsSheet` — opens the same modal sheet from the bottom. A small
+ * popover anchored under the title was the one screen pattern that behaved differently: it sat
+ * under the thumb's own target, escaped the reachable half of the phone, and dismissed on a tap
+ * that felt like it had landed on the row. Rows are `ListRow`s and the surface is `Sheet`, so the
+ * height, insets, press state and dismissal (scrim, Escape, Android back) are the app's own.
+ *
+ * One implementation for every detail screen: product and customer (and whatever comes next)
+ * cannot drift into three slightly different menus.
  */
 export interface OverflowAction {
   icon: ComponentType<{ size?: number | string; style?: React.CSSProperties }>;
@@ -28,24 +36,26 @@ export interface OverflowAction {
 export default function OverflowMenu({
   actions,
   label,
+  title,
   testId,
 }: {
   actions: OverflowAction[];
   /** Accessible name for the toggle; falls back to "More". */
   label?: string;
+  /** The sheet's title — the record's own name, so the sheet says what it acts on. */
+  title?: string;
   testId?: string;
 }) {
   const [open, setOpen] = useState(false);
   if (actions.length === 0) return null;
 
   return (
-    <div className="relative">
+    <>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(true)}
         aria-label={label ?? tNow("common.more")}
-        aria-expanded={open}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         data-testid={testId}
         // 44px of target around an 18px glyph, the same floor as the back arrow.
         className="flex items-center justify-center size-11 rounded-full active:opacity-60 transition-opacity -me-2.5"
@@ -54,48 +64,24 @@ export default function OverflowMenu({
         <MoreVertical size={18} />
       </button>
 
-      {open && (
-        <>
-          {/* Tap anywhere else, including the page behind, to dismiss. */}
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div
-            role="menu"
-            className="absolute z-50 mt-1 min-w-[196px] rounded-[var(--radius-card)] overflow-hidden"
-            style={{
-              background: "var(--surface)",
-              border: "1px solid var(--divider)",
-              boxShadow: "0 12px 32px rgb(0 0 0 / 0.28)",
-              // Logical: the menu opens inward from the trailing edge in both directions.
-              insetInlineEnd: 0,
-            }}
-          >
-            {actions.map((action, index) => {
-              const Icon = action.icon;
-              return (
-                <button
-                  key={action.label}
-                  type="button"
-                  role="menuitem"
-                  disabled={action.disabled}
-                  data-testid={action.testId}
-                  onClick={() => {
-                    setOpen(false);
-                    action.onClick();
-                  }}
-                  className="w-full flex items-center gap-3 px-4 h-12 text-start active:opacity-60 transition-opacity disabled:opacity-50"
-                  style={{
-                    borderTop: index === 0 ? undefined : "1px solid var(--divider)",
-                    color: action.destructive ? "var(--error)" : "var(--text-primary)",
-                  }}
-                >
-                  <Icon size={16} />
-                  <span className="text-13 font-semibold">{action.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
+      <Sheet open={open} title={title ?? label ?? tNow("common.more")} onClose={() => setOpen(false)} closeButton={false}>
+        <div className="px-4 pt-1">
+          {actions.map((action) => (
+            <ListRow
+              key={action.label}
+              testId={action.testId}
+              icon={action.icon as never}
+              title={action.label}
+              danger={action.destructive}
+              disabled={action.disabled}
+              onClick={() => {
+                setOpen(false);
+                action.onClick();
+              }}
+            />
+          ))}
+        </div>
+      </Sheet>
+    </>
   );
 }

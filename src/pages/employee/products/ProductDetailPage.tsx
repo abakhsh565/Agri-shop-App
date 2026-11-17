@@ -238,6 +238,7 @@ export default function ProductDetailPage() {
         right={
           <OverflowMenu
             testId="product-actions"
+            title={t("sale.productDetails")}
             label={t("common.more")}
             actions={[
               ...(canEditProduct

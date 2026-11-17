@@ -347,6 +347,7 @@ export default function CustomerProfilePage() {
         right={
           <OverflowMenu
             testId="customer-actions"
+            title={t("customerProfile.title")}
             label={t("common.more")}
             actions={[
               ...(canEditCustomers
