@@ -95,7 +95,12 @@ export default function VariantSelectorPage() {
         qtyStep: variant.qtyStep,
       });
     }
-    addToast(t("sale.addedPacks", { count: String(stagedVariants.length) }), "success");
+    addToast(
+      stagedVariants.length === 1
+        ? t("sale.addedOnePack")
+        : t("sale.addedPacks", { count: String(stagedVariants.length) }),
+      "success",
+    );
     navigate(`${base}/sale/cart`);
   }
 

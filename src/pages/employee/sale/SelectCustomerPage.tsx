@@ -11,9 +11,8 @@ import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
 import { withReturn } from "@/lib/dependencyGraph";
 import type { Customer } from "@/types";
-import { Plus, UserRound, UserRoundCheck, Banknote } from "lucide-react"
+import { Plus, UserRound } from "lucide-react"
 import { SkeletonList } from "@/components/ui/Skeleton";
-import Sheet from "@/components/ui/Sheet";
 
 export default function SelectCustomerPage() {
   const navigate = useNavigate();
@@ -24,21 +23,6 @@ export default function SelectCustomerPage() {
   const ready = useCustomersStore((s) => s.ready);
   const [search, setSearch] = useState("");
   const [searchParams] = useSearchParams();
-  /**
-   * A new sale starts by asking what KIND of sale it is, because that answer decides the rest of
-   * the flow: a regular customer can take credit and be reminded, a walk-in pays at the counter
-   * and has no account to owe anything (owner, 2026-11-17).
-   *
-   * The question is a sheet over this screen rather than a screen of its own: choosing "regular"
-   * leaves the very list underneath it, and choosing "walk-in" leaves the till. Arriving from the
-   * review screen to change a customer (or back from creating one) skips the question — the sale
-   * already knows what it is.
-   */
-  const [mode, setMode] = useState<"choose" | "customer">(() => {
-    const fromCart = (window.history.state?.usr as { fromCart?: boolean } | null)?.fromCart;
-    const backFromNewCustomer = new URLSearchParams(window.location.search).get("customerId");
-    return fromCart || backFromNewCustomer ? "customer" : "choose";
-  });
 
   const filtered = customers.filter(
     (c) =>
@@ -165,63 +149,6 @@ export default function SelectCustomerPage() {
         ))}
 
       </div>
-
-      {/* What kind of sale this is. Two answers, each a card rather than a row, because this is the
-          decision the rest of the flow is built on. */}
-      <Sheet
-        open={mode === "choose"}
-        title={t("sale.startSale")}
-        onClose={() => setMode("customer")}
-        closeButton={false}
-      >
-        <div className="px-4 flex flex-col gap-2.5">
-          <button
-            type="button"
-            onClick={() => setMode("customer")}
-            className="rounded-[var(--radius-card)] p-4 flex items-center gap-3.5 text-start ds-pressable"
-            style={{ background: "var(--tone-card)", border: "1px solid var(--divider)" }}
-            data-testid="sale-mode-regular"
-          >
-            <div
-              className="size-11 rounded-full flex items-center justify-center shrink-0"
-              style={{ background: "var(--brand-tint)" }}
-            >
-              <UserRoundCheck size={20} style={{ color: "var(--brand-dark)" }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                {t("sale.regularCustomer")}
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                {t("sale.regularHint")}
-              </p>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => continueWith(null)}
-            className="rounded-[var(--radius-card)] p-4 flex items-center gap-3.5 text-start ds-pressable"
-            style={{ background: "var(--tone-card)", border: "1px solid var(--divider)" }}
-            data-testid="sale-mode-walkin"
-          >
-            <div
-              className="size-11 rounded-full flex items-center justify-center shrink-0"
-              style={{ background: "var(--surface-2)" }}
-            >
-              <Banknote size={20} style={{ color: "var(--text-secondary)" }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                {t("sale.walkIn")}
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                {t("sale.walkInHint")}
-              </p>
-            </div>
-          </button>
-        </div>
-      </Sheet>
     </div>
   );
 }

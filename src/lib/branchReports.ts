@@ -17,6 +17,11 @@ export interface BranchPeriodReport {
   branchId: string;
   branchName: string;
   isCurrent: boolean;
+  /** What the goods were ticketed at, before any discount was given. */
+  listSales: number | null;
+  /** Everything taken off, bill-level and line-level, in one number. */
+  discounts: number | null;
+  /** What was actually charged — cash, credit and profit are all built on this. */
   grossSales: number | null;
   returns: number | null;
   netSales: number | null;
@@ -39,6 +44,8 @@ interface RawBranchPeriodReport {
   branch_id: string;
   branch_name: string;
   is_current: boolean;
+  list_sales: number | string | null;
+  discounts: number | string | null;
   gross_sales: number | string | null;
   returns: number | string | null;
   net_sales: number | string | null;
@@ -91,6 +98,8 @@ export function useBranchPeriodReport(from: string, to: string): {
           branchId: row.branch_id,
           branchName: row.branch_name,
           isCurrent: Boolean(row.is_current),
+          listSales: numberOrNull(row.list_sales),
+          discounts: numberOrNull(row.discounts),
           grossSales: numberOrNull(row.gross_sales),
           returns: numberOrNull(row.returns),
           netSales: numberOrNull(row.net_sales),

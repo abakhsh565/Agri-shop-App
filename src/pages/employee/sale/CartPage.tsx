@@ -10,7 +10,7 @@ import { useCartStore } from "@/stores/cartStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, getCreditHealth, getCreditHealthColor } from "@/lib/formatters";
-import { Plus, AlertTriangle, Clock, X, Percent } from "lucide-react";
+import { Plus, AlertTriangle, Clock, X, Percent, Pencil } from "lucide-react";
 import Photo from "@/components/ui/Photo";
 import Sheet from "@/components/ui/Sheet";
 import { useUIStore } from "@/stores/uiStore";
@@ -318,14 +318,19 @@ export default function CartPage() {
                   {t("sale.creditHealth")}: {creditHealth === "good" ? t("sale.good") : creditHealth === "warning" ? t("sale.warning") : t("sale.overLimit")}
                 </p>
               </div>
+              {/* Swap the customer. The word "Change" is gone and a pencil stands in its place
+                  (owner, 2026-11-17): the row already says whose sale this is, so the only thing
+                  the reader needs from this control is "this is the editable part". */}
               <button
                 type="button"
                 onClick={() => navigate(`${base}/sale`, { state: { fromCart: true } })}
-                className="h-8 px-3 rounded-full text-xs font-semibold shrink-0"
+                aria-label={t("common.change")}
+                title={t("common.change")}
+                className="size-8 rounded-full flex items-center justify-center shrink-0"
                 style={{ background: "var(--surface-2)", color: "var(--text-primary)", border: "1px solid var(--divider)" }}
                 data-testid="sale-change-customer"
               >
-                {t("common.change")}
+                <Pencil size={14} />
               </button>
               <button
                 type="button"

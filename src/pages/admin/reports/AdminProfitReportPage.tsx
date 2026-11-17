@@ -135,14 +135,23 @@ export default function AdminProfitReportPage() {
   const productRows = useMemo<ProductProfit[]>(() => {
     const byName = new Map<string, ProductProfit>();
     for (const sale of periodSales) {
+      /*
+       * A bill-level discount belongs to the sale, not to one line, so it is shared out across the
+       * lines in proportion to what each line was worth. Without this the products here added up
+       * to the ticketed total while the branch above reported what was charged — two profits for
+       * one period, differing by exactly the discount given (owner, 2026-11-17).
+       */
+      const lineNet = sale.items.reduce((sum, item) => sum + item.lineTotal, 0);
+      const billDiscount = sale.discount ?? 0;
       for (const item of sale.items) {
         const name = item.productName || item.variantName;
         if (!name) continue;
         const entry =
           byName.get(name) ??
           { name, qty: 0, revenue: 0, cost: 0, unknownLines: 0, profit: 0, margin: 0 };
+        const share = lineNet > 0 && billDiscount > 0 ? (item.lineTotal / lineNet) * billDiscount : 0;
         entry.qty += item.qty;
-        entry.revenue += item.lineTotal;
+        entry.revenue += item.lineTotal - share;
         const cost = lineCogs(item, liveCost);
         if (cost == null) entry.unknownLines += 1;
         else entry.cost += cost;
@@ -319,11 +328,20 @@ export default function AdminProfitReportPage() {
                     </p>
                   </div>
                   <div
-                    className="flex items-baseline justify-between gap-3 mt-0.5"
+                    className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mt-0.5"
                     style={{ color: "var(--text-tertiary)" }}
                   >
-                    <p className="text-10 truncate min-w-0">
-                      {t("sales.revenue")} {row.grossSales == null ? "—" : money(row.grossSales)}
+                    {/* Wraps rather than truncates: the line grew by a discount, and "Cost of 1…"
+                        was already being cut on a 480px phone. */}
+                    <p className="text-10 leading-snug min-w-0">
+                      {/* The subtraction is named (owner, 2026-11-17): what the goods were
+                          ticketed at, what was taken off to close the sale, and only then what
+                          was charged. Without the middle figure a branch that discounts hard
+                          looked identical to one that simply sold less. */}
+                      {t("profit.listSales")} {row.listSales == null ? "—" : money(row.listSales)}
+                      {(row.discounts ?? 0) > 0 && (
+                        <>{" · "}{t("profit.discountsGiven")} −{money(row.discounts ?? 0)}</>
+                      )}
                       {" · "}
                       {row.unknownLines > 0
                         ? t("profit.unknownCostLine")
