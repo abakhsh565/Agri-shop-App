@@ -674,7 +674,7 @@ export default function RemindersOverviewPage() {
         return readyReminders.length === 0 ? (
           <EmptyState icon={<CheckCircle2 size={24} style={{ color: "var(--text-secondary)" }} />} title={t("reminders.allCaughtUp")} subtitle={t("inline.no_reminders_are_due_right_now")} />
         ) : (
-          <ListCard className="mx-4">
+          <ListCard>
             {readyReminders.map((r, i) => (
               <ReminderCard key={i} reminder={r} onSend={openSendSheet} onNavigate={navigateToCustomer} isSent={false} statusKey="reminders.readyToSend" />
             ))}
@@ -684,7 +684,7 @@ export default function RemindersOverviewPage() {
         return upcomingReminders.length === 0 ? (
           <EmptyState icon={<Clock size={24} style={{ color: "var(--text-secondary)" }} />} title={t("inline.no_upcoming_reminders")} subtitle={t("inline.configure_reminder_schedules_on_customer_pro")} />
         ) : (
-          <ListCard className="mx-4">
+          <ListCard>
             {upcomingReminders.map((r, i) => (
               <ReminderCard key={i} reminder={r} onSend={openSendSheet} onNavigate={navigateToCustomer} isSent={false} statusKey="reminders.futureReady" />
             ))}
@@ -697,7 +697,7 @@ export default function RemindersOverviewPage() {
           <div className="flex flex-col gap-3">
             {todaySent.total > 0 && (
               <div
-                className="mx-4 rounded-[var(--radius-card)] p-4"
+                className="rounded-[var(--radius-card)] p-4"
                 style={{ background: "var(--warning-bg)" }}
                 data-testid="reminders-sent-today"
               >
@@ -744,8 +744,8 @@ export default function RemindersOverviewPage() {
               }
               return groups.map(g => (
                 <div key={g.heading}>
-                  <p className="ds-section-label px-4 pt-3 pb-1" style={{ color: "var(--text-secondary)" }}>{g.heading}</p>
-                  <ListCard className="mx-4">
+                  <p className="ds-section-label px-1 pt-3 pb-1" style={{ color: "var(--text-secondary)" }}>{g.heading}</p>
+                  <ListCard>
                   {g.items.map((log, i) => (
                     <ActivityItem key={log.id || i} log={log} />
                   ))}
@@ -773,14 +773,14 @@ export default function RemindersOverviewPage() {
             />
             <button
               onClick={() => setShowGroupSheet(true)}
-              className="mx-5 flex items-center justify-center gap-2 h-11 rounded-full text-13 font-bold transition-transform active:scale-[0.97]"
-              style={{ width: "calc(100% - 2.5rem)", background: "var(--brand)", color: "#0a0a0a" }}
+              className="w-full flex items-center justify-center gap-2 h-11 rounded-full text-13 font-bold transition-transform active:scale-[0.97]"
+              style={{ background: "var(--brand)", color: "#0a0a0a" }}
             >
               <Plus size={15} /> {t("inline.create_group_reminder_x")}
             </button>
           </div>
         ) : (
-          <ListCard className="mx-4">
+          <ListCard>
             {reminderGroups.map((group) => (
               <ListRow
                 key={group.id}
@@ -835,6 +835,12 @@ export default function RemindersOverviewPage() {
       <StatusBar />
       <NavHeader title={t("inline.action_center")} />
 
+      {/*
+        One inset, not two. This container already pads by 16px, and the follow-up lists used to add
+        their own `mx-4` on top of it, so a customer card sat 32px in while the tab bar above it sat
+        at 16px: the card read as not filling the screen. Cards now inherit this padding, which is
+        what makes Ready, Upcoming, Recently Sent and Group Reminder line up with the tabs.
+      */}
       <div className="flex flex-col px-4 pt-4 pb-8 gap-4" style={{ overflowY: "auto", flex: 1 }}>
         {/* Main tabs — premium segmented control */}
         <div className="flex items-center gap-1 p-1 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
