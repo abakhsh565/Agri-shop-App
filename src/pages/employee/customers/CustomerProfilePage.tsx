@@ -350,6 +350,35 @@ export default function CustomerProfilePage() {
             title={t("customerProfile.title")}
             label={t("common.more")}
             actions={[
+              // The record's own screens and its one money action, in one place (owner,
+              // 2026-11-18). They used to be a list at the bottom of the page, which meant the page
+              // had to be read to its end before anyone knew the customer had a payment history.
+              {
+                icon: History,
+                label: t("customerProfile.purchaseHistory"),
+                onClick: () => navigate(base + "/customers/" + customerId + "/purchases"),
+                testId: "customer-action-purchases",
+              },
+              {
+                icon: Wallet,
+                label: t("customerProfile.paymentHistory"),
+                onClick: () => navigate(base + "/customers/" + customerId + "/payments"),
+                testId: "customer-action-payments",
+              },
+              {
+                icon: Bell,
+                label: t("customerProfile.reminderHistory"),
+                onClick: () => navigate(base + "/customers/" + customerId + "/reminders"),
+                testId: "customer-action-reminders",
+              },
+              ...(canRecordPayments
+                ? [{
+                    icon: Receipt,
+                    label: t("customerProfile.recordPayment"),
+                    onClick: () => navigate(base + "/customers/" + customerId + "/record-payment"),
+                    testId: "customer-action-record-payment",
+                  }]
+                : []),
               ...(canEditCustomers
                 ? [{
                     icon: Pencil,
@@ -419,6 +448,33 @@ export default function CustomerProfilePage() {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* The two actions that are used on every visit, directly under the customer's card
+            (owner, 2026-11-18), on the app's quiet plate: `--cta` is dark grey in the dark theme and
+            the pale surface in the light one, so neither theme ever shows a dark button on a white
+            page. `--cta-fg` is the label for that plate in the theme it is being read in. */}
+        <div className="flex gap-2">
+          {canRecordPayments && (
+            <button
+              type="button"
+              onClick={() => navigate(base + "/customers/" + customerId + "/record-payment")}
+              data-testid="customer-action-record-payment-inline"
+              className="flex-1 h-11 rounded-full flex items-center justify-center gap-1.5 text-13 font-bold active:scale-[0.99] transition-transform"
+              style={{ background: "var(--cta)", color: "var(--text-primary)" }}
+            >
+              <Receipt size={16} /> {t("customerProfile.recordPayment")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => navigate(base + "/customers/" + customerId + "/payments")}
+            data-testid="customer-action-payments-inline"
+            className="flex-1 h-11 rounded-full flex items-center justify-center gap-1.5 text-13 font-bold active:scale-[0.99] transition-transform"
+            style={{ background: "var(--cta)", color: "var(--text-primary)" }}
+          >
+            <Wallet size={16} /> {t("customerProfile.paymentHistory")}
+          </button>
         </div>
 
         {/* ═══════════════════════════════════════════
@@ -610,39 +666,6 @@ export default function CustomerProfilePage() {
             4. RECOMMENDED PRODUCTS
            ═══════════════════════════════════════════ */}
         <RecommendedSection customerId={customerId} onAddCrops={startEdit} />
-        <ListCard>
-          <ListRow
-            onClick={() => navigate(base + "/customers/" + customerId + "/purchases")}
-            icon={History}
-            title={t("customerProfile.purchaseHistory")}
-          />
-          <ListRow
-            onClick={() => navigate(base + "/customers/" + customerId + "/payments")}
-            icon={Wallet}
-            title={t("customerProfile.paymentHistory")}
-          />
-          <ListRow
-            onClick={() => navigate(base + "/customers/" + customerId + "/reminders")}
-            icon={Bell}
-            title={t("customerProfile.reminderHistory")}
-            // The count sits where the app puts every right-hand secondary value. A bell in a
-            // pill beside it said "alert" for something that is only a number of notes.
-            value={openCustomerReminders > 0 ? String(openCustomerReminders) : undefined}
-          />
-          {/* Same row as its neighbours: it was the only one carrying a tinted background and a
-              hardcoded dark green label, which read as a different kind of control and was
-              invisible once the page is dark. */}
-          {/* Each row follows the grant its action needs: recording a payment is
-              `customers.payments`, editing is `customers.edit`, archiving is
-              `customers.delete`. A row that is only refused by the database is clutter. */}
-          {canRecordPayments && (
-            <ListRow
-              onClick={() => navigate(base + "/customers/" + customerId + "/record-payment")}
-              icon={Receipt}
-              title={t("customerProfile.recordPayment")}
-            />
-          )}
-        </ListCard>
 
       </div>
 

@@ -260,6 +260,25 @@ export default function CustomersListPage() {
           </div>
         </div>
 
+        {/* Add a customer, directly under the search it belongs to (owner, 2026-11-18): a floating
+            pill sat over the last row of the list it was adding to, and on a page whose job is
+            finding a person the create action reads as part of the search, not as an overlay. The
+            plate is `--cta`, so it is dark grey in the dark theme and the pale plate in the light
+            one — never a dark button on a white page. */}
+        {hasPermission("customers.create") && (
+          <div className="px-4 pb-3">
+            <button
+              type="button"
+              onClick={() => navigate(`${base}/customers/new`)}
+              data-testid="customers-add"
+              className="w-full h-11 rounded-full flex items-center justify-center gap-2 text-14 font-bold active:scale-[0.99] transition-transform"
+              style={{ background: "var(--cta)", color: "var(--brand-dark)" }}
+            >
+              <Plus size={18} strokeWidth={2.5} /> {t("customers.addNew")}
+            </button>
+          </div>
+        )}
+
         {/* Two views of the credit book: everyone who owes, or only the late ones. */}
         <div className="flex gap-2 px-4 pb-3 overflow-x-auto no-scrollbar">
           {filters.map((f) => (
@@ -406,23 +425,6 @@ export default function CustomersListPage() {
         )}
       </div>
 
-      {/* Floating Add Customer — shown to whoever holds `customers.create`, the grant the create
-          RPC checks, rather than to the admin shell alone. */}
-      {hasPermission("customers.create") && (
-        <div
-          className="fixed start-0 end-0 max-w-[480px] mx-auto pointer-events-none z-40 px-4 flex justify-end"
-          style={{ bottom: "calc(var(--tabbar-height) + 16px)" }}
-        >
-          <button
-            type="button"
-            onClick={() => navigate(`${base}/customers/new`)}
-            className="pointer-events-auto ps-4 pe-5 rounded-full flex items-center gap-2 text-14 font-bold active:scale-95 transition-transform"
-            style={{ background: "var(--brand)", color: "#0a0a0a", height: "52px", boxShadow: "0 6px 20px rgba(0,0,0,0.25)" }}
-          >
-            <Plus size={20} strokeWidth={2.5} /> {t("customers.addNew")}
-          </button>
-        </div>
-      )}
     </PullToRefresh>
   );
 }
