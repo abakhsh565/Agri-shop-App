@@ -15,6 +15,7 @@ import { whatsappShareUrl } from "@/lib/appInvite";
 import {
   getInvoice,
   invoiceStatusKey,
+  invoiceTypeKey,
   isInvoiceOverdue,
   setInvoicePayment,
   type Invoice,
@@ -136,6 +137,9 @@ export default function InvoiceDetailPage() {
       </div>
 
       <div className="px-4 pt-3 flex flex-col gap-1">
+        <p className="text-12" style={{ color: "var(--text-secondary)" }}>
+          {t(invoiceTypeKey(invoice.invoice_type ?? "sale"))}
+        </p>
         <p className="text-12" style={{ color: "var(--text-secondary)" }}>
           {t("invoice.date")}: <span style={{ color: "var(--text-primary)" }}>{formatDate(invoice.issued_on)}</span>
         </p>

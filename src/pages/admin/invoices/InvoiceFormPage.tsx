@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Package, Plus, Trash2 } from "lucide-react";
+import { Check, Eye, Package, Plus, Trash2 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import DateField, { displayDate } from "@/components/ui/DateField";
+import DateField from "@/components/ui/DateField";
 import SelectorField from "@/components/ui/SelectorField";
 import Sheet from "@/components/ui/Sheet";
 import SearchBar from "@/components/ui/SearchBar";
@@ -16,6 +16,9 @@ import { formatCurrency } from "@/lib/formatters";
 import { pkToday } from "@/lib/pkDate";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
+import { loadBusinessProfile } from "@/lib/businessProfile";
+import { resolveImageUrl } from "@/lib/storage";
+import { useShopStore } from "@/stores/shopStore";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useCompaniesStore } from "@/stores/companiesStore";
@@ -24,18 +27,21 @@ import {
   createInvoice,
   getInvoice,
   invoiceTotals,
+  nextInvoiceNumber,
   updateInvoice,
+  type Invoice,
   type InvoiceDesign,
   type InvoiceDiscountType,
   type InvoicePartyType,
+  type InvoiceType,
 } from "@/lib/invoices";
+import InvoiceSheet, { InvoiceDesignThumb, type ShopIdentity } from "@/components/invoices/InvoiceSheet";
 
 interface Line {
   key: string;
   description: string;
   qty: string;
   unitPrice: string;
-  discount: string;
   productId: string | null;
 }
 
@@ -44,7 +50,6 @@ const blankLine = (): Line => ({
   description: "",
   qty: "1",
   unitPrice: "",
-  discount: "",
   productId: null,
 });
 
@@ -56,11 +61,14 @@ const toNum = (value: string) => {
 /**
  * Writing a bill.
  *
- * The screen follows the paper it replaces: who it is for, the number and the dates, the goods, the
- * discount and tax, what has been paid now, and the note at the bottom. Two things are deliberately
- * unlike a paper pad: the number is assigned by the shop's own series when it is saved (`INV-0001`),
- * and the customer is optional — a walk-in asking for a proper bill still gets one, and the name on
- * it is simply typed.
+ * The screen asks **why** before it asks who: a counter sale, a credit (udhaar) bill, a service bill
+ * or a one-off charge. The answer is what changes the rest of the form — a credit bill needs a
+ * customer to chase and a due date, a service bill has no stock and usually no tax, a counter sale is
+ * paid as it is written. Party comes second because it follows from the purpose.
+ *
+ * One discount, not two. The line-level discount that used to sit on every row and the bill-level one
+ * below them asked the same question twice; the bill-level control keeps its Rs / % choice and does
+ * both jobs, and the line's own `discount` column stays for rows written before this screen changed.
  */
 export default function InvoiceFormPage() {
   const navigate = useNavigate();
@@ -70,26 +78,24 @@ export default function InvoiceFormPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>();
   const isEdit = Boolean(invoiceId);
 
+  const activeShopName = useShopStore((s) => s.activeShopName);
   const customers = useCustomersStore((s) => s.customers);
   const products = useProductsStore((s) => s.products);
   const companies = useCompaniesStore((s) => s.companies);
   const employees = useEmployeesStore((s) => s.employees);
 
-  /**
-   * A bill can be raised for anyone the shop deals with. The type decides which record is offered
-   * and which table the id comes from; the name on the paper is copied either way, so a bill for a
-   * supplier's driver still prints his name after the record is renamed.
-   */
+  const [invoiceType, setInvoiceType] = useState<InvoiceType>("sale");
   const [partyType, setPartyType] = useState<InvoicePartyType>("customer");
   const [partyId, setPartyId] = useState("");
+  const [customerId, setCustomerId] = useState("");
   const [design, setDesign] = useState<InvoiceDesign>("royal");
   const [loading, setLoading] = useState(isEdit);
-  const [customerId, setCustomerId] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [issuedOn, setIssuedOn] = useState(pkToday());
   const [dueDate, setDueDate] = useState("");
+  const [nextNumber, setNextNumber] = useState("INV-001");
   const [lines, setLines] = useState<Line[]>([blankLine()]);
   const [discountType, setDiscountType] = useState<InvoiceDiscountType>("amount");
   const [discountValue, setDiscountValue] = useState("");
@@ -101,31 +107,51 @@ export default function InvoiceFormPage() {
 
   const [stockOpen, setStockOpen] = useState(false);
   const [stockQuery, setStockQuery] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [shop, setShop] = useState<ShopIdentity>({ name: activeShopName ?? "", phone: null, address: null, logoUrl: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const keyRef = useRef<string | null>(null);
 
-  const totals = useMemo(
-    () =>
-      invoiceTotals({
-        lines: lines.map((l) => ({ qty: toNum(l.qty), unitPrice: toNum(l.unitPrice), discount: toNum(l.discount) })),
-        discountType,
-        discountValue: toNum(discountValue),
-        taxRate: toNum(taxRate),
-      }),
-    [lines, discountType, discountValue, taxRate],
-  );
+  // The number the next save will write, so the field says the bill's name instead of "assigned".
+  useEffect(() => {
+    if (isEdit) return;
+    let alive = true;
+    nextInvoiceNumber()
+      .then((value) => {
+        if (alive) setNextNumber(value);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [isEdit]);
 
-  const paid = Math.min(toNum(amountPaid), totals.total);
-  const balance = Math.max(totals.total - paid, 0);
+  useEffect(() => {
+    let alive = true;
+    loadBusinessProfile()
+      .then((profile) => {
+        if (!alive || !profile) return;
+        setShop({
+          name: profile.shop.name ?? activeShopName ?? "",
+          phone: profile.shop.phone ?? profile.shop.whatsapp_phone ?? null,
+          address: profile.shop.address ?? null,
+          logoUrl: resolveImageUrl(profile.shop.logo_url) ?? null,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [activeShopName]);
 
-  // Opening an existing bill: the fields come back exactly as the paper says them.
   useEffect(() => {
     if (!invoiceId) return;
     let alive = true;
     getInvoice(invoiceId)
       .then((inv) => {
         if (!alive) return;
+        setInvoiceType(inv.invoice_type ?? "sale");
         setPartyType(inv.party_type ?? "customer");
         setPartyId(inv.party_id ?? "");
         setCustomerId(inv.customer_id ?? "");
@@ -135,6 +161,7 @@ export default function InvoiceFormPage() {
         setAddress(inv.customer_address ?? "");
         setIssuedOn(inv.issued_on);
         setDueDate(inv.due_date ?? "");
+        setNextNumber(inv.invoice_number);
         setDiscountType(inv.discount_type);
         setDiscountValue(inv.discount_value ? String(inv.discount_value) : "");
         setTaxRate(inv.tax_rate ? String(inv.tax_rate) : "");
@@ -148,7 +175,6 @@ export default function InvoiceFormPage() {
             description: it.description,
             qty: String(it.qty),
             unitPrice: String(it.unit_price),
-            discount: it.discount ? String(it.discount) : "",
             productId: it.product_id,
           })),
         );
@@ -165,8 +191,76 @@ export default function InvoiceFormPage() {
     };
   }, [invoiceId]);
 
+  const totals = useMemo(
+    () =>
+      invoiceTotals({
+        lines: lines.map((l) => ({ qty: toNum(l.qty), unitPrice: toNum(l.unitPrice) })),
+        discountType,
+        discountValue: toNum(discountValue),
+        taxRate: toNum(taxRate),
+      }),
+    [lines, discountType, discountValue, taxRate],
+  );
+
+  const paid = Math.min(toNum(amountPaid), totals.total);
+  const balance = Math.max(totals.total - paid, 0);
+  const needsCustomer = invoiceType === "credit";
+
+  /** The bill as it stands, for the preview — the same shape the print screen prints. */
+  const draft: Invoice = useMemo(
+    () => ({
+      id: invoiceId ?? "draft",
+      invoice_number: nextNumber,
+      customer_id: partyType === "customer" ? customerId || null : null,
+      party_type: partyType,
+      party_id: partyId || null,
+      invoice_type: invoiceType,
+      design,
+      customer_name: name.trim() || t("invoice.namePlaceholder"),
+      customer_phone: phone.trim() || null,
+      customer_address: address.trim() || null,
+      issued_on: issuedOn,
+      due_date: dueDate || null,
+      discount_type: discountType,
+      discount_value: toNum(discountValue),
+      tax_rate: toNum(taxRate),
+      subtotal: totals.subtotal,
+      discount_amount: totals.discount,
+      tax_amount: totals.tax,
+      total: totals.total,
+      amount_paid: paid,
+      payment_method: paymentMethod,
+      status: paid >= totals.total && totals.total > 0 ? "paid" : paid > 0 ? "partial" : "unpaid",
+      notes: notes.trim() || null,
+      terms: terms.trim() || null,
+      created_at: new Date().toISOString(),
+      items: lines
+        .filter((l) => l.description.trim() || toNum(l.unitPrice) > 0)
+        .map((l) => ({
+          product_id: l.productId,
+          description: l.description.trim() || t("invoice.item"),
+          qty: toNum(l.qty) || 1,
+          unit_price: toNum(l.unitPrice),
+          discount: 0,
+          line_total: Math.round((toNum(l.qty) || 1) * toNum(l.unitPrice) * 100) / 100,
+        })),
+    }),
+    [invoiceId, nextNumber, partyType, customerId, partyId, invoiceType, design, name, phone, address, issuedOn, dueDate, discountType, discountValue, taxRate, totals, paid, paymentMethod, notes, terms, lines, t],
+  );
+
   function updateLine(key: string, patch: Partial<Line>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  }
+
+  function choosePartyType(next: InvoicePartyType) {
+    setPartyType(next);
+    setPartyId("");
+    setCustomerId("");
+    if (next === "other") {
+      setName("");
+      setPhone("");
+      setAddress("");
+    }
   }
 
   function chooseParty(id: string) {
@@ -199,14 +293,27 @@ export default function InvoiceFormPage() {
     }
   }
 
-  function choosePartyType(next: InvoicePartyType) {
-    setPartyType(next);
-    setPartyId("");
-    setCustomerId("");
-    if (next === "other") {
-      setName("");
-      setPhone("");
-      setAddress("");
+  /** Choosing a purpose sets what that purpose implies; nothing it fills is locked. */
+  function choosePurpose(next: InvoiceType) {
+    setInvoiceType(next);
+    if (next === "credit") {
+      choosePartyType("customer");
+    } else if (next === "other") {
+      choosePartyType("supplier");
+    } else {
+      choosePartyType("customer");
+    }
+    if (next === "service") {
+      setTaxRate("");
+      setDiscountValue("");
+    }
+    if (next === "credit") {
+      setAmountPaid("");
+      setDueDate((current) => current || addDays(issuedOn, 30));
+    }
+    if (next === "sale") {
+      setAmountPaid(String(totals.total || ""));
+      setDueDate("");
     }
   }
 
@@ -234,11 +341,9 @@ export default function InvoiceFormPage() {
       description: variant.name && variant.name !== product.name ? `${product.name} · ${variant.name}` : product.name,
       qty: "1",
       unitPrice: String(variant.sellingPrice ?? ""),
-      discount: "",
       productId: product.id,
     };
     setLines((prev) => {
-      // An empty first row is a placeholder, not a line — reuse it instead of leaving a blank above.
       const rest = prev.filter((l) => l.description.trim() !== "" || l.unitPrice.trim() !== "");
       return [...rest, line];
     });
@@ -252,6 +357,10 @@ export default function InvoiceFormPage() {
       setError(t("invoice.nameRequired"));
       return;
     }
+    if (needsCustomer && !customerId) {
+      setError(t("invoice.customerRequiredForCredit"));
+      return;
+    }
     const usable = lines.filter((l) => l.description.trim() !== "" || toNum(l.unitPrice) > 0);
     if (usable.length === 0) {
       setError(t("invoice.itemRequired"));
@@ -263,6 +372,7 @@ export default function InvoiceFormPage() {
       customerId: partyType === "customer" ? customerId || null : null,
       partyType,
       partyId: partyId || null,
+      invoiceType,
       design,
       customerName: name.trim(),
       customerPhone: phone.trim(),
@@ -280,7 +390,6 @@ export default function InvoiceFormPage() {
         description: l.description.trim() || t("invoice.item"),
         qty: toNum(l.qty) || 1,
         unitPrice: toNum(l.unitPrice),
-        discount: toNum(l.discount),
         productId: l.productId,
       })),
     };
@@ -316,35 +425,66 @@ export default function InvoiceFormPage() {
       <StatusBar />
       <NavHeader title={isEdit ? t("invoice.edit") : t("invoice.new")} />
 
-      {/* 1. Who it is for. A saved customer fills the three fields from their record; a walk-in is
-             typed once and never has to become a customer. */}
+      {/* 1. Why this paper exists. It decides the rest of the form. */}
       <section className="px-4 pt-1">
-        <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("invoice.billTo")}</p>
-        {/* Who the bill is for: the same paper serves a customer, a supplier, an employee, or
-            somebody with no record at all. Picking the type decides which register is searched. */}
-        <div className="flex items-center gap-1 p-1 rounded-[var(--radius-tile)] mb-3" style={{ background: "var(--surface-2)" }}>
-          {(["customer", "supplier", "employee", "other"] as InvoicePartyType[]).map((kind) => (
-            <button
-              key={kind}
-              onClick={() => choosePartyType(kind)}
-              aria-pressed={partyType === kind}
-              className="flex-1 py-2 rounded-[var(--radius-tile)] text-12 font-semibold transition-all"
-              style={{
-                color: partyType === kind ? "var(--text-primary)" : "var(--text-secondary)",
-                background: partyType === kind ? "var(--background)" : "transparent",
-                boxShadow: partyType === kind ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              }}
-            >
-              {kind === "customer"
-                ? t("invoice.partyCustomer")
-                : kind === "supplier"
-                  ? t("invoice.partySupplier")
-                  : kind === "employee"
-                    ? t("invoice.partyEmployee")
-                    : t("invoice.partyOther")}
-            </button>
-          ))}
+        <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("invoice.purpose")}</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              { id: "sale" as InvoiceType, title: "invoice.purposeSale", hint: "invoice.purposeSaleHint" },
+              { id: "credit" as InvoiceType, title: "invoice.purposeCredit", hint: "invoice.purposeCreditHint" },
+              { id: "service" as InvoiceType, title: "invoice.purposeService", hint: "invoice.purposeServiceHint" },
+              { id: "other" as InvoiceType, title: "invoice.purposeOther", hint: "invoice.purposeOtherHint" },
+            ] as const
+          ).map((option) => {
+            const on = invoiceType === option.id;
+            return (
+              <button
+                key={option.id}
+                onClick={() => choosePurpose(option.id)}
+                aria-pressed={on}
+                className="text-start p-3 rounded-[var(--radius-tile)] ds-pressable"
+                style={{
+                  background: "var(--surface-2)",
+                  border: `1.5px solid ${on ? "var(--brand-dark)" : "transparent"}`,
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>{t(option.title)}</span>
+                  {on && <Check size={14} style={{ color: "var(--brand-dark)" }} />}
+                </div>
+                <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>{t(option.hint)}</p>
+              </button>
+            );
+          })}
         </div>
+        {invoiceType === "other" && (
+          <p className="text-11 mt-2" style={{ color: "var(--text-tertiary)" }}>{t("invoice.otherHint")}</p>
+        )}
+      </section>
+
+      {/* 2. Who it is for. */}
+      <section className="px-4 pt-5">
+        <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("invoice.billTo")}</p>
+        {invoiceType === "other" && (
+          <div className="flex items-center gap-1 p-1 rounded-[var(--radius-tile)] mb-3" style={{ background: "var(--surface-2)" }}>
+            {(["supplier", "employee", "other"] as InvoicePartyType[]).map((kind) => (
+              <button
+                key={kind}
+                onClick={() => choosePartyType(kind)}
+                aria-pressed={partyType === kind}
+                className="flex-1 py-2 rounded-[var(--radius-tile)] text-12 font-semibold transition-all"
+                style={{
+                  color: partyType === kind ? "var(--text-primary)" : "var(--text-secondary)",
+                  background: partyType === kind ? "var(--background)" : "transparent",
+                  boxShadow: partyType === kind ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                }}
+              >
+                {kind === "supplier" ? t("invoice.partySupplier") : kind === "employee" ? t("invoice.partyEmployee") : t("invoice.partyOther")}
+              </button>
+            ))}
+          </div>
+        )}
         {partyType !== "other" && (
           <SelectorField
             value={partyId}
@@ -355,25 +495,41 @@ export default function InvoiceFormPage() {
             searchable
           />
         )}
+        {invoiceType === "sale" && (
+          <button
+            onClick={() => {
+              setName("Walk-in customer");
+              setPhone("");
+              setAddress("");
+              setPartyId("");
+              setCustomerId("");
+            }}
+            className="mt-2 text-12 font-semibold ds-pressable"
+            style={{ color: "var(--brand-dark)" }}
+          >
+            {t("invoice.walkInParty")}
+          </button>
+        )}
         <div className="mt-3 flex flex-col gap-3">
           <Input label={t("invoice.name")} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("invoice.namePlaceholder")} />
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3">
             <Input label={t("invoice.phone")} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0301 2345678" />
             <Input label={t("invoice.address")} value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t("invoice.optional")} />
           </div>
         </div>
       </section>
 
-      {/* 2. The number is the shop's series, written when this is saved — not something to type. */}
+      {/* 3. The number and the dates. */}
       <section className="px-4 pt-5">
         <div className="flex gap-3">
           <div className="flex-1 flex flex-col gap-2">
             <span className="text-11 font-semibold tracking-wide" style={{ color: "var(--text-secondary)" }}>{t("invoice.number")}</span>
             <div
-              className="h-11 px-4 flex items-center rounded-[var(--radius-field,var(--radius-tile))] text-14 tabular-nums"
-              style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
+              className="h-11 px-4 flex items-center rounded-[var(--radius-field,var(--radius-tile))] text-14 font-semibold tabular-nums"
+              style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+              data-testid="invoice-next-number"
             >
-              {t("invoice.numberOnSave")}
+              {nextNumber}
             </div>
           </div>
           <div className="flex-1 flex flex-col gap-2">
@@ -386,13 +542,18 @@ export default function InvoiceFormPage() {
             {t("invoice.dueDate")} <span className="font-normal normal-case">{t("invoice.optional")}</span>
           </span>
           <DateField value={dueDate} onChange={setDueDate} min={issuedOn} title={t("invoice.dueDate")} />
+          {invoiceType === "credit" && !dueDate && (
+            <p className="text-11" style={{ color: "var(--warning)" }}>{t("invoice.creditNeedsDue")}</p>
+          )}
         </div>
       </section>
 
-      {/* 3. The goods. */}
+      {/* 4. The goods or the work. */}
       <section className="px-4 pt-5">
         <div className="flex items-center justify-between mb-2">
-          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("invoice.items")}</p>
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
+            {invoiceType === "service" ? t("invoice.work") : t("invoice.items")}
+          </p>
           <button
             onClick={() => setStockOpen(true)}
             className="text-12 font-semibold flex items-center gap-1 ds-pressable"
@@ -402,16 +563,16 @@ export default function InvoiceFormPage() {
           </button>
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {lines.map((line) => {
-            const amount = Math.max(toNum(line.qty) * toNum(line.unitPrice) - toNum(line.discount), 0);
+            const amount = Math.max(toNum(line.qty) * toNum(line.unitPrice), 0);
             return (
               <div key={line.key} className="rounded-[var(--radius-tile)] p-3" style={{ background: "var(--surface-2)" }}>
                 <div className="flex items-center gap-2">
                   <Input
                     value={line.description}
                     onChange={(e) => updateLine(line.key, { description: e.target.value })}
-                    placeholder={t("invoice.itemPlaceholder")}
+                    placeholder={invoiceType === "service" ? t("invoice.workPlaceholder") : t("invoice.itemPlaceholder")}
                   />
                   <button
                     onClick={() => setLines((prev) => (prev.length === 1 ? [blankLine()] : prev.filter((l) => l.key !== line.key)))}
@@ -422,7 +583,7 @@ export default function InvoiceFormPage() {
                     <Trash2 size={15} />
                   </button>
                 </div>
-                <div className="grid grid-cols-3 gap-2 mt-2">
+                <div className="grid grid-cols-2 gap-2 mt-2">
                   <Input
                     value={line.qty}
                     onChange={(e) => updateLine(line.key, { qty: e.target.value })}
@@ -437,15 +598,8 @@ export default function InvoiceFormPage() {
                     placeholder={t("invoice.unitPrice")}
                     aria-label={t("invoice.unitPrice")}
                   />
-                  <Input
-                    value={line.discount}
-                    onChange={(e) => updateLine(line.key, { discount: e.target.value })}
-                    inputMode="decimal"
-                    placeholder={t("invoice.itemDiscount")}
-                    aria-label={t("invoice.itemDiscount")}
-                  />
                 </div>
-                <p className="text-11 tabular-nums mt-1 text-end" style={{ color: "var(--text-secondary)" }}>
+                <p className="text-11 tabular-nums mt-1.5 text-end" style={{ color: "var(--text-secondary)" }}>
                   {formatCurrency(amount)}
                 </p>
               </div>
@@ -458,11 +612,11 @@ export default function InvoiceFormPage() {
           className="mt-3 text-13 font-semibold flex items-center gap-1.5 ds-pressable"
           style={{ color: "var(--brand-dark)" }}
         >
-          <Plus size={15} /> {t("invoice.addItem")}
+          <Plus size={15} /> {invoiceType === "service" ? t("invoice.addWork") : t("invoice.addItem")}
         </button>
       </section>
 
-      {/* 4. Discount and tax. */}
+      {/* 5. One discount, on the bill, with the Rs / % choice it always had. */}
       <section className="px-4 pt-5">
         <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
           {t("invoice.additional")} <span className="font-normal normal-case">{t("invoice.optional")}</span>
@@ -505,7 +659,7 @@ export default function InvoiceFormPage() {
         <p className="text-11 mt-1.5" style={{ color: "var(--text-tertiary)" }}>{t("invoice.taxHint")}</p>
       </section>
 
-      {/* 5. What it adds up to. */}
+      {/* 6. What it adds up to. */}
       <section className="px-4 pt-5">
         <div className="rounded-[var(--radius-card)] p-4 flex flex-col gap-2" style={{ background: "var(--surface-2)" }}>
           <div className="flex justify-between text-13" style={{ color: "var(--text-secondary)" }}>
@@ -537,10 +691,13 @@ export default function InvoiceFormPage() {
         </div>
       </section>
 
-      {/* 6. Money received now. */}
+      {/* 7. Money received now. */}
       <section className="px-4 pt-5">
         <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("invoice.amountPaid")}</p>
-        <div className="flex gap-3 items-end">
+        {/* The field and its two shortcuts on one line, the way the paper reads: type what was
+            handed over, or say "all of it" / "none of it". The shortcuts never wrap — a wrapped
+            "Mark fully paid" over three lines was taller than the field it belongs to. */}
+        <div className="flex gap-2 items-end">
           <Input
             value={amountPaid}
             onChange={(e) => setAmountPaid(e.target.value)}
@@ -548,13 +705,21 @@ export default function InvoiceFormPage() {
             placeholder="0"
             aria-label={t("invoice.amountPaid")}
           />
-          <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="sm" onClick={() => setAmountPaid(String(totals.total))}>
+          <div className="flex gap-1.5 shrink-0 pb-0.5">
+            <button
+              onClick={() => setAmountPaid(String(totals.total))}
+              className="h-9 px-3 rounded-full text-11 font-semibold whitespace-nowrap ds-pressable"
+              style={{ border: "1px solid var(--border)", color: "var(--text-primary)", background: "transparent" }}
+            >
               {t("invoice.markPaid")}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setAmountPaid("")}>
+            </button>
+            <button
+              onClick={() => setAmountPaid("")}
+              className="h-9 px-2 text-11 font-semibold whitespace-nowrap ds-pressable"
+              style={{ color: "var(--text-secondary)", background: "transparent" }}
+            >
               {t("invoice.markUnpaid")}
-            </Button>
+            </button>
           </div>
         </div>
         {paid > 0 && (
@@ -578,48 +743,55 @@ export default function InvoiceFormPage() {
         )}
       </section>
 
-      {/* 7. What the paper says at the bottom. */}
+      {/* 8. The foot of the paper. */}
       <section className="px-4 pt-5 flex flex-col gap-3">
         <Input label={t("invoice.notes")} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("invoice.notesPlaceholder")} />
         <Input label={t("invoice.terms")} value={terms} onChange={(e) => setTerms(e.target.value)} placeholder={t("invoice.optional")} />
       </section>
 
-      {/* The paper it prints on. Chosen here, stored with the bill, so a reprint from the archive
-          looks like the copy that was handed over. */}
+      {/* 9. The paper it prints on — the card shows the design itself, not an icon of it. */}
       <section className="px-4 pt-5">
-        <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>{t("invoice.design")}</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>{t("invoice.design")}</p>
+          <button
+            onClick={() => setPreviewOpen(true)}
+            className="text-12 font-semibold flex items-center gap-1 ds-pressable"
+            style={{ color: "var(--brand-dark)" }}
+          >
+            <Eye size={14} /> {t("invoice.preview")}
+          </button>
+        </div>
         <div className="flex flex-col gap-2">
-          {([
-            { id: "atelier" as InvoiceDesign, name: t("invoice.designAtelier"), hint: t("invoice.designAtelierHint") },
-            { id: "royal" as InvoiceDesign, name: t("invoice.designRoyal"), hint: t("invoice.designRoyalHint") },
-            { id: "aurora" as InvoiceDesign, name: t("invoice.designAurora"), hint: t("invoice.designAuroraHint") },
-          ]).map((option) => (
+          {(
+            [
+              { id: "atelier" as InvoiceDesign, name: "invoice.designAtelier", hint: "invoice.designAtelierHint" },
+              { id: "royal" as InvoiceDesign, name: "invoice.designRoyal", hint: "invoice.designRoyalHint" },
+              { id: "aurora" as InvoiceDesign, name: "invoice.designAurora", hint: "invoice.designAuroraHint" },
+            ] as const
+          ).map((option) => (
             <button
               key={option.id}
-              onClick={() => setDesign(option.id)}
+              onClick={() => {
+                setDesign(option.id);
+                setPreviewOpen(true);
+              }}
               aria-pressed={design === option.id}
-              className="flex items-center gap-3 p-3 rounded-[var(--radius-tile)] text-start ds-pressable"
+              className="flex items-center gap-3 p-2.5 rounded-[var(--radius-tile)] text-start ds-pressable"
               style={{
                 background: "var(--surface-2)",
                 border: `1.5px solid ${design === option.id ? "var(--brand-dark)" : "transparent"}`,
               }}
             >
-              <div
-                className="size-11 rounded-[var(--radius-sm,6px)] shrink-0"
-                style={{
-                  background: "var(--background)",
-                  border: "1px solid var(--divider)",
-                  boxShadow: "inset 0 -14px 0 rgba(0,0,0,0.04)",
-                }}
-              />
+              <InvoiceDesignThumb design={option.id} sample={{ ...draft, design: option.id }} shop={shop} width={54} height={70} />
               <div className="flex-1 min-w-0">
-                <p className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>{option.name}</p>
-                <p className="text-11" style={{ color: "var(--text-secondary)" }}>{option.hint}</p>
+                <p className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>{t(option.name)}</p>
+                <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t(option.hint)}</p>
               </div>
               {design === option.id && <Check size={16} style={{ color: "var(--brand-dark)" }} />}
             </button>
           ))}
         </div>
+        <p className="text-11 mt-2" style={{ color: "var(--text-tertiary)" }}>{t("invoice.designHint")}</p>
       </section>
 
       {error && (
@@ -632,11 +804,9 @@ export default function InvoiceFormPage() {
         <Button variant="cta" size="lg" fullWidth loading={saving} disabled={saving} onClick={save}>
           {isEdit ? t("invoice.saveChanges") : t("invoice.save")}
         </Button>
-        <p className="text-11 text-center mt-2" style={{ color: "var(--text-tertiary)" }}>
-          {dueDate ? `${t("invoice.paymentTerms")}: ${displayDate(dueDate)}` : t("invoice.noDueDate")}
-        </p>
       </div>
 
+      {/* Stock picker */}
       <Sheet open={stockOpen} title={t("invoice.addFromStock")} onClose={() => setStockOpen(false)} closeButton={false}>
         <div className="px-4 pb-3">
           <SearchBar value={stockQuery} onChange={(e) => setStockQuery(e.target.value)} placeholder={t("invoice.searchStock")} />
@@ -665,6 +835,19 @@ export default function InvoiceFormPage() {
           </ListCard>
         )}
       </Sheet>
+
+      {/* Live preview of this bill on the chosen paper. */}
+      <Sheet open={previewOpen} title={t("invoice.preview")} onClose={() => setPreviewOpen(false)}>
+        <div className="px-3 pb-6">
+          <InvoiceSheet invoice={{ ...draft, design }} shop={shop} design={design} />
+        </div>
+      </Sheet>
     </div>
   );
+}
+
+function addDays(iso: string, days: number): string {
+  const base = new Date(`${iso}T00:00:00`);
+  base.setDate(base.getDate() + days);
+  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
 }

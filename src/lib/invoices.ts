@@ -14,6 +14,11 @@ export type InvoiceStatus = "unpaid" | "partial" | "paid";
 export type InvoiceDiscountType = "amount" | "percent";
 /** Who the paper bills. The name is copied onto the invoice either way. */
 export type InvoicePartyType = "customer" | "supplier" | "employee" | "other";
+/**
+ * Why the bill exists. The purpose decides the paper: a counter sale is paid now, a credit (udhaar)
+ * bill needs somebody to chase, a service bill has no stock behind it.
+ */
+export type InvoiceType = "sale" | "credit" | "service" | "other";
 /** The three paper layouts; stored per invoice so a reprint looks like the hand-over. */
 export type InvoiceDesign = "atelier" | "royal" | "aurora";
 
@@ -36,6 +41,7 @@ export interface Invoice {
   customer_id: string | null;
   party_type: InvoicePartyType;
   party_id: string | null;
+  invoice_type: InvoiceType;
   design: InvoiceDesign;
   customer_name: string;
   customer_phone: string | null;
@@ -72,6 +78,7 @@ export interface NewInvoiceInput {
   customerId?: string | null;
   partyType?: InvoicePartyType;
   partyId?: string | null;
+  invoiceType?: InvoiceType;
   design?: InvoiceDesign;
   customerName: string;
   customerPhone?: string;
@@ -146,6 +153,7 @@ export async function createInvoice(input: NewInvoiceInput): Promise<Invoice> {
         customerId: input.customerId ?? "",
         partyType: input.partyType ?? "customer",
         partyId: input.partyId ?? "",
+        invoiceType: input.invoiceType ?? "sale",
         design: input.design ?? "royal",
         customerName: input.customerName,
         customerPhone: input.customerPhone ?? "",
@@ -185,6 +193,7 @@ export async function updateInvoice(id: string, input: Omit<NewInvoiceInput, "id
         customerId: input.customerId ?? "",
         partyType: input.partyType ?? "customer",
         partyId: input.partyId ?? "",
+        invoiceType: input.invoiceType ?? "sale",
         design: input.design ?? "royal",
         customerName: input.customerName,
         customerPhone: input.customerPhone ?? "",
@@ -212,6 +221,24 @@ export async function updateInvoice(id: string, input: Omit<NewInvoiceInput, "id
   } finally {
     finish();
   }
+}
+
+/**
+ * The next number this shop will write, `INV-003`.
+ *
+ * Read from the series the shop already has, so the field can say what the bill will be called
+ * instead of "assigned on save". It is a preview, not an allocation: the number is only claimed
+ * inside `create_invoice`, under the shop's lock, and two tills previewing at once still get two
+ * different numbers.
+ */
+export async function nextInvoiceNumber(): Promise<string> {
+  const { data, error } = await supabase.from("invoices").select("invoice_number").order("created_at", { ascending: false }).limit(200);
+  if (error) return "INV-001";
+  const highest = (data ?? []).reduce((max, row) => {
+    const match = /([0-9]+)$/.exec(String((row as { invoice_number?: string }).invoice_number ?? ""));
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return `INV-${String(highest + 1).padStart(3, "0")}`;
 }
 
 export async function setInvoicePayment(
@@ -274,6 +301,14 @@ export function isInvoiceOverdue(invoice: Invoice, today = new Date()): boolean 
   if (invoice.status === "paid" || !invoice.due_date) return false;
   const due = new Date(`${invoice.due_date}T00:00:00`);
   return due.getTime() < new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+}
+
+/** The purpose, as the label the app reads out. */
+export function invoiceTypeKey(type: InvoiceType) {
+  if (type === "credit") return "invoice.purposeCredit" as const;
+  if (type === "service") return "invoice.purposeService" as const;
+  if (type === "other") return "invoice.purposeOther" as const;
+  return "invoice.purposeSale" as const;
 }
 
 export function invoiceStatusKey(status: InvoiceStatus): "invoice.statusUnpaid" | "invoice.statusPartial" | "invoice.statusPaid" {
