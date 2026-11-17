@@ -10,6 +10,7 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
+import SegmentedTabs from "@/components/ui/SegmentedTabs";
 import {
   invoiceStatusKey,
   invoiceSummary,
@@ -107,23 +108,15 @@ export default function InvoiceListPage() {
 
       {/* The one control a bill book needs: which bills. Same segmented control as the Action Center. */}
       <div className="px-4 pb-3">
-        <div className="flex items-center gap-1 p-1 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
-          {(["all", "unpaid", "paid"] as Filter[]).map((key) => (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              aria-pressed={filter === key}
-              className="flex-1 py-2 rounded-[var(--radius-tile)] text-13 font-semibold transition-all"
-              style={{
-                color: filter === key ? "var(--text-primary)" : "var(--text-secondary)",
-                background: filter === key ? "var(--background)" : "transparent",
-                boxShadow: filter === key ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              }}
-            >
-              {key === "all" ? t("invoice.filterAll") : key === "unpaid" ? t("invoice.unpaid") : t("invoice.statusPaid")}
-            </button>
-          ))}
-        </div>
+        <SegmentedTabs
+          value={filter}
+          onChange={setFilter}
+          items={[
+            { key: "all" as Filter, label: t("invoice.filterAll") },
+            { key: "unpaid" as Filter, label: t("invoice.unpaid") },
+            { key: "paid" as Filter, label: t("invoice.statusPaid") },
+          ]}
+        />
       </div>
 
       {error && (

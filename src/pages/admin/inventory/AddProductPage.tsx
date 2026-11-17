@@ -29,6 +29,7 @@ import {
   unitGroupForBaseUnit,
 } from "@/lib/classification";
 import { Plus, Trash2, Lock, RefreshCw } from "lucide-react";
+import NumberStepper from "@/components/ui/NumberStepper";
 import ScanButton from "@/components/ui/ScanButton";
 import { DEFAULT_STOCK_ALERT_SETTINGS, loadStockAlertSettings, type StockAlertSettings } from "@/lib/stockAlerts";
 import { markupPercent, sellingFromMarkup } from "@/lib/profit";
@@ -1245,15 +1246,13 @@ export default function AddProductPage() {
                     </button>
                   </div>
                 ) : (
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={p.stockQty}
+                  <NumberStepper
+                    value={Number(p.stockQty) || 0}
                     min={0}
-                    onChange={(e) => setPack(i, { stockQty: unsigned(e.target.value) })}
-                    data-testid={`product-pack-stock-${i}`}
-                    className="w-full h-12 rounded-[var(--radius-card)] px-3 text-sm outline-none"
-                    style={fieldStyle}
+                    width={148}
+                    ariaLabel={t("addProduct.itemsLabel")}
+                    inputTestId={`product-pack-stock-${i}`}
+                    onChange={(v) => setPack(i, { stockQty: String(v) })}
                   />
                 )}
               </div>
@@ -1266,17 +1265,13 @@ export default function AddProductPage() {
                   <p className="text-12 font-semibold" style={{ color: "var(--text-primary)" }}>{t("addProduct.stockAlerts")}</p>
                   <div className="flex items-center gap-1.5">
                     <span className="text-12 shrink-0" style={{ color: "var(--text-secondary)" }}>{t("addProduct.minLeft")}</span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={p.lowStockThreshold}
+                    <NumberStepper
+                      value={Number(p.lowStockThreshold) || 0}
                       min={0}
-                      onChange={(e) => setPack(i, { lowStockThreshold: unsigned(e.target.value) })}
-                      data-testid={`product-pack-warn-${i}`}
-                      /* Same type size as every other input on the screen: a number typed
-                         here is the same kind of thing as a number typed above. */
-                      className="w-16 h-12 rounded-[var(--radius-tile)] px-2 text-sm text-center outline-none"
-                      style={fieldStyle}
+                      width={112}
+                      ariaLabel={`${t("addProduct.stockAlerts")} — ${t("addProduct.minLeft")}`}
+                      inputTestId={`product-pack-warn-${i}`}
+                      onChange={(v) => setPack(i, { lowStockThreshold: String(v) })}
                     />
                     <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("addProduct.itemsWord")}</span>
                   </div>

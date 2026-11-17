@@ -13,6 +13,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { PaymentMethod } from "@/types";
 import { ChevronDown, AlertTriangle } from "lucide-react";
+import NumberStepper from "@/components/ui/NumberStepper";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 
@@ -285,8 +286,14 @@ export default function RecordPurchasePage() {
               <div className="flex gap-3">
                 <div className="flex-1">
                   <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.quantity")}</p>
-                  <input type="number" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)}
-                    placeholder="0" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
+                  <NumberStepper
+                    value={Number(qty) || 0}
+                    min={1}
+                    width={132}
+                    ariaLabel={t("admin.quantity")}
+                    inputTestId="purchase-qty"
+                    onChange={(v) => setQty(String(v))}
+                  />
                 </div>
                 <div className="flex-1">
                   <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.baseCostUnit")}</p>

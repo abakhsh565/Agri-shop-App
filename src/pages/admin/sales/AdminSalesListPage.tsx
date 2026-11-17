@@ -39,6 +39,7 @@ import { groupSalesByDateSections } from "@/lib/salesGrouping";
 import { netSalesOf, refundsBySale, useReturns } from "@/lib/salesActivity";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday, pkWeekStart, pkMonthStart } from "@/lib/pkDate";
 import { useShellBase } from "@/lib/useShellBase";
+import SegmentedTabs from "@/components/ui/SegmentedTabs";
 
 function initBgColor(name: string | null | undefined) {
   const colors = ["#84cc16","#3b82f6","#8b5cf6","#f59e0b","#06b6d4","#ec4899"];
@@ -362,33 +363,13 @@ export default function AdminSalesListPage() {
           (owner's request, 2026-11-16). The selected pill is the app's black in both themes, as
           the reference shows — not the ink token, which flips to white in the dark theme. */}
       <div className="px-4 pt-2">
-        <div
-          className="flex items-center gap-1 rounded-full"
-          style={{ background: "var(--surface-2)", height: 48, padding: 4 }}
-          role="group"
-          aria-label={t("sales.type")}
-        >
-          {TABS.map(({ key, label }) => {
-            const selected = tab === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                aria-pressed={selected}
-                data-testid={`sales-tab-${key}`}
-                className="flex-1 min-w-0 rounded-full text-13 font-semibold truncate px-2 transition-colors active:opacity-70"
-                style={
-                  selected
-                    ? { height: 40, background: "#0a0a09", color: "#ffffff" }
-                    : { height: 40, background: "transparent", color: "var(--text-secondary)" }
-                }
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedTabs
+          items={TABS}
+          value={tab}
+          onChange={setTab}
+          ariaLabel={t("sales.type")}
+          itemTestId={(key) => `sales-tab-${key}`}
+        />
       </div>
 
       {/* One flat period card, with the reading chosen above: label, headline, the line that

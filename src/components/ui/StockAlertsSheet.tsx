@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useDelayedDismiss } from "@/hooks/usePresence";
 import { X, Check, Loader2 } from "lucide-react";
+import NumberStepper from "./NumberStepper";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { useUIStore } from "@/stores/uiStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -188,18 +189,13 @@ export default function StockAlertsSheet({ onClose, onSaved }: Props) {
                 <p className="ds-section-label mb-1.5" style={{ color: "var(--text-secondary)" }}>
                   {t("stockAlerts.thresholdLabel")}
                 </p>
-                <input
-                  type="number"
-                  inputMode="numeric"
+                <NumberStepper
+                  value={Number(thresholdText) || 0}
                   min={0}
-                  value={thresholdText}
-                  onChange={(e) => setThresholdText(e.target.value)}
-                  data-testid="stock-alerts-threshold"
-                  className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none"
-                  style={{
-                    background: "var(--field-bg)",
-                    color: "var(--text-primary)",
-                  }}
+                  width={148}
+                  ariaLabel={t("stockAlerts.thresholdLabel")}
+                  inputTestId="stock-alerts-threshold"
+                  onChange={(v) => setThresholdText(String(v))}
                 />
                 <p className="text-11 mt-1.5" style={{ color: "var(--text-secondary)" }}>
                   {t("stockAlerts.thresholdHint")}

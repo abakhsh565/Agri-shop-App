@@ -10,6 +10,7 @@ import { fetchCustomerPayments } from "@/lib/db";
 import type { CustomerPayment } from "@/types";
 import { formatCurrency, formatDate, getCreditHealth } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
+import SegmentedTabs from "@/components/ui/SegmentedTabs";
 import { useThemeStore } from "@/stores/themeStore";
 import { getCreditRequestsDB, type LocalCreditRequest } from "@/lib/localGroupRegistry";
 import { CheckCircle2, XCircle, ArrowUpRight, CreditCard } from "lucide-react";
@@ -79,35 +80,16 @@ export default function CustomerPaymentHistoryPage() {
         </div>
       </div>
 
-      {/* Tab bar — segmented control */}
-      <div className="mx-4 mt-3 flex items-center gap-1 p-1 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
-        <button
-          onClick={() => setActiveTab("payments")}
-          className="flex-1 text-center py-2 rounded-[var(--radius-sm)] text-13 font-semibold transition-all"
-          style={{
-            color: activeTab === "payments" ? "var(--text-primary)" : "var(--text-secondary)",
-            background: activeTab === "payments" ? "var(--background)" : "transparent",
-            boxShadow: activeTab === "payments" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-          }}
-        >
-          {t("inline.payment_records")}
-        </button>
-        <button
-          onClick={() => setActiveTab("credit")}
-          className="flex-1 text-center py-2 rounded-[var(--radius-sm)] text-13 font-semibold transition-all relative"
-          style={{
-            color: activeTab === "credit" ? "var(--text-primary)" : "var(--text-secondary)",
-            background: activeTab === "credit" ? "var(--background)" : "transparent",
-            boxShadow: activeTab === "credit" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-          }}
-        >
-          {t("inline.credit_approval")}
-          {creditRequests.length > 0 && (
-            <span className="absolute -top-1 -end-1 text-9 font-bold w-4 h-4 flex items-center justify-center rounded-full" style={{ background: "#7c3aed", color: "#fff" }}>
-              {creditRequests.length}
-            </span>
-          )}
-        </button>
+      {/* Tab bar — the app's segmented control, the same track and pill as Sales. */}
+      <div className="mx-4 mt-3">
+        <SegmentedTabs
+          value={activeTab}
+          onChange={setActiveTab}
+          items={[
+            { key: "payments" as const, label: t("inline.payment_records") },
+            { key: "credit" as const, label: t("inline.credit_approval"), count: creditRequests.length },
+          ]}
+        />
       </div>
 
       {/* Tab content */}

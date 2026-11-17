@@ -6,6 +6,7 @@ const SHEET_MS = 280;
 import { X } from "lucide-react";
 import InlineSelect from "./InlineSelect";
 import DateField from "./DateField";
+import NumberStepper from "./NumberStepper";
 import { useT } from "@/lib/i18n";
 import type { ReminderConfig, ReminderRepeat, ReminderEnds, ReminderAnchor } from "@/types";
 import { DEFAULT_ESCALATION, escalationIsOrdered } from "@/lib/reminderEngine";
@@ -96,12 +97,6 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
   const escalationInvalid = local.repeat === "escalate" && !escalationIsOrdered(local.escalation);
 
-  const fieldStyle = {
-    background: "var(--field-bg)",
-    color: "var(--text-primary)",
-    borderRadius: "24px",
-  };
-
   const labelCls = "ds-section-label mb-2 block";
 
   return (
@@ -142,13 +137,13 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("reminder.startReminders")}</p>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
+              <NumberStepper
                 value={local.startDays}
                 min={0}
-                onChange={(e) => update("startDays", parseInt(e.target.value) || 0)}
-                className="h-12 px-4 text-sm w-[72px] outline-none font-medium"
-                style={fieldStyle}
+                width={104}
+                ariaLabel={t("reminder.startReminders")}
+                inputTestId="reminder-start-days"
+                onChange={(v) => update("startDays", v)}
               />
               <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("reminder.days")}</span>
               <div className="flex-1">
@@ -192,13 +187,13 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
             <div className="ps-4">
               <div className="flex items-center gap-2">
                 <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("reminder.every")}</span>
-                <input
-                  type="number"
+                <NumberStepper
                   value={local.intervalN}
                   min={1}
-                  onChange={(e) => update("intervalN", parseInt(e.target.value) || 1)}
-                  className="h-12 px-3 text-sm w-[60px] outline-none font-medium"
-                  style={fieldStyle}
+                  width={92}
+                  ariaLabel={t("reminder.repeat")}
+                  inputTestId="reminder-interval"
+                  onChange={(v) => update("intervalN", v)}
                 />
                 <div className="w-[116px]">
                   <InlineSelect
@@ -224,13 +219,13 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 <div key={i} className="flex items-center gap-3">
                   <span className="text-13 w-[96px] shrink-0 font-medium" style={{ color: "var(--text-secondary)" }}>{step.label === "Gentle" ? t("reminder.gentle") : step.label === "Firmer" ? t("reminder.firmer") : t("reminder.finalNotice")}</span>
                   <span className="text-12" style={{ color: "var(--text-muted, var(--text-secondary))" }}>{t("reminder.day")}</span>
-                  <input
-                    type="number"
+                  <NumberStepper
                     value={step.day}
-                    min={1}
-                    onChange={(e) => updateEscDay(i, parseInt(e.target.value) || 0)}
-                    className="h-12 px-3 text-13 w-[64px] outline-none font-medium"
-                    style={fieldStyle}
+                    min={0}
+                    width={92}
+                    ariaLabel={`${t("reminder.day")} ${i + 1}`}
+                    inputTestId={`reminder-step-${i}`}
+                    onChange={(v) => updateEscDay(i, v)}
                   />
                 </div>
               ))}
@@ -272,13 +267,13 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {/* Ends count */}
           {local.ends === "count" && (
             <div className="flex items-center gap-2">
-              <input
-                type="number"
+              <NumberStepper
                 value={local.endsCount}
                 min={1}
-                onChange={(e) => update("endsCount", parseInt(e.target.value) || 1)}
-                className="h-12 px-4 text-sm w-[80px] outline-none font-medium"
-                style={fieldStyle}
+                width={104}
+                ariaLabel={t("reminder.reminders")}
+                inputTestId="reminder-ends-count"
+                onChange={(v) => update("endsCount", v)}
               />
               <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("reminder.reminders")}</span>
             </div>

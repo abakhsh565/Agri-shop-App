@@ -13,6 +13,7 @@ import { markSignalReviewed, isSignalSuppressed, isSignalEscalated, getSuppressi
 import { formatCurrency } from "@/lib/formatters";
 import { resolveImageUrl } from "@/lib/storage";
 import { useT, tNow } from "@/lib/i18n";
+import SegmentedTabs from "@/components/ui/SegmentedTabs";
 import { generateReminders, generateReminderMessage, calculatePaymentStatus, markOccurrenceSent, categorizeReminders } from "@/lib/reminderEngine";
 import type { GeneratedReminder } from "@/types";
 import { MessageCircle, Smartphone, X, ChevronDown, ChevronUp, Bell, CheckCircle2, Clock, AlertTriangle, AlertOctagon, Info, Plus, Users, Trash2, Eye, Send, XCircle } from "lucide-react";
@@ -912,31 +913,17 @@ export default function RemindersOverviewPage() {
       <div className="flex flex-col px-4 pt-4 pb-8 gap-4" style={{ overflowY: "auto", flex: 1 }}>
         {/* Main tabs — the segmented control this screen has always used, restored on the owner's
             call: two tabs read as one control here, and a plain pair of labels lost that. */}
-        <div className="flex items-center gap-1 p-1 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
-          {([
+        <SegmentedTabs
+          value={mainTab}
+          items={[
             { key: "today" as const, label: t("actionCenter.today") },
             { key: "groups" as const, label: t("inline.group_reminder") },
-          ] as const).map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => { setMainTab(tab.key); setSubTab(tab.key === "groups" ? "" : (subTab || "critical")); }}
-              aria-pressed={mainTab === tab.key}
-              className="flex-1 text-center py-2 rounded-[var(--radius-tile)] text-13 font-semibold transition-all flex items-center justify-center gap-1.5"
-              style={{
-                color: mainTab === tab.key ? "var(--text-primary)" : "var(--text-secondary)",
-                background: mainTab === tab.key ? "var(--background)" : "transparent",
-                boxShadow: mainTab === tab.key ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              }}
-            >
-              {tab.label}
-              {"count" in tab && (tab as any).count > 0 && (
-                <span className="text-10 font-bold w-5 h-5 flex items-center justify-center rounded-full" style={{ background: mainTab === tab.key ? "var(--brand-dark, #65a30d)" : "var(--surface-2)", color: mainTab === tab.key ? "#fff" : "var(--text-secondary)", fontSize: '10px' }}>
-                  {(tab as any).count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+          ]}
+          onChange={(key) => {
+            setMainTab(key);
+            setSubTab(key === "groups" ? "" : (subTab || "critical"));
+          }}
+        />
 
         {/* Sub tabs — refined text links with active underline */}
         {currentSubTabs.length > 0 && (
