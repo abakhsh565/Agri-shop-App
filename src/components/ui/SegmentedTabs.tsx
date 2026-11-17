@@ -34,6 +34,10 @@ interface SegmentedTabsProps<K extends string> {
  * track is `--tone-sunken`, which is the pale grey it should be in light and the near-black it
  * should be in dark, so the same control reads correctly without a second set of colours.
  *
+ * The pill's own colours are tokens, not literals: light draws it WHITE on the pale track (the
+ * owner's Profit-screen tab) and dark draws the black pill that reads on a near-black track, so
+ * the same component is the right control in both themes instead of a black slab in one of them.
+ *
  * The selected pill SLIDES between the tabs, the way the reference's toggle does. Painting black
  * onto whichever button is selected was the same shape in the same place, but it teleported — and
  * on a control whose whole job is answering "which of these", the movement is what says the answer
@@ -98,7 +102,8 @@ export default function SegmentedTabs<K extends string>({
             width: pill.width,
             top: 4,
             bottom: 4,
-            background: "#0a0a09",
+            background: "var(--seg-pill)",
+            boxShadow: "var(--seg-pill-shadow)",
             transition: settled
               ? "left 300ms cubic-bezier(0.34, 1.24, 0.64, 1), width 300ms cubic-bezier(0.34, 1.24, 0.64, 1)"
               : "none",
@@ -124,7 +129,7 @@ export default function SegmentedTabs<K extends string>({
             style={{
               height: 40,
               background: "transparent",
-              color: selected ? "#ffffff" : "var(--text-secondary)",
+              color: selected ? "var(--seg-pill-fg)" : "var(--text-secondary)",
               transition: "color 160ms var(--ease-out)",
             }}
           >
@@ -134,7 +139,7 @@ export default function SegmentedTabs<K extends string>({
                 className="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-10 font-bold tabular-nums"
                 style={
                   selected
-                    ? { background: "rgba(255,255,255,0.22)", color: "#ffffff" }
+                    ? { background: "var(--seg-badge-bg)", color: "var(--seg-badge-fg)" }
                     : { background: "var(--tone-card)", color: "var(--text-secondary)" }
                 }
               >

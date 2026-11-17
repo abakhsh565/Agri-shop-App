@@ -102,14 +102,33 @@
      PIN dot. Light fills them black; dark fills them brand. One token pair replaces the
      old `.dark .bg-black { background: var(--brand) }` / `.dark .text-white` shim, which
      also applied to text that was never on a black surface. */
-  --ink: #000000;
+  /* Not #000. On the dark theme the strongest plate is a LIGHT BLACK one step above the page
+     (#1a1a1a on #0d0d0c); the light theme paired that with absolute black, which read as a slab
+     dropped onto a warm off-white page rather than the same system inverted. #1a1a1a is that same
+     "light black" one step below the page, and it is the tone the owner's CTAs already use. */
+  --ink: #1a1a1a;
   --ink-fg: #ffffff;
+  /* The segmented tab's pill. Light fills it WHITE on the pale track — the owner's Profit-screen
+     tab ("light grey bg, white active tab") — because a black pill is the dark theme's answer,
+     not the light one. Dark keeps the black pill, which reads correctly on a near-black track. */
+  --seg-pill: #ffffff;
+  --seg-pill-fg: var(--text-primary);
+  --seg-pill-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.08);
+  /* A count inside the selected pill. On a white pill white ink would vanish, so the badge is a
+     wash of the text colour instead of a wash of white. */
+  --seg-badge-bg: rgba(0, 0, 0, 0.07);
+  --seg-badge-fg: var(--text-primary);
   /* Quiet dark action — the owner's CTA (Figma 2081-921, 2087-1765). A dark-grey control
      that sits a step above the page instead of a solid brand fill: the primary action is the
      darkest thing on the screen, with a brand-green label. Light fills it near-black, dark
      fills it one step above the card so it still reads as a button on #0d0d0c. */
-  --cta: #1a1a1a;
-  --cta-fg: var(--brand);
+  /* The quiet dark action is the DARK theme's idea: a plate one step off the page with a brand
+     label. On the light theme it was a black slab — the strongest thing on a warm off-white
+     screen, which is not what a "quiet" action is. It is now the light counterpart of that same
+     step: a pale plate with a dark brand label, so the page keeps its tone and the button still
+     reads as the action (owner, 2026-11-18: "pure black bg button on white theme"). */
+  --cta: #e9e9e4;
+  --cta-fg: var(--brand-dark);
   /* Caption/hint text. Light and dark greys were never aligned: light read
      `--text-secondary`, dark `--muted-foreground`. Same token, same relationship. */
   --caption: var(--text-secondary);
@@ -337,6 +356,11 @@
    */
   --ink: #f2f2ef;
   --ink-fg: #0a0a0a;
+  --seg-pill: #0a0a09;
+  --seg-pill-fg: #ffffff;
+  --seg-pill-shadow: none;
+  --seg-badge-bg: rgba(255, 255, 255, 0.22);
+  --seg-badge-fg: #ffffff;
   --cta: #1f1f1e;
   --cta-fg: var(--brand);
   --caption: var(--text-tertiary);

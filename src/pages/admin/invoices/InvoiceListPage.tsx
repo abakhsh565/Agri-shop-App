@@ -11,6 +11,7 @@ import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import SegmentedTabs from "@/components/ui/SegmentedTabs";
+import RollingNumber from "@/components/ui/RollingNumber";
 import {
   invoiceStatusKey,
   invoiceSummary,
@@ -90,8 +91,8 @@ export default function InvoiceListPage() {
               <span className="size-1.5 rounded-full inline-block" style={{ background: "var(--warning)" }} />
               {t("invoice.unpaid")}
             </p>
-            <p className="text-20 font-bold tabular-nums mt-1" style={{ color: "var(--text-primary)" }} data-testid="invoice-unpaid-total">
-              {formatCurrency(summary.unpaid)}
+            <p className="text-20 font-bold mt-1" style={{ color: "var(--text-primary)" }} data-testid="invoice-unpaid-total">
+              <RollingNumber value={summary.unpaid} format={formatCurrency} />
             </p>
           </div>
           <div>
@@ -99,8 +100,8 @@ export default function InvoiceListPage() {
               <span className="size-1.5 rounded-full inline-block" style={{ background: "var(--brand)" }} />
               {t("invoice.collected")}
             </p>
-            <p className="text-20 font-bold tabular-nums mt-1" style={{ color: "var(--text-primary)" }} data-testid="invoice-collected-total">
-              {formatCurrency(summary.collected)}
+            <p className="text-20 font-bold mt-1" style={{ color: "var(--text-primary)" }} data-testid="invoice-collected-total">
+              <RollingNumber value={summary.collected} format={formatCurrency} />
             </p>
           </div>
         </div>

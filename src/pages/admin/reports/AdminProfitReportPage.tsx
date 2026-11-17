@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, ReceiptText, Store } from "lucide-react";
+import { ChevronRight, ReceiptText } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import RollingNumber from "@/components/ui/RollingNumber";
 import NavHeader from "@/components/ui/NavHeader";
 import PeriodTabs from "@/components/ui/PeriodTabs";
+import BranchSwitchChip from "@/components/shop/BranchSwitchChip";
 import DateRangeSheet from "@/components/ui/DateRangeSheet";
 import Button from "@/components/ui/Button";
 import Sheet from "@/components/ui/Sheet";
@@ -223,18 +224,12 @@ export default function AdminProfitReportPage() {
           (owner, 2026-11-17). It sits under the title, centred, so it reads as the scope of the
           screen rather than as one more control in a row of them. */}
       <div className="flex justify-center px-4 pt-1">
-        <button
-          type="button"
+        <BranchSwitchChip
+          branchName={activeBranchName ?? t("sales.thisBranch")}
           onClick={() => openSwitcher()}
-          data-testid="profit-branch-switch"
-          aria-label={t("profit.switchBranch")}
-          className="flex items-center gap-1.5 h-8 max-w-full ps-2.5 pe-2 rounded-full text-13 font-semibold active:opacity-70"
-          style={{ background: "var(--tone-card)", color: "var(--text-primary)" }}
-        >
-          <Store size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-          <span className="truncate">{activeBranchName ?? t("sales.thisBranch")}</span>
-          <ChevronDown size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-        </button>
+          testId="profit-branch-switch"
+          maxWidth="max-w-full"
+        />
       </div>
 
       <div className="px-4 pt-2">

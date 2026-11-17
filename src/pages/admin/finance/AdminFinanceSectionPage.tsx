@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import RollingNumber from "@/components/ui/RollingNumber";
+import BranchSwitchChip from "@/components/shop/BranchSwitchChip";
 import {
   ArrowDownUp,
   Banknote,
@@ -8,7 +9,6 @@ import {
   BellRing,
   Building2,
   CalendarRange,
-  ChevronDown,
   ChevronRight,
   Download,
   HandCoins,
@@ -725,16 +725,12 @@ export default function AdminFinanceSectionPage() {
             {scopeLine}
           </p>
         </div>
-        <button
-          type="button"
+        <BranchSwitchChip
+          branchName={activeBranchName ?? t("sales.thisBranch")}
           onClick={() => openSwitcher()}
-          data-testid="finance-branch-switch"
-          className="shrink-0 flex items-center gap-1 h-8 mt-0.5 ps-2.5 pe-2 rounded-full text-13 font-semibold active:opacity-70"
-          style={{ background: "var(--tone-card)", color: "var(--text-primary)" }}
-        >
-          <span className="max-w-[7.5rem] truncate">{activeBranchName ?? t("sales.thisBranch")}</span>
-          <ChevronDown size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-        </button>
+          testId="finance-branch-switch"
+          className="mt-0.5"
+        />
       </div>
 
       <div className="px-4 pt-4">

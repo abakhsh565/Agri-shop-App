@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Ban,
   CalendarRange,
-  ChevronDown,
   ChevronRight,
   Download,
   FileSpreadsheet,
@@ -17,6 +16,7 @@ import {
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import PeriodTabs from "@/components/ui/PeriodTabs";
+import BranchSwitchChip from "@/components/shop/BranchSwitchChip";
 import DateRangeSheet from "@/components/ui/DateRangeSheet";
 import ListRow from "@/components/ui/ListRow";
 import Sheet from "@/components/ui/Sheet";
@@ -735,18 +735,12 @@ export default function AdminSalesSectionPage() {
             {scopeLine}
           </p>
         </div>
-        <button
-          type="button"
+        <BranchSwitchChip
+          branchName={branchName}
           onClick={() => openSwitcher()}
-          data-testid="sales-branch-switch"
-          aria-label={t("profit.switchBranch")}
-          className="shrink-0 flex items-center gap-1 max-w-[9.5rem] h-8 mt-0.5 ps-2.5 pe-2 rounded-full text-13 font-semibold active:opacity-70"
-          style={{ background: "var(--tone-card)", color: "var(--text-primary)" }}
-        >
-          <Store size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-          <span className="truncate">{branchName ?? t("sales.thisBranch")}</span>
-          <ChevronDown size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-        </button>
+          testId="sales-branch-switch"
+          className="mt-0.5"
+        />
       </div>
 
       <div className="px-4 pt-4">
