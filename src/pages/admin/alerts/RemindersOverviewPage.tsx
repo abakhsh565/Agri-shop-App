@@ -839,7 +839,7 @@ export default function RemindersOverviewPage() {
         {/* Main tabs — premium segmented control */}
         <div className="flex items-center gap-1 p-1 rounded-[var(--radius-tile)]" style={{ background: "var(--surface-2)" }}>
           {([
-            { key: "action" as const, label: t("actions") },
+            { key: "action" as const, label: t("inline.action_center_tab") },
             { key: "followups" as const, label: t("inline.follow_ups") },
             { key: "groups" as const, label: t("inline.group_reminder") },
           ] as const).map(tab => (
