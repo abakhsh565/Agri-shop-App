@@ -1,10 +1,12 @@
 import { create } from "zustand";
-import { captureDataContext, isDataContextCurrent } from "@/lib/localCache";
+import { captureDataContext, getCachedData, isDataContextCurrent, setCachedData } from "@/lib/localCache";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { tNow } from "@/lib/i18n";
 import { resolveImageUrl } from "@/lib/storage";
 import type { Company } from "@/types";
+
+const CACHE_KEY = "companies";
 
 interface CompanyRow {
   id: string;
@@ -71,7 +73,8 @@ interface CompaniesState {
 let channel: ReturnType<typeof supabase.channel> | null = null;
 
 export const useCompaniesStore = create<CompaniesState>((set, get) => ({
-  companies: [],
+  // Suppliers paint from the last read on this device; the network read below then replaces them.
+  companies: getCachedData<Company[]>(CACHE_KEY) ?? [],
   loading: false,
   ready: false,
   error: null,
@@ -82,6 +85,8 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
   load: async () => {
     const context = captureDataContext();
     if (!isDataContextCurrent(context)) return;
+    const cached = getCachedData<Company[]>(CACHE_KEY);
+    if (cached) set({ companies: cached, ready: true });
     set({ loading: true, error: null });
     const { data, error } = await supabase
       .from("companies")
@@ -112,21 +117,19 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
             row,
           ])
     );
-    set({
-      companies: mapped.map((company) => {
-        const balance = balanceById.get(company.id);
-        if (!balance) {
-          return { ...company, totalPurchases: 0, outstandingPayable: 0 };
-        }
-        return {
-          ...company,
-          totalPurchases: Number(balance.total_purchases),
-          outstandingPayable: Number(balance.outstanding_payable),
-        };
-      }),
-      loading: false,
-      ready: true,
+    const nextCompanies = mapped.map((company) => {
+      const balance = balanceById.get(company.id);
+      if (!balance) {
+        return { ...company, totalPurchases: 0, outstandingPayable: 0 };
+      }
+      return {
+        ...company,
+        totalPurchases: Number(balance.total_purchases),
+        outstandingPayable: Number(balance.outstanding_payable),
+      };
     });
+    setCachedData(CACHE_KEY, nextCompanies);
+    set({ companies: nextCompanies, loading: false, ready: true });
   },
 
   subscribe: () => {
@@ -172,6 +175,7 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
       createdAt: new Date().toISOString(),
     };
     set({ companies: [company, ...get().companies] });
+    setCachedData(CACHE_KEY, get().companies);
     return company;
   },
 
@@ -188,6 +192,7 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
       throw new Error(error.message);
     }
     set({ companies: get().companies.filter((c) => c.id !== id) });
+    setCachedData(CACHE_KEY, get().companies);
   },
 
   updateCompany: async (id, input) => {
@@ -223,5 +228,6 @@ export const useCompaniesStore = create<CompaniesState>((set, get) => ({
           : c
       ),
     });
+    setCachedData(CACHE_KEY, get().companies);
   },
 }));

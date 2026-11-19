@@ -1475,8 +1475,19 @@ svg.ds-row-chevron {
    The page itself does not scroll; the shell's panel does, so this is the element to hold still.
    `useOverlayScrollLock` does the same in script for the browsers whose WebView has no `:has()`;
    this rule is the version for the ones that do. Locking <body> (the old rule) moved nothing. */
-body:has(.fixed.inset-0) [data-app-scroll] {
+body:has(.fixed.inset-0) [data-app-scroll],
+body:has(.fixed.inset-0) .app-frame {
   overflow: hidden;
+  /* Deliberately no `touch-action: none`: the sheet lives inside this element, so it would
+     disable finger-scrolling inside the sheet as well. The hook cancels touchmove outside the
+     sheet instead, which is the gesture that was reaching the page behind it. */
+  overscroll-behavior: contain;
+}
+
+/* The sheet's own body owns its scrolling, but reaching its end must never chain the gesture to
+   the page underneath (owner, 2026-11-19: "behind screen is stuck"). */
+.ds-sheet {
+  overscroll-behavior: contain;
 }
 
 /* ===========================================================================

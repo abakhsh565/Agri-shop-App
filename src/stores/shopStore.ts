@@ -35,6 +35,52 @@ import type { MembershipRole, MembershipStatus } from "@/types";
  * drops them all.
  */
 
+/**
+ * The last shop and branch this account was working in.
+ *
+ * Kept for one reason: a cold start with no connection. `get_my_shops` and `get_my_branches` are
+ * the authority and always run, but when neither can answer there is still a whole cached book on
+ * the device that cannot be read without a branch id. Remembering the last one — bound to the
+ * user id, so another account on the phone can never inherit it — is what lets the same shop open
+ * offline instead of showing an access notice over its own data.
+ */
+interface StoredShopContext {
+  shopId: string;
+  shopName: string;
+  branchId: string;
+  branchName: string;
+  userId: string;
+}
+
+const SHOP_CONTEXT_KEY = "agrishop_shop_context";
+
+function readShopContext(): StoredShopContext | null {
+  try {
+    const raw = localStorage.getItem(SHOP_CONTEXT_KEY);
+    return raw ? (JSON.parse(raw) as StoredShopContext) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeShopContext(context: StoredShopContext | null): void {
+  try {
+    if (context) localStorage.setItem(SHOP_CONTEXT_KEY, JSON.stringify(context));
+    else localStorage.removeItem(SHOP_CONTEXT_KEY);
+  } catch {
+    // localStorage unavailable — the app simply resolves the branch online as before.
+  }
+}
+
+/** The remembered context, but only for the account and shop currently signed in. */
+function rememberedShop(): StoredShopContext | null {
+  const stored = readShopContext();
+  const user = useAuthStore.getState().user;
+  if (!stored || !user) return null;
+  if (stored.userId !== user.id || stored.shopId !== user.tenantId) return null;
+  return stored;
+}
+
 export interface ShopSummary {
   id: string;
   name: string;
@@ -459,9 +505,11 @@ export const useShopStore = create<ShopState>((set, get) => ({
   shops: [],
   // Seeded from the membership the server returned at sign-in; confirmed by load().
   activeShopId: useAuthStore.getState().user?.tenantId ?? null,
-  activeShopName: null,
-  activeBranchId: null,
-  activeBranchName: null,
+  activeShopName: rememberedShop()?.shopName ?? null,
+  // The remembered branch is a first-paint guess only, and only for the same account and shop.
+  // The branch read below replaces it the moment the server answers.
+  activeBranchId: rememberedShop()?.branchId ?? null,
+  activeBranchName: rememberedShop()?.branchName ?? null,
   loading: false,
   loaded: false,
   ownerId: null,
@@ -500,6 +548,26 @@ export const useShopStore = create<ShopState>((set, get) => ({
     const { data, error } = await supabase.rpc("get_my_branches");
     if (actorId !== useAuthStore.getState().user?.id || tenantId !== get().activeShopId || get().switching) return;
     if (error) {
+      // Offline (or a failed read) is not a reason to forget which branch this book belongs to.
+      // The remembered answer lets the same account open the same shop's cached rows; it is only
+      // used when it matches BOTH the signed-in user and the shop being worked in.
+      const remembered = readShopContext();
+      const actor = useAuthStore.getState().user;
+      if (
+        remembered &&
+        actor &&
+        remembered.userId === actor.id &&
+        remembered.shopId === get().activeShopId
+      ) {
+        confirmCacheBranch(remembered.shopId, actor.id, remembered.branchId);
+        set({
+          branchesLoading: false,
+          branchesError: null,
+          activeBranchId: remembered.branchId,
+          activeBranchName: remembered.branchName,
+        });
+        return;
+      }
       suspendCachedData();
       resetShopScopedStores();
       set({ branchesLoading: false, branchesError: "load_failed" });
@@ -550,6 +618,15 @@ export const useShopStore = create<ShopState>((set, get) => ({
       activeBranchId: rows.find((r) => r.is_current)?.branch_id ?? null,
       activeBranchName: rows.find((r) => r.is_current)?.name ?? null,
     });
+    if (selected && actor) {
+      writeShopContext({
+        shopId: selected.tenant_id,
+        shopName: get().activeShopName ?? selected.name,
+        branchId: selected.branch_id,
+        branchName: selected.name,
+        userId: actor.id,
+      });
+    }
   },
 
   switchBranch: async (branchId) => {
@@ -681,6 +758,25 @@ export const useShopStore = create<ShopState>((set, get) => ({
     set({ loading: true, error: null });
     const { data, error } = await supabase.rpc("get_my_shops");
     if (error) {
+      // No connection: the remembered shop is the same account's own book, so the shell can open
+      // it instead of showing an access notice over data that is sitting on the device. The
+      // server's answer replaces this as soon as one arrives.
+      const remembered = rememberedShop();
+      const actor = useAuthStore.getState().user;
+      if (remembered && actor) {
+        confirmCacheBranch(remembered.shopId, actor.id, remembered.branchId);
+        set({
+          loading: false,
+          error: null,
+          loaded: true,
+          ownerId: actor.id,
+          activeShopId: remembered.shopId,
+          activeShopName: remembered.shopName,
+          activeBranchId: remembered.branchId,
+          activeBranchName: remembered.branchName,
+        });
+        return;
+      }
       set({ loading: false, error: "load_failed" });
       return;
     }

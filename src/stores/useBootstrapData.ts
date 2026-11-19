@@ -8,6 +8,7 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopStore } from "@/stores/shopStore";
+import { whenDataContextConfirmed } from "@/lib/localCache";
 
 // Loads every live dataset once when an authenticated shell mounts and wires
 // Realtime so any device sees new sales/stock/customers immediately. Pages then
@@ -33,35 +34,49 @@ export function useBootstrapData() {
 
   useEffect(() => {
     if (!shopId || !branchId || switching) return;
+    let cancelled = false;
     const unsubs: Array<() => void> = [];
 
-    useProductsStore.getState().load();
-    unsubs.push(useProductsStore.getState().subscribe());
+    // A remembered branch paints the shell a moment before the server confirms which branch it
+    // really is. Every read below refuses to publish until that confirmation exists, so firing
+    // them at once made them return early and nothing ever asked again — the screen sat on its
+    // skeleton with an empty store. Waiting for the confirmation (bounded, so a shop that never
+    // resolves one still settles) is what turns those reads into answers instead of no-ops.
+    void (async () => {
+      await whenDataContextConfirmed(2500);
+      if (cancelled) return;
 
-    useCustomersStore.getState().load();
-    unsubs.push(useCustomersStore.getState().subscribe());
+      useProductsStore.getState().load();
+      unsubs.push(useProductsStore.getState().subscribe());
 
-    useSalesStore.getState().load();
-    unsubs.push(useSalesStore.getState().subscribe());
+      useCustomersStore.getState().load();
+      unsubs.push(useCustomersStore.getState().subscribe());
 
-    useNotificationStore.getState().load();
-    unsubs.push(useNotificationStore.getState().subscribe());
+      useSalesStore.getState().load();
+      unsubs.push(useSalesStore.getState().subscribe());
 
-    useEmployeesStore.getState().load();
-    unsubs.push(useEmployeesStore.getState().subscribe());
+      useNotificationStore.getState().load();
+      unsubs.push(useNotificationStore.getState().subscribe());
 
-    // The shop's own shelves and units (0259). They are read by the Add Product form and by
-    // every product page, so they load with the shell rather than on whichever screen happened
-    // to ask first — a picker that fills a moment after the form opened looks empty.
-    useCatalogueStore.getState().load();
-    unsubs.push(useCatalogueStore.getState().subscribe());
+      useEmployeesStore.getState().load();
+      unsubs.push(useEmployeesStore.getState().subscribe());
 
-    if (canUseCompanies) {
-      useCompaniesStore.getState().load();
-      unsubs.push(useCompaniesStore.getState().subscribe());
-    }
+      // The shop's own shelves and units (0259). They are read by the Add Product form and by
+      // every product page, so they load with the shell rather than on whichever screen happened
+      // to ask first — a picker that fills a moment after the form opened looks empty.
+      useCatalogueStore.getState().load();
+      unsubs.push(useCatalogueStore.getState().subscribe());
 
-    return () => unsubs.forEach((fn) => fn());
+      if (canUseCompanies) {
+        useCompaniesStore.getState().load();
+        unsubs.push(useCompaniesStore.getState().subscribe());
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubs.forEach((fn) => fn());
+    };
     // Re-run if the role changes (e.g. after login) so admin-only data loads, and if the
     // active shop changes so nothing from the shop we left survives into this one.
   }, [canUseCompanies, shopId, branchId, switching]);

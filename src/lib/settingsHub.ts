@@ -52,7 +52,7 @@ export const HUB_SECTIONS: HubSection[] = [
       // instruction, 2026-10-28). The rows below are still the section's catalogue — its screen
       // reads these labels and the New sale destination from here — and `to` is the ledger each
       // job is about, which is where a row would land if the generic hub ever rendered them.
-      { id: "all", labelKey: "hub.sales.all", to: "/sales" },
+      { id: "all", labelKey: "hub.sales.all", to: "/history/sales" },
       { id: "new", labelKey: "hub.sales.new", to: "/sale" },
       { id: "returns", labelKey: "hub.sales.returns", to: "/sales" },
       { id: "voided", labelKey: "hub.sales.voided", to: "/sales" },

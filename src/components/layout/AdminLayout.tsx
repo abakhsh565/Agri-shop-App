@@ -5,6 +5,7 @@ import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
 import FirstRunGate from "@/components/education/FirstRunGate";
 import { useBootstrapData } from "@/stores/useBootstrapData";
+import BootGate from "@/components/ui/BootGate";
 import { isTopLevel } from "@/lib/navDepth";
 import { Suspense, useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import useOverlayScrollLock from "@/hooks/useOverlayScrollLock";
@@ -330,7 +331,7 @@ export default function AdminLayout() {
       {/* ── Main content ── */}
       <div
         data-app-scroll
-        className={`flex flex-col flex-1 ${isAssistant ? "min-h-0 overflow-hidden" : "overflow-y-auto"}`}
+        className={`flex flex-col flex-1 min-h-0 ${isAssistant ? "overflow-hidden" : "overflow-y-auto"}`}
         style={{ paddingBottom: showTabBar ? "var(--tabbar-height)" : "0px" }}
       >
         <Suspense fallback={<div className="flex items-center justify-center flex-1" style={{ color: "var(--text-secondary)" }}><div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" /></div>}>
@@ -345,7 +346,7 @@ export default function AdminLayout() {
           >
             {/* An account the database accepts nothing from is told so, instead of being shown
                 the owner's screens with nothing in them. */}
-            {noActiveShop ? <ShopAccessNotice /> : <Outlet />}
+            {noActiveShop ? <ShopAccessNotice /> : <BootGate><Outlet /></BootGate>}
           </div>
         </Suspense>
       </div>

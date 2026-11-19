@@ -157,6 +157,7 @@ import ReturnSuccessPage from "@/pages/employee/returns/ReturnSuccessPage";
 import SearchPage from "@/pages/employee/search/SearchPage";
 // The search screen's filters are a screen, not a strip that would have to hold six dimensions.
 import SearchFiltersPage from "@/pages/employee/search/SearchFiltersPage";
+import SearchPersonPickerPage from "@/pages/employee/search/SearchPersonPickerPage";
 import SettingsPage from "@/pages/employee/settings/SettingsPage";
 import MyReportsPage from "@/pages/employee/reports/MyReportsPage";
 import ActivityLogPage from "@/pages/employee/activity/ActivityLogPage";
@@ -247,6 +248,7 @@ export const router = createBrowserRouter([
       { path: "guide/step/:workflowId/:step", element: <GuideDetailPage /> },
       { path: "search", element: <SearchPage /> },
       { path: "search/filters", element: <SearchFiltersPage /> },
+      { path: "search/filters/people", element: <SearchPersonPickerPage /> },
 
       // ── Customers (requires customers.view) ──────────────────────────────
       { element: <PermissionGuard requires="customers.view" />,
@@ -645,6 +647,7 @@ export const router = createBrowserRouter([
         ] },
       { path: "search", element: <SearchPage /> },
       { path: "search/filters", element: <SearchFiltersPage /> },
+      { path: "search/filters/people", element: <SearchPersonPickerPage /> },
     ],
   }],
   },
@@ -710,6 +713,7 @@ export const router = createBrowserRouter([
       { path: "team", element: <EmployeeTeamPage /> },
       { path: "search", element: <SearchPage /> },
       { path: "search/filters", element: <SearchFiltersPage /> },
+      { path: "search/filters/people", element: <SearchPersonPickerPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "reports", element: <MyReportsPage /> },
       { path: "activity", element: <ActivityLogPage /> },

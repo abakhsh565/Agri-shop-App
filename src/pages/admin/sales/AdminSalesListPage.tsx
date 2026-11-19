@@ -13,6 +13,7 @@ import { summariseSales, profitDisplay } from "@/lib/profit";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { Sale } from "@/types";
 import {
+  ArrowRight,
   Calendar,
   CalendarRange,
   Check,
@@ -189,6 +190,12 @@ export default function AdminSalesListPage() {
       if (sort === "highest") return b.totalAmount - a.totalAmount;
       return a.totalAmount - b.totalAmount;
     });
+
+  // The screen shows the latest 20 records, not the whole book: a shopkeeper looking for today's
+  // last bill should not scroll a year to find it, and the complete ledger already has its own
+  // screen at `/history/sales` with date ranges and search (owner, 2026-11-19).
+  const PREVIEW_LIMIT = 20;
+  const preview = filtered.slice(0, PREVIEW_LIMIT);
 
   // Sales less their own refunds — the same reading of "net sales" the Sales section shows.
   const refundMap = refundsBySale(returns);
@@ -706,14 +713,7 @@ export default function AdminSalesListPage() {
         </div>
       ) : (
         <div className="flex flex-col pb-8">
-          <p className="ds-section-label px-4 mt-4" style={{ color: "var(--text-secondary)" }}>
-            {t("sales.transactionList")}
-            <span className="ms-1.5 font-normal normal-case tracking-normal" style={{ color: "var(--text-tertiary)" }}>
-              · {filtered.length}{" "}
-              {t(filtered.length === 1 ? "sales.transactionOne" : "sales.transactions")}
-            </span>
-          </p>
-          {groupSalesByDateSections(filtered, now).map((section) => (
+          {groupSalesByDateSections(preview, now).map((section) => (
             <div key={section.label} className="mt-4">
               <div className="px-4 mb-2">
                 <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
@@ -768,6 +768,19 @@ export default function AdminSalesListPage() {
               </ListCard>
             </div>
           ))}
+
+          {/* The rest of the book, one tap away. A text door rather than a filled block: the
+              rows above are the record, and this is only where the record continues. */}
+          <button
+            type="button"
+            onClick={() => navigate(`${base}/history/sales`)}
+            data-testid="sales-view-all"
+            className="mx-4 mt-5 flex items-center justify-center gap-1.5 text-13 font-semibold ds-pressable"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {t("hub.sales.viewAllSales")}
+            <ArrowRight size={14} className="ds-glyph-sm" />
+          </button>
         </div>
       )}
     </div>

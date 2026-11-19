@@ -8,6 +8,7 @@ import ListRow from "@/components/ui/ListRow";
 import Button from "@/components/ui/Button";
 import DateRangeSheet from "@/components/ui/DateRangeSheet";
 import EmptyState from "@/components/ui/EmptyState";
+import Photo from "@/components/ui/Photo";
 import SearchBar from "@/components/ui/SearchBar";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import Sheet from "@/components/ui/Sheet";
@@ -19,8 +20,11 @@ import { useShellBase } from "@/lib/useShellBase";
 import { useDir } from "@/lib/dirContext";
 import { supabase } from "@/lib/supabase";
 import { matchesSearch } from "@/lib/searchText";
+import { getCachedData, setCachedData } from "@/lib/localCache";
 import { hasPermission } from "@/lib/tenantContext";
 import { useUIStore } from "@/stores/uiStore";
+import { useCustomersStore } from "@/stores/customersStore";
+import { useCompaniesStore } from "@/stores/companiesStore";
 
 type Translate = (key: I18nKey, params?: Record<string, string>) => string;
 
@@ -412,6 +416,25 @@ export default function AdminHistoryListPage() {
   const [selected, setSelected] = useState<Tx | null>(null);
   const [query, setQuery] = useState("");
 
+  // The picture belongs to the customer or supplier record, not to this ledger: a card written
+  // last month and one written today both read the current portrait. Reading the same live stores
+  // the profile and pickers use is what keeps an upload in sync here, in the filter sheet and on
+  // every other screen — there is no second copy of the URL to fall behind.
+  const customers = useCustomersStore((s) => s.customers);
+  const companies = useCompaniesStore((s) => s.companies);
+  const imageByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const customer of customers) {
+      if (customer.imageUrl) map.set(customer.name.trim().toLowerCase(), customer.imageUrl);
+    }
+    for (const company of companies) {
+      if (company.logoUrl) map.set(company.name.trim().toLowerCase(), company.logoUrl);
+    }
+    return map;
+  }, [customers, companies]);
+
+  const photoFor = (name: string) => imageByName.get(name.trim().toLowerCase());
+
   const from = period === "custom" ? customFrom : daysAgo(PERIOD_DAYS[period]);
   const to = period === "custom" ? customTo : today;
 
@@ -431,13 +454,20 @@ export default function AdminHistoryListPage() {
 
   const load = useCallback(async () => {
     if (!allowed) return;
-    setTransactions(null);
+    // One key per ledger and window. The last copy this device read is the offline answer: it
+    // paints immediately, and the refresh below replaces it with the server's rows when there is
+    // a connection. A ledger the shop has never opened has nothing to show but its skeleton.
+    const cacheKey = `history-${kind}-${from}-${to}`;
+    const cached = getCachedData<Tx[]>(cacheKey);
+    setTransactions(cached ?? null);
     try {
       const rows = await loadTransactions(kind, from, to, base, translate.current);
       setTransactions(rows);
+      setCachedData(cacheKey, rows);
     } catch {
-      // A failed read is an empty ledger on this screen, not a spinner that never resolves.
-      setTransactions([]);
+      // A failed read falls back to the cached ledger; with no cache it is empty, not a spinner
+      // that never resolves.
+      if (!cached) setTransactions([]);
     }
   }, [allowed, kind, from, to, base]);
 
@@ -648,10 +678,15 @@ export default function AdminHistoryListPage() {
                 style={{ background: "var(--surface-2)" }}
               >
                 <span
-                  className="size-10 shrink-0 rounded-full flex items-center justify-center text-14 font-bold"
+                  className="size-10 shrink-0 rounded-full overflow-hidden flex items-center justify-center text-14 font-bold"
                   style={{ background: "var(--surface)", color: "var(--text-primary)" }}
                 >
-                  {initial}
+                  <Photo
+                    src={photoFor(tx.title)}
+                    alt={tx.title}
+                    className="w-full h-full object-cover"
+                    fallback={initial}
+                  />
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-14 font-semibold truncate" style={{ color: "var(--text-primary)" }}>
@@ -700,6 +735,24 @@ export default function AdminHistoryListPage() {
         <div className="px-4 pb-6" data-testid="history-detail-sheet">
           {selected && (
             <>
+              {/* The record's own face, above its values — the same live portrait the card showed. */}
+              <div className="flex items-center gap-3 pb-3" data-testid="history-detail-photo">
+                <span
+                  className="size-11 shrink-0 rounded-full overflow-hidden flex items-center justify-center text-15 font-bold"
+                  style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
+                >
+                  <Photo
+                    src={photoFor(selected.title)}
+                    alt={selected.title}
+                    className="w-full h-full object-cover"
+                    fallback={selected.title.charAt(0).toUpperCase()}
+                  />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-15 font-semibold truncate" style={{ color: "var(--text-primary)" }}>{selected.title}</p>
+                  <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>{selected.meta}</p>
+                </div>
+              </div>
               <ListCard>
                 {selected.detail.map((row) => (
                   <ListRow key={row.label} title={row.label} description={row.value} />

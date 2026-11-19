@@ -92,7 +92,9 @@ interface ProductsState {
 let channel: ReturnType<typeof supabase.channel> | null = null;
 
 export const useProductsStore = create<ProductsState>((set, get) => ({
-  products: [],
+  // The catalogue paints from the last read on this device — the shelf is the screen a shopkeeper
+  // opens most, and an empty one for a second reads as "my stock is gone".
+  products: getCachedData<Product[]>(CACHE_KEY) ?? [],
   loading: false,
   ready: false,
   error: null,
