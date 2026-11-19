@@ -767,7 +767,15 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
   test('5. Customize access saves an override in the DB, and "use role access only" removes it', async ({ page }) => {
     await login(page, OWNER_PHONE);
     await page.goto(`${BASE}/admin/employees/${QA_EMPLOYEE_ID}`);
-    await page.waitForTimeout(1600);
+    // WAIT FOR THE RENDER, not a stopwatch. This deep link boots the whole app and hydrates the
+    // employees store before the profile (and its header actions) can exist; a fixed 1.6s was
+    // under the cold-boot time on a loaded runner, so the click below spent its 10s action timeout
+    // on a page that was still a skeleton — measured 2026-11-19: the same employee rendered fine in
+    // test 4, and no product code on this screen changed in the UI batch, so the wait was the bug.
+    await expect(
+      page.getByText('Employee profile'),
+      'the employee detail never rendered — the store did not hydrate this deep link',
+    ).toBeVisible({ timeout: 20000 });
 
     // "Customize access" is a row inside the profile's ACTION SHEET (`employee-actions` in the header),
     // not a button on the page — measured 2026-11-14: the profile body renders no such control, and

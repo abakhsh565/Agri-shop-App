@@ -166,7 +166,9 @@ export default function VariantSelectorPage() {
                     </p>
                   )}
                 </div>
-                <div className="shrink-0 w-[132px]">
+                {/* Named by the pack it counts, not by its position: a lane (and a person reading
+                    the DOM) has to be able to say which pack's number it is addressing. */}
+                <div className="shrink-0 w-[132px]" data-testid={`pack-counter-${v.id}`}>
                   <QuantityCounter
                     size="sm"
                     min={0}
