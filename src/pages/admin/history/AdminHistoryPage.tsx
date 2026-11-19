@@ -17,6 +17,7 @@ import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
+import { useDir } from "@/lib/dirContext";
 import { hasPermission } from "@/lib/tenantContext";
 
 interface HistoryDoor {
@@ -48,6 +49,7 @@ export default function AdminHistoryPage() {
   const t = useT();
   const base = useShellBase();
   const navigate = useNavigate();
+  const { isRtl } = useDir();
 
   const doors = DOORS.filter((door) => !door.permission || hasPermission(door.permission));
 
@@ -56,7 +58,9 @@ export default function AdminHistoryPage() {
       <StatusBar />
       <NavHeader title={t("history.title")} />
 
-      <div className="pt-1 pb-8" data-testid="history-doors">
+      {/* The standard 16px page gutter: without it the card ran to the bezel, which is the
+          spacing the owner flagged on this screen. */}
+      <div className="px-4 pt-3 pb-8" data-testid="history-doors">
         <ListCard>
           {doors.map((door) => (
             <ListRow
@@ -65,7 +69,13 @@ export default function AdminHistoryPage() {
               title={t(door.labelKey)}
               testId={`history-door-${door.id}`}
               onClick={() => navigate(`${base}/history/${door.id}`)}
-              trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
+              trailing={
+                <ChevronRight
+                  size={14}
+                  className="shrink-0"
+                  style={{ color: "var(--text-secondary)", transform: isRtl ? "rotate(180deg)" : undefined }}
+                />
+              }
             />
           ))}
         </ListCard>

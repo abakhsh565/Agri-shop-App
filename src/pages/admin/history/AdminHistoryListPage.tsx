@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Download, History as HistoryIcon, RotateCw, Share2 } from "lucide-react";
+import { Download, History as HistoryIcon, RotateCw, Search, Share2 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
@@ -8,6 +8,7 @@ import ListRow from "@/components/ui/ListRow";
 import Button from "@/components/ui/Button";
 import DateRangeSheet from "@/components/ui/DateRangeSheet";
 import EmptyState from "@/components/ui/EmptyState";
+import SearchBar from "@/components/ui/SearchBar";
 import OverflowMenu from "@/components/ui/OverflowMenu";
 import Sheet from "@/components/ui/Sheet";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -15,7 +16,9 @@ import { formatCurrency, formatDateTime } from "@/lib/formatters";
 import { pkToday } from "@/lib/pkDate";
 import { useT, type I18nKey } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
+import { useDir } from "@/lib/dirContext";
 import { supabase } from "@/lib/supabase";
+import { matchesSearch } from "@/lib/searchText";
 import { hasPermission } from "@/lib/tenantContext";
 import { useUIStore } from "@/stores/uiStore";
 
@@ -144,8 +147,11 @@ async function loadTransactions(
   base: string,
   t: Translate,
 ): Promise<Tx[]> {
-  const start = `${from}T00:00:00`;
-  const end = `${to}T23:59:59.999`;
+  // A calendar day is local to the shop. Sending `2026-11-20T00:00:00` without an offset is read
+  // as UTC by the database, which moved a bill created at 12:41 am out of its own day; converting
+  // the local day to an instant is what makes "Today" mean the shopkeeper's today.
+  const start = new Date(`${from}T00:00:00`).toISOString();
+  const end = new Date(`${to}T23:59:59.999`).toISOString();
   const when = formatDateTime;
 
   if (kind === "sales") {
@@ -389,6 +395,7 @@ export default function AdminHistoryListPage() {
   const t = useT();
   const base = useShellBase();
   const navigate = useNavigate();
+  const { isRtl } = useDir();
   const { kind: rawKind } = useParams<{ kind: string }>();
   const { addToast } = useUIStore();
 
@@ -403,11 +410,19 @@ export default function AdminHistoryListPage() {
   const [transactions, setTransactions] = useState<Tx[] | null>(null);
   const [nonce, setNonce] = useState(0);
   const [selected, setSelected] = useState<Tx | null>(null);
+  const [query, setQuery] = useState("");
 
   const from = period === "custom" ? customFrom : daysAgo(PERIOD_DAYS[period]);
   const to = period === "custom" ? customTo : today;
 
   const allowed = hasPermission(info.permission);
+
+  // A new ledger is a new question; a keyword typed for invoices must not follow the reader into
+  // sales. The range stays, because it belongs to the screen rather than to one search.
+  useEffect(() => {
+    setQuery("");
+    setSelected(null);
+  }, [kind]);
 
   // The translator is not a dependency: `useT` hands back a new function each render, so reading
   // it through a ref keeps the fetch keyed to the ledger and the days rather than to the render.
@@ -430,13 +445,30 @@ export default function AdminHistoryListPage() {
     void load();
   }, [load, nonce]);
 
+  /** Every field the card carries — including its detail rows — is searchable. */
+  const visible = useMemo(() => {
+    const rows = transactions ?? [];
+    if (!query.trim()) return rows;
+    return rows.filter((tx) =>
+      matchesSearch(query, [
+        tx.title,
+        tx.meta,
+        tx.sub,
+        tx.status?.label,
+        tx.quantity,
+        tx.amount != null ? formatCurrency(tx.amount) : "",
+        ...tx.detail.flatMap((row) => [row.label, row.value]),
+      ]),
+    );
+  }, [transactions, query]);
+
   const summaryText = useMemo(() => {
-    const lines = (transactions ?? []).slice(0, 40).map((tx) => {
+    const lines = visible.slice(0, 40).map((tx) => {
       const value = tx.amount != null ? formatCurrency(tx.amount) : tx.quantity ?? "";
       return [tx.title, tx.meta, value].filter(Boolean).join(" · ");
     });
     return [`${t(info.labelKey)} · ${from} – ${to}`, ...lines].join("\n");
-  }, [transactions, from, to, info.labelKey, t]);
+  }, [visible, from, to, info.labelKey, t]);
 
   async function share() {
     try {
@@ -453,7 +485,7 @@ export default function AdminHistoryListPage() {
 
   function exportCsv() {
     const header = [t("history.colType"), t("history.date"), t("history.colTotal")].join(",");
-    const lines = (transactions ?? []).map((tx) =>
+    const lines = visible.map((tx) =>
       [`"${tx.title.replace(/"/g, '""')}"`, `"${tx.meta}"`, tx.amount != null ? String(tx.amount) : `"${tx.quantity ?? ""}"`].join(","),
     );
     const blob = new Blob([`\uFEFF${[header, ...lines].join("\n")}`], { type: "text/csv;charset=utf-8" });
@@ -572,6 +604,19 @@ export default function AdminHistoryListPage() {
         }}
       />
 
+      {transactions !== null && transactions.length > 0 && (
+        <div className="px-4 pt-3">
+          <SearchBar
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onClear={() => setQuery("")}
+            placeholder={t("history.searchPlaceholder")}
+            aria-label={t("history.searchPlaceholder")}
+            data-testid="history-search"
+          />
+        </div>
+      )}
+
       {transactions === null ? (
         <SkeletonList rows={5} />
       ) : transactions.length === 0 ? (
@@ -580,9 +625,16 @@ export default function AdminHistoryListPage() {
           title={t("history.nothing")}
           subtitle={t("history.emptyBody")}
         />
+      ) : visible.length === 0 ? (
+        <EmptyState
+          icon={Search}
+          title={t("history.noMatchesTitle")}
+          subtitle={t("history.noMatchesBody")}
+          action={{ label: t("history.clearSearch"), onClick: () => setQuery("") }}
+        />
       ) : (
         <div className="px-4 pt-3 pb-8 flex flex-col gap-2" data-testid="history-cards">
-          {transactions.map((tx) => {
+          {visible.map((tx) => {
             const tone =
               tx.status?.tone === "paid" ? PAID : tx.status?.tone === "returned" ? RETURNED : DUE;
             const initial = tx.title.charAt(0).toUpperCase();
@@ -605,9 +657,24 @@ export default function AdminHistoryListPage() {
                   <p className="text-14 font-semibold truncate" style={{ color: "var(--text-primary)" }}>
                     {tx.title}
                   </p>
-                  <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>{tx.meta}</p>
+                  {/* In an Urdu (RTL) card a plain paragraph reorders "20 Nov 2026 — 12:41 am"
+                      around the digits. The line is marked LTR for its own content and aligned to
+                      the card's start edge, so the date reads in order on both sides. */}
+                  <p
+                    dir="ltr"
+                    className="text-11 mt-0.5"
+                    style={{ color: "var(--text-secondary)", textAlign: isRtl ? "right" : "left" }}
+                  >
+                    {tx.meta}
+                  </p>
                   {tx.sub && (
-                    <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-tertiary)" }}>{tx.sub}</p>
+                    <p
+                      dir="ltr"
+                      className="text-11 mt-0.5 truncate"
+                      style={{ color: "var(--text-tertiary)", textAlign: isRtl ? "right" : "left" }}
+                    >
+                      {tx.sub}
+                    </p>
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
