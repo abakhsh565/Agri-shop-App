@@ -11,6 +11,7 @@ import {
   CalendarClock,
   ClipboardList,
   HandCoins,
+  History,
   Landmark,
   LayoutGrid,
   PackagePlus,
@@ -74,6 +75,16 @@ const ACTIONS: ShopAction[] = [
     to: "/admin/invoices",
     permission: "sales.view",
     keywords: ["invoice", "bill", "billing", "parchi", "بل", "انوائس"],
+  },
+  {
+    // The owner's reference names History as a counter job, and it is one: the day's paperwork,
+    // read back by date. It opens the one screen that indexes every ledger.
+    id: "history",
+    icon: History,
+    labelKey: "shopAction.history",
+    group: "money",
+    to: "/admin/history",
+    keywords: ["history", "tareekh", "ledger", "past", "تاریخ", "ریکارڈ"],
   },
   {
     id: "daily-cash",

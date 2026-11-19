@@ -137,6 +137,9 @@ import InvoiceListPage from "@/pages/admin/invoices/InvoiceListPage";
 import InvoiceFormPage from "@/pages/admin/invoices/InvoiceFormPage";
 import InvoiceDetailPage from "@/pages/admin/invoices/InvoiceDetailPage";
 import InvoicePrintPage from "@/pages/admin/invoices/InvoicePrintPage";
+import InvoiceSettingsPage from "@/pages/admin/invoices/InvoiceSettingsPage";
+import AdminHistoryPage from "@/pages/admin/history/AdminHistoryPage";
+import AdminHistoryListPage from "@/pages/admin/history/AdminHistoryListPage";
 import SaleSuccessPage from "@/pages/employee/sale/SaleSuccessPage";
 const SalesListPage = React.lazy(() => import("@/pages/employee/sales/SalesListPage"));
 const CustomersListPage = React.lazy(() => import("@/pages/employee/customers/CustomersListPage"));
@@ -231,6 +234,12 @@ export const router = createBrowserRouter([
       // way round: a business module belongs one tap from the bar, not inside an account page.
       { path: "more",       element: <AdminMorePage /> },
       { path: "messages",   element: <AdminMessagesPage /> },
+      // Every ledger, read through one date range. The screen is an index over the screens that
+      // already own each book; it does not keep a second copy of any of them.
+      { path: "history",    element: <AdminHistoryPage /> },
+      // One ledger, with its own date range and transaction cards. The address names the book;
+      // the screen reads it for the period chosen there.
+      { path: "history/:kind", element: <AdminHistoryListPage /> },
       { path: "guide",      element: <AppGuidePage /> },
       // One explanation, its own page: the guide's rows lead here instead of jumping at a live
       // screen or opening a sheet with no words in it.
@@ -311,6 +320,9 @@ export const router = createBrowserRouter([
           // the same grants as the sale that produces the goods on the bill (0319/0320).
           { path: "invoices", element: <InvoiceListPage /> },
           { path: "invoices/new", element: <InvoiceFormPage /> },
+          // The shop's paper, before the parameter route: `invoices/:invoiceId` would otherwise
+          // open a bill called "settings".
+          { path: "invoices/settings", element: <InvoiceSettingsPage /> },
           { path: "invoices/:invoiceId", element: <InvoiceDetailPage /> },
           { path: "invoices/:invoiceId/edit", element: <InvoiceFormPage /> },
           { path: "invoices/:invoiceId/print", element: <InvoicePrintPage /> },

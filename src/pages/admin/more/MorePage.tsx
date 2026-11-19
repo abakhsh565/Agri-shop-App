@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Compass,
   Crown,
+  History,
   KeyRound,
   Landmark,
   LayoutGrid,
@@ -161,12 +162,33 @@ export default function AdminMorePage() {
       headingKey: "more.group.business",
       rows: [
         {
+          // Every book the shop keeps, read by a date range. It opens the History screen rather
+          // than one of the ledgers, because the question it answers — what happened between
+          // these two days — spans all of them.
+          id: "history",
+          icon: History,
+          labelKey: "history.title",
+          descriptionKey: "history.hint",
+          to: `${base}/history`,
+          show: true,
+        },
+        {
           // The shop's own paperwork, next to the registers it is written from.
           id: "invoices",
           icon: ReceiptText,
           labelKey: "nav.invoices",
           descriptionKey: "more.hint.invoices",
           to: `${base}/invoices`,
+          show: hasPermission("sales.view"),
+        },
+        {
+          // The shop's paper: which design, whose logo, and what prints. It sits beside the
+          // invoice book it configures.
+          id: "invoice-settings",
+          icon: Settings,
+          labelKey: "invoiceSettings.open",
+          descriptionKey: "invoiceSettings.hint",
+          to: `${base}/invoices/settings`,
           show: hasPermission("sales.view"),
         },
         {

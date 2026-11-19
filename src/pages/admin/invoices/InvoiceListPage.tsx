@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, ReceiptText } from "lucide-react";
+import { Plus, ReceiptText, Settings } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
@@ -69,7 +69,21 @@ export default function InvoiceListPage() {
   return (
     <div className="flex flex-col bg-background w-full min-h-full">
       <StatusBar />
-      <NavHeader title={t("invoice.title")} />
+      <NavHeader
+        title={t("invoice.title")}
+        right={
+          <button
+            type="button"
+            onClick={() => navigate(`${base}/invoices/settings`)}
+            aria-label={t("invoiceSettings.open")}
+            data-testid="invoice-list-settings"
+            className="flex items-center justify-center size-11 rounded-full active:opacity-60"
+            style={{ color: "var(--text-primary)" }}
+          >
+            <Settings size={18} />
+          </button>
+        }
+      />
 
       <div className="px-4 pt-1 pb-3">
         <Button variant="cta" size="md" fullWidth onClick={() => navigate(`${base}/invoices/new`)}>
