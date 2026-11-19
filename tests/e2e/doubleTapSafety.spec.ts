@@ -240,7 +240,11 @@ test.describe('Double tap safety', () => {
     // The fixture product's real name ("QA Product A"). 'DT Product' is a name no QA row carries.
     await page.getByText('QA Product A').first().click();
     await page.waitForURL(/\/sale\/products\//, { timeout: 15000 });
-    await page.getByText('1kg').first().click();
+    // The pack screen is per-pack COUNTERS since 2026-11-17 (owner): a pack starts at 0 and Add to
+    // Cart is disabled until one carries a number. Tapping the pack's name is not a selection any
+    // more, so this lane taps the counter of the fixture variant — the one whose stock it asserts.
+    await expect(page.getByTestId(`pack-counter-${DT_VAR_ID}`)).toBeVisible({ timeout: 15000 });
+    await page.getByTestId(`pack-counter-${DT_VAR_ID}`).getByRole('button', { name: /increase/i }).click();
     await page.getByRole('button', { name: /add to cart/i }).click();
     await page.waitForURL(/\/sale\/cart/, { timeout: 15000 });
     await page.getByRole('button', { name: /complete sale/i }).waitFor({ timeout: 15000 });
