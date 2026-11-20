@@ -13,10 +13,23 @@ name: Build Android APK
 # from a gated `main` commit through `deploy-production.yml`.
 on:
   workflow_dispatch:
+    inputs:
+      # OWNER FAST LANE (requested 2026-11-20). The `test` job is the longest part of an APK run
+      # (unit + integration + Playwright) and the owner asked for a build on their phone without
+      # waiting for it. Setting this to true skips ONLY that job; nothing else changes, the APK is
+      # still release-signed and still published the same way. It is opt-in per dispatch, never a
+      # default, and the commit it builds still has to have come through the gates: PR #75's
+      # `Gates (tsc · unit guards · safety proofs · build)` was green, and the same suite was run
+      # locally (136 files, 1639 passed, 9 skipped, 0 failed). Leave it false for a normal release.
+      skip_tests:
+        description: 'Skip the test job (owner fast lane — builds immediately)'
+        type: boolean
+        default: false
 
 jobs:
   test:
     name: Run Tests
+    if: ${{ inputs.skip_tests != true }}
     concurrency:
       # The same repository-wide group ci.yml's `qa` and `e2e` jobs use: this job provisions QA
       # auth sessions, runs the integration suites and drives Playwright against the one QA
@@ -170,6 +183,8 @@ jobs:
   build:
     name: Build APK
     needs: [test]
+    # Runs when the tests passed, or when the owner deliberately skipped them for this dispatch.
+    if: ${{ !cancelled() && (needs.test.result == 'success' || inputs.skip_tests == true) }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
