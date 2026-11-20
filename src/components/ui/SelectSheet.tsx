@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Search, Check } from "lucide-react";
+import { Check } from "lucide-react";
+import SearchBar from "@/components/ui/SearchBar";
 import { useT } from "@/lib/i18n";
 import usePresence from "@/hooks/usePresence";
 import Photo from "@/components/ui/Photo";
@@ -86,18 +87,14 @@ export default function SelectSheet({
 
         {searchable && (
           <div className="px-5 pb-3">
-            <div className="flex items-center gap-2 h-[40px] rounded-[var(--radius-tile)] px-3"
-              style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}>
-              <Search size={14} style={{ color: "var(--text-secondary)" }} />
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t("common.searchPlaceholder")}
-                className="h-full flex-1 bg-transparent text-13 outline-none"
-                style={{ color: "var(--text-primary)" }}
-              />
-            </div>
+            {/* The one field, so a picker sheet speaks as well as types. */}
+            <SearchBar
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onClear={() => setQuery("")}
+              placeholder={t("common.searchPlaceholder")}
+            />
           </div>
         )}
 

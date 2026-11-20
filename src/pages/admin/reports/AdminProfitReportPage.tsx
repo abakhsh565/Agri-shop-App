@@ -422,7 +422,7 @@ export default function AdminProfitReportPage() {
               className="shrink-0"
             />
           }
-          onClick={() => navigate(`${base}/sales`)}
+          onClick={() => navigate(`${base}/history/sales`)}
         />
       </div>
 

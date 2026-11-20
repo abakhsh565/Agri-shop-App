@@ -40,7 +40,9 @@ export default function Switch({ checked, onChange, label, testId, disabled = fa
       style={{
         width: 42,
         height: 24,
-        background: checked ? "var(--roles-accent, var(--text-primary))" : "var(--tone-sunken)",
+        // The on state is the shop's own green everywhere, so a row of switches reads as one
+        // system and never borrows a role's colour.
+        background: checked ? "var(--brand)" : "var(--tone-sunken)",
         border: "1px solid var(--border-control)",
         transitionDuration: "var(--dur-2)",
       }}
@@ -52,7 +54,7 @@ export default function Switch({ checked, onChange, label, testId, disabled = fa
         key={checked ? "on" : "off"}
         className="ds-switch-knob"
         data-on={checked ? "true" : "false"}
-        style={{ background: checked ? "var(--tone-page)" : "var(--text-tertiary)" }}
+        style={{ background: checked ? "var(--brand-fg)" : "var(--text-tertiary)" }}
       />
     </button>
   );

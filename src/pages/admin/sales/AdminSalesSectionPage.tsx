@@ -969,7 +969,7 @@ export default function AdminSalesSectionPage() {
           icon={ReceiptText}
           title={t("hub.sales.viewAllSales")}
           trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-          onClick={() => navigate(`${base}/sales`)}
+          onClick={() => navigate(`${base}/history/sales`)}
         />
         <ListRow
           testId="hub-row-returns"

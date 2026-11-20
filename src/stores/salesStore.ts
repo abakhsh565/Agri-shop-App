@@ -157,7 +157,9 @@ function asUuidOrNull(id: string | undefined | null): string | null {
 }
 
 export const useSalesStore = create<SalesState>((set, get) => ({
-  sales: [],
+  // First paint comes from the cache: the shop's last known book is visible in the same frame as
+  // the shell, and the network read below replaces it a moment later.
+  sales: getLocalCache<Sale[]>(CACHE_KEY) ?? [],
   loading: false,
   ready: false,
   error: null,

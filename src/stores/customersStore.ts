@@ -134,7 +134,9 @@ const asUuidOrNull = (id?: string | null) =>
   id && UUID_RE.test(id) ? id : null;
 
 export const useCustomersStore = create<CustomersState>((set, get) => ({
-  customers: [],
+  // The cached list paints on the first frame, before any network round trip. `ready` still means
+  // "the server answered", so screens can revalidate without going blank.
+  customers: getCachedData<Customer[]>(CACHE_KEY) ?? [],
   loading: false,
   ready: false,
   error: null,

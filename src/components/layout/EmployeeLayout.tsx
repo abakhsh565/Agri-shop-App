@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useOfflineStore } from "@/stores/offlineStore";
-import { getPendingCount } from "@/lib/offlineQueue";
+import { useConnectivityToasts } from "@/hooks/useConnectivityToasts";
 import PINInput from "@/components/ui/PINInput";
 import { Suspense, useState, useEffect, useRef } from "react";
 import useOverlayScrollLock from "@/hooks/useOverlayScrollLock";
@@ -18,6 +18,7 @@ import NavTracker from "@/components/ui/NavTracker";
 import FirstRunGate from "@/components/education/FirstRunGate";
 import { useT, tNow, type I18nKey } from "@/lib/i18n";
 import { useBootstrapData } from "@/stores/useBootstrapData";
+import BootGate from "@/components/ui/BootGate";
 import { useShopStore } from "@/stores/shopStore";
 import { hasPermission } from "@/lib/tenantContext";
 import { resolveEmployeeWorkspace } from "@/lib/employeeWorkspace";
@@ -111,7 +112,7 @@ export default function EmployeeLayout() {
   const refreshPermissions = useAuthStore((s) => s.refreshPermissions);
   const activeBranchId = useShopStore((s) => s.activeBranchId);
   const { addToast } = useUIStore();
-  const { isOnline, setOnline, syncQueue, isSyncing, pendingOpsCount } = useOfflineStore();
+  const { isOnline, isSyncing, pendingOpsCount } = useOfflineStore();
   const navigate = useNavigate();
   const location = useLocation();
   useBootstrapData();
@@ -140,28 +141,9 @@ export default function EmployeeLayout() {
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [pinShake, setPinShake] = useState(false);
-  const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);  // Online/offline detection + auto-sync
-  useEffect(() => {
-    const handleOnline = () => {
-      setOnline(true);
-      addToast("Back online — syncing data", "success");
-      syncQueue();
-    };
-    const handleOffline = () => {
-      setOnline(false);
-      addToast("You are offline. Sales will queue locally.", "warning");
-    };
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    const pending = getPendingCount();
-    if (pending > 0) {
-      setOnline(navigator.onLine);
-    }
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Online/offline detection, auto-sync, and the toast that reports how many changes it sent.
+  useConnectivityToasts();
 
   // Session lock timer
   function resetLockTimer() {
@@ -303,6 +285,9 @@ export default function EmployeeLayout() {
         background: "var(--background)",
         // Keep the conversation shell on the visible viewport; only its transcript may scroll.
         ...(isAssistant ? { height: "var(--assistant-viewport-height, 100dvh)" } : {}),
+        // The tab bar's reserve is taken off the screen's minimum height, not added on top of it
+        // (see AdminLayout): a screen whose content fits must not scroll at all.
+        ...(!isAssistant && showTabBar ? { minHeight: "calc(100% - var(--tabbar-height))" } : {}),
       }}
     >
       <NavTracker />
@@ -342,7 +327,10 @@ export default function EmployeeLayout() {
       {/* ── Session lock overlay ── */}
       {isLocked && (
         <div
-          className="absolute inset-0 z-50 flex flex-col"
+          // Fixed for the same reason as the admin shell's lock screen: the page behind it can be
+          // taller than the phone, and an absolute overlay was centred in that page rather than
+          // on the screen. Being `.fixed.inset-0` also makes the scroll-lock hook hold the shell.
+          className="fixed inset-0 z-50 mx-auto flex w-full max-w-[480px] flex-col"
           style={{ background: "var(--background)" }}
         >
           <div className="safe-top" />
@@ -412,7 +400,7 @@ export default function EmployeeLayout() {
       {/* ── Main content ── */}
       <div
         data-app-scroll
-        className={`flex flex-col flex-1 ${isAssistant ? "min-h-0 overflow-hidden" : "overflow-y-auto"}`}
+        className={`flex flex-col flex-1 min-h-0 ${isAssistant ? "overflow-hidden" : "overflow-y-auto"}`}
         style={{ paddingBottom: showTabBar ? "var(--tabbar-height)" : "0px" }}
       >
         <Suspense fallback={<div className="flex items-center justify-center flex-1" style={{ color: "var(--text-secondary)" }}><div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" /></div>}>
@@ -427,7 +415,7 @@ export default function EmployeeLayout() {
           >
             {/* An account the database accepts nothing from is told so, instead of being shown
                 the employee's screens with nothing in them. */}
-            {noActiveShop ? <ShopAccessNotice /> : <Outlet />}
+            {noActiveShop ? <ShopAccessNotice /> : <BootGate><Outlet /></BootGate>}
           </div>
         </Suspense>
       </div>

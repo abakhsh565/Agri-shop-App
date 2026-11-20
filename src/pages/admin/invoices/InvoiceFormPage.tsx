@@ -28,6 +28,7 @@ import {
   getInvoice,
   invoiceTotals,
   nextInvoiceNumber,
+  PAGE_DESIGNS,
   updateInvoice,
   type Invoice,
   type InvoiceDesign,
@@ -35,6 +36,8 @@ import {
   type InvoicePartyType,
   type InvoiceType,
 } from "@/lib/invoices";
+import { INVOICE_DESIGN_KEYS } from "@/lib/invoiceDesignLabels";
+import { loadInvoiceSettings } from "@/lib/invoiceSettings";
 import InvoiceSheet, { InvoiceDesignThumb, type ShopIdentity } from "@/components/invoices/InvoiceSheet";
 
 interface Line {
@@ -79,6 +82,7 @@ export default function InvoiceFormPage() {
   const isEdit = Boolean(invoiceId);
 
   const activeShopName = useShopStore((s) => s.activeShopName);
+  const activeShopId = useShopStore((s) => s.activeShopId);
   const customers = useCustomersStore((s) => s.customers);
   const products = useProductsStore((s) => s.products);
   const companies = useCompaniesStore((s) => s.companies);
@@ -112,6 +116,21 @@ export default function InvoiceFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const keyRef = useRef<string | null>(null);
+
+  // A new bill starts on the shop's own paper. The settings screen is where that choice lives;
+  // this screen only asks once, and only when there is no stored design to edit.
+  useEffect(() => {
+    if (isEdit) return;
+    let alive = true;
+    loadInvoiceSettings(activeShopId)
+      .then((loaded) => {
+        if (alive && !loaded.design.startsWith("receipt-")) setDesign(loaded.design);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [isEdit, activeShopId]);
 
   // The number the next save will write, so the field says the bill's name instead of "assigned".
   useEffect(() => {
@@ -765,37 +784,30 @@ export default function InvoiceFormPage() {
             <Eye size={14} /> {t("invoice.preview")}
           </button>
         </div>
-        <div className="flex flex-col gap-2">
-          {(
-            [
-              { id: "atelier" as InvoiceDesign, name: "invoice.designAtelier", hint: "invoice.designAtelierHint" },
-              { id: "royal" as InvoiceDesign, name: "invoice.designRoyal", hint: "invoice.designRoyalHint" },
-              { id: "aurora" as InvoiceDesign, name: "invoice.designAurora", hint: "invoice.designAuroraHint" },
-            ] as const
-          ).map((option) => (
+        <div className="grid grid-cols-2 gap-2">
+          {PAGE_DESIGNS.map((option) => (
             <button
-              key={option.id}
+              key={option}
               onClick={() => {
-                setDesign(option.id);
+                setDesign(option);
                 setPreviewOpen(true);
               }}
-              aria-pressed={design === option.id}
-              className="flex items-center gap-3 p-2.5 rounded-[var(--radius-tile)] text-start ds-pressable"
+              aria-pressed={design === option}
+              className="flex flex-col items-center gap-1.5 p-2 rounded-[var(--radius-tile)] text-center ds-pressable"
               style={{
                 background: "var(--surface-2)",
-                border: `1.5px solid ${design === option.id ? "var(--brand-dark)" : "transparent"}`,
+                border: `1.5px solid ${design === option ? "var(--brand-dark)" : "transparent"}`,
               }}
+              data-testid={`invoice-form-design-${option}`}
             >
-              <InvoiceDesignThumb design={option.id} sample={{ ...draft, design: option.id }} shop={shop} width={54} height={70} />
-              <div className="flex-1 min-w-0">
-                <p className="text-13 font-semibold" style={{ color: "var(--text-primary)" }}>{t(option.name)}</p>
-                <p className="text-11" style={{ color: "var(--text-secondary)" }}>{t(option.hint)}</p>
-              </div>
-              {design === option.id && <Check size={16} style={{ color: "var(--brand-dark)" }} />}
+              <InvoiceDesignThumb design={option} sample={{ ...draft, design: option }} shop={shop} width={54} height={70} />
+              <span className="text-11 font-semibold" style={{ color: "var(--text-primary)" }}>
+                {t(INVOICE_DESIGN_KEYS[option])}
+              </span>
+              {design === option && <Check size={14} style={{ color: "var(--brand-dark)" }} />}
             </button>
           ))}
         </div>
-        <p className="text-11 mt-2" style={{ color: "var(--text-tertiary)" }}>{t("invoice.designHint")}</p>
       </section>
 
       {error && (

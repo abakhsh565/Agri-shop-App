@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -12,17 +12,48 @@ import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
 import { useAppBack } from "@/hooks/useAppBack";
 import { formatCurrency, productLowStockThreshold } from "@/lib/formatters";
-import { Search, Package, Users, ShoppingCart, Building2, UserCog, ChevronLeft, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Building2,
+  ChevronLeft,
+  LayoutGrid,
+  Package,
+  ReceiptText,
+  Search,
+  ShoppingCart,
+  SlidersHorizontal,
+  Truck,
+  Undo2,
+  UserCog,
+  Users,
+  Wallet,
+} from "lucide-react";
 import {
   countActiveFilters,
-  periodStart,
+  periodWindow,
   useSearchFilters,
 } from "@/stores/searchFiltersStore";
 import SearchBar from "@/components/ui/SearchBar";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import { hasPermission } from "@/lib/tenantContext";
+import { APP_DESTINATIONS, destinationKeywords } from "@/lib/appSearchIndex";
+import { matchesSearch } from "@/lib/searchText";
+import { searchDocuments } from "@/lib/globalSearch";
 
-type FilterType = "all" | "product" | "customer" | "sale" | "employee" | "company";
+type FilterType =
+  | "all"
+  | "product"
+  | "customer"
+  | "sale"
+  | "employee"
+  | "company"
+  | "module"
+  | "invoice"
+  | "purchase"
+  | "payment"
+  | "return"
+  | "stock";
 
 interface SearchResult {
   id: string;
@@ -46,6 +77,10 @@ const FILTER_CHIPS_BASE: { key: FilterType; labelKey: string; icon: any }[] = [
   { key: "product",  labelKey: "search.products",  icon: Package },
   { key: "customer", labelKey: "search.customers", icon: Users },
   { key: "sale",     labelKey: "search.sales",     icon: ShoppingCart },
+  { key: "module",   labelKey: "search.modules",   icon: LayoutGrid },
+  { key: "invoice",  labelKey: "search.invoices",  icon: ReceiptText },
+  { key: "purchase", labelKey: "search.purchases", icon: Truck },
+  { key: "payment",  labelKey: "search.payments",  icon: Wallet },
 ];
 
 const ADMIN_EXTRA_FILTERS_BASE = [
@@ -55,6 +90,9 @@ const ADMIN_EXTRA_FILTERS_BASE = [
 
 export default function SearchPage() {
   const navigate = useNavigate();
+  // `?voice=1` is how the home screen's microphone hands the field a spoken query to listen for.
+  const [searchParams] = useSearchParams();
+  const voice = searchParams.get("voice");
   const back = useAppBack();
   const base = useShellBase();
   // Co-Owners get the wider catalogue too; every route they open has its own permission gate.
@@ -69,6 +107,11 @@ export default function SearchPage() {
 
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+  const [docResults, setDocResults] = useState<SearchResult[]>([]);
+  // `searchDocuments` is called from an effect; a ref keeps the translator out of its deps so a
+  // new function identity each render cannot restart the request.
+  const translate = useRef(t);
+  translate.current = t;
   // The narrowing that is not a result type — period, person, staff, payment, stock. It lives on
   // its own screen and in its own store, so this screen only has to apply it.
   const filters = useSearchFilters();
@@ -88,21 +131,79 @@ export default function SearchPage() {
 
   const q = query.toLowerCase().trim();
 
+  /** Every screen and setting, matched by its English and Urdu names and its shop synonyms. */
+  const moduleResults: SearchResult[] = useMemo(() => {
+    if (!q || base === "/co-owner") return [];
+    return APP_DESTINATIONS.filter((entry) => {
+      if (entry.adminOnly && !isAdmin) return false;
+      if (entry.employeeOnly && isAdmin) return false;
+      if (entry.permission && !hasPermission(entry.permission)) return false;
+      return matchesSearch(q, destinationKeywords(entry));
+    })
+      .slice(0, 12)
+      .map((entry) => ({
+        id: `module-${entry.id}`,
+        type: "module" as FilterType,
+        title: language === "ur" ? entry.ur : entry.en,
+        subtitle: t("search.screen"),
+        path: `${base}${!isAdmin && entry.employeePath ? entry.employeePath : entry.path}`,
+      }));
+  }, [q, base, isAdmin, language, t]);
+
+  /** The books that live only in the database: bills, purchases, refunds, payments, stock. */
+  useEffect(() => {
+    let alive = true;
+    if (q.length < 2) {
+      setDocResults([]);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void searchDocuments(query, { base, isAdmin, t: translate.current })
+        .then((hits) => {
+          if (!alive) return;
+          setDocResults(
+            hits.map((hit) => ({
+              id: hit.id,
+              type: hit.group,
+              title: hit.title,
+              subtitle: hit.subtitle,
+              badge: hit.badge,
+              path: hit.path,
+            })),
+          );
+        })
+        .catch(() => {
+          if (alive) setDocResults([]);
+        });
+    }, 250);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [q, query, base, isAdmin]);
+
   const results: SearchResult[] = useMemo(() => {
     // A filter is a question of its own: a period with no keyword still answers "what came in
     // today", which is the reason the filter screen exists.
     if (!q && activeFilterCount === 0) return [];
 
-    const startsAt = periodStart(filters.period);
-    const inPeriod = (iso: string | null | undefined) =>
-      !startsAt || (!!iso && new Date(iso) >= startsAt);
+    const { from: startsAt, to: endsAt } = periodWindow(
+      filters.period,
+      filters.customFrom,
+      filters.customTo,
+    );
+    const inPeriod = (iso: string | null | undefined) => {
+      if (startsAt && !(iso && new Date(iso) >= startsAt)) return false;
+      if (endsAt && !(iso && new Date(iso) <= endsAt)) return false;
+      return true;
+    };
 
     const items: SearchResult[] = [];
 
     // Products
     if (activeFilter === "all" || activeFilter === "product") {
       products
-        .filter((p) => p.name?.toLowerCase().includes(q) || (p.company ?? '').toLowerCase().includes(q))
+        .filter((p) => matchesSearch(query, [p.name, p.company]))
         .filter((p) => {
           if (filters.stock === "any") return true;
           if (filters.stock === "in") return p.stockQty > 0;
@@ -125,7 +226,7 @@ export default function SearchPage() {
     // Customers
     if (activeFilter === "all" || activeFilter === "customer") {
       customers
-        .filter((c) => (c.name ?? '').toLowerCase().includes(q) || (c.phone ?? '').includes(q))
+        .filter((c) => matchesSearch(query, [c.name, c.phone]))
         .filter((c) => !filters.personId || c.id === filters.personId)
         .forEach((c) => {
           items.push({
@@ -142,12 +243,8 @@ export default function SearchPage() {
     // Sales
     if (activeFilter === "all" || activeFilter === "sale") {
       [
-        ...sales.filter(
-          (s) =>
-            (s.customerName ?? '').toLowerCase().includes(q) ||
-            (s.saleNumber ?? '').toLowerCase().includes(q) ||
-            (s.employeeName ?? '').toLowerCase().includes(q) ||
-            formatCurrency(s.totalAmount).toLowerCase().includes(q)
+        ...sales.filter((s) =>
+          matchesSearch(query, [s.customerName, s.saleNumber, s.employeeName, s.note, formatCurrency(s.totalAmount)]),
         ),
       ]
         .filter((s) => inPeriod(s.createdAt))
@@ -180,7 +277,7 @@ export default function SearchPage() {
     // Employees (admin only)
     if (isAdmin && (activeFilter === "all" || activeFilter === "employee")) {
       employees
-        .filter((e) => (e.name ?? '').toLowerCase().includes(q) || e.phone?.includes(q))
+        .filter((e) => matchesSearch(query, [e.name, e.phone, e.jobTitle]))
         .filter((e) => !filters.employeeId || e.id === filters.employeeId)
         .forEach((e) => {
           items.push({
@@ -197,7 +294,7 @@ export default function SearchPage() {
     // Companies (admin only)
     if (isAdmin && (activeFilter === "all" || activeFilter === "company")) {
       companies
-        .filter((c) => (c.name ?? '').toLowerCase().includes(q) || c.phone?.includes(q))
+        .filter((c) => matchesSearch(query, [c.name, c.phone, c.contactPerson]))
         .filter((c) => !filters.personId || c.id === filters.personId)
         .forEach((c) => {
           items.push({
@@ -211,8 +308,31 @@ export default function SearchPage() {
         });
     }
 
-    return items;
-  }, [q, activeFilter, products, customers, sales, employees, companies, isAdmin, base, filters, activeFilterCount]);
+    // Records before rooms: a bill number should answer with the bill, not with the screens that
+    // happen to mention invoices.
+    const extras = [...docResults, ...moduleResults].filter(
+      (hit) =>
+        activeFilter === "all" ||
+        hit.type === activeFilter ||
+        (activeFilter === "sale" && hit.type === "return") ||
+        (activeFilter === "product" && hit.type === "stock"),
+    );
+    return [...items, ...extras];
+  }, [
+    q,
+    activeFilter,
+    products,
+    customers,
+    sales,
+    employees,
+    companies,
+    isAdmin,
+    base,
+    filters,
+    activeFilterCount,
+    moduleResults,
+    docResults,
+  ]);
 
   // Group results by type
   const grouped = useMemo(() => {
@@ -250,6 +370,12 @@ export default function SearchPage() {
     sale: t("search.sales"),
     employee: t("search.employees"),
     company: t("search.companies"),
+    module: t("search.modules"),
+    invoice: t("search.invoices"),
+    purchase: t("search.purchases"),
+    payment: t("search.payments"),
+    return: t("search.returns"),
+    stock: t("search.stock"),
   };
 
   return (
@@ -259,11 +385,15 @@ export default function SearchPage() {
     >
       <StatusBar />
 
-      {/* Search bar */}
+      {/* Search bar
+          The back control is a 44px target, the same floor the header arrow uses, and the same
+          height as the field beside it: at 36px the circle sat a size below the pill and the
+          chevron read as too large for the mark around it (owner, 2026-11-19). */}
       <div className="flex items-center gap-3 px-4 pt-3 pb-3">
         <button
           onClick={back}
-          className="size-9 rounded-full flex items-center justify-center shrink-0 active:opacity-70"
+          aria-label={t("common.back")}
+          className="size-11 rounded-full flex items-center justify-center shrink-0 active:opacity-70 ds-pressable"
           style={{ background: "var(--surface-2)" }}
         >
           <ChevronLeft size={18} style={{ color: "var(--text-primary)" }} />
@@ -271,6 +401,7 @@ export default function SearchPage() {
         <SearchBar
           containerClass="flex-1 min-w-0"
           autoFocus
+          autoStartVoice={voice === "1"}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onClear={() => setQuery("")}
@@ -348,7 +479,9 @@ export default function SearchPage() {
       {q && results.length > 0 && (
         <div className="px-4 pt-2 pb-24">
           <p className="text-13 font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>
-            {t("search.resultsFor", "{count} results for \"{query}\"").replace("{count}", String(results.length)).replace("{query}", query)}
+            {t(results.length === 1 ? "search.resultOne" : "search.resultsFor")
+              .replace("{count}", String(results.length))
+              .replace("{query}", query)}
           </p>
           {Array.from(grouped.entries()).map(([type, items]) => (
             <div key={type} className="mb-4">
@@ -364,28 +497,7 @@ export default function SearchPage() {
                     key={r.id + r.type}
                     onClick={() => navigate(r.path)}
                     tile={
-                      r.type === "product" ? (
-                        <div
-                          className="size-9 rounded-[var(--radius-tile)] shrink-0 flex items-center justify-center text-11 font-bold"
-                          style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}
-                        >
-                          <Package size={15} />
-                        </div>
-                      ) : r.type === "customer" ? (
-                        <div
-                          className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold"
-                          style={{ background: initBgColor(r.title), color: "#fff" }}
-                        >
-                          {r.title.charAt(0).toUpperCase()}
-                        </div>
-                      ) : r.type === "sale" ? (
-                        <div
-                          className="size-9 rounded-full shrink-0 flex items-center justify-center"
-                          style={{ background: "var(--surface-2)" }}
-                        >
-                          <ShoppingCart size={14} style={{ color: "var(--text-secondary)" }} />
-                        </div>
-                      ) : r.type === "employee" ? (
+                      r.type === "customer" || r.type === "employee" ? (
                         <div
                           className="size-9 rounded-full shrink-0 flex items-center justify-center text-11 font-bold"
                           style={{ background: initBgColor(r.title), color: "#fff" }}
@@ -397,7 +509,25 @@ export default function SearchPage() {
                           className="size-9 rounded-[var(--radius-tile)] shrink-0 flex items-center justify-center"
                           style={{ background: "var(--surface-2)" }}
                         >
-                          <Building2 size={14} style={{ color: "var(--text-secondary)" }} />
+                          {r.type === "product" ? (
+                            <Package size={15} style={{ color: "var(--text-secondary)" }} />
+                          ) : r.type === "sale" ? (
+                            <ShoppingCart size={14} style={{ color: "var(--text-secondary)" }} />
+                          ) : r.type === "invoice" ? (
+                            <ReceiptText size={15} style={{ color: "var(--text-secondary)" }} />
+                          ) : r.type === "purchase" ? (
+                            <Truck size={15} style={{ color: "var(--text-secondary)" }} />
+                          ) : r.type === "payment" ? (
+                            <Wallet size={15} style={{ color: "var(--text-secondary)" }} />
+                          ) : r.type === "module" ? (
+                            <LayoutGrid size={15} style={{ color: "var(--text-secondary)" }} />
+                          ) : r.type === "return" ? (
+                            <Undo2 size={15} style={{ color: "var(--text-secondary)" }} />
+                          ) : r.type === "stock" ? (
+                            <ArrowLeftRight size={15} style={{ color: "var(--text-secondary)" }} />
+                          ) : (
+                            <Building2 size={14} style={{ color: "var(--text-secondary)" }} />
+                          )}
                         </div>
                       )}
                     trailing={r.badge ? (

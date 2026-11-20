@@ -24,7 +24,7 @@ import { useT } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
 import { canSeeDashboard } from "@/lib/tenantContext";
 import { branchKind } from "@/lib/branchKind";
-import { AlertTriangle, CalendarDays, ChevronRight, ChevronDown, PackageX, ShoppingCart, Search, Bell, Truck, Wallet, CheckCircle2, HandCoins, PackagePlus, Store } from "lucide-react";
+import { AlertTriangle, CalendarDays, ChevronRight, ChevronDown, PackageX, ShoppingCart, Search, Bell, Truck, Wallet, CheckCircle2, HandCoins, PackagePlus, Store, Mic, RefreshCw } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import RollingNumber from "@/components/ui/RollingNumber";
 import { useCartStore } from "@/stores/cartStore";
@@ -513,6 +513,29 @@ export default function AdminDashboardPage() {
     ]);
   }
 
+  /**
+   * The card's refresh arrow. It is the same read the pull gesture already performs — every book
+   * the screen is built from, re-read from the server — plus the two period reports this card
+   * prints, which the pull gesture does not retry. One control, the whole screen's data.
+   */
+  const [refreshing, setRefreshing] = useState(false);
+  /** A ref, not the state variable: five fast taps are five events in one task, and `refreshing`
+   *  is still false for the second of them — the state only re-renders afterwards. */
+  const refreshingRef = useRef(false);
+  async function refreshNow() {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    try {
+      await handleRefresh();
+      profitReport.retry();
+      financeTotals.retry();
+    } finally {
+      refreshingRef.current = false;
+      setRefreshing(false);
+    }
+  }
+
   return (
     <PullToRefresh onRefresh={handleRefresh}>
     <div
@@ -756,19 +779,37 @@ export default function AdminDashboardPage() {
           a shopkeeper who wants to type is going to type a customer, a bill number or a product,
           and that screen already answers all three with its own filters. */}
       <div className="px-4 pt-5">
-        <button
-          type="button"
-          onClick={() => navigate("/admin/search")}
-          aria-label={t("common.search")}
-          data-testid="home-search"
-          className="w-full h-11 rounded-full flex items-center gap-2.5 px-4 text-start ds-pressable"
+        <div
+          className="w-full h-11 rounded-full flex items-center px-4"
           style={{ background: "var(--tone-card)", border: "1px solid var(--divider)" }}
         >
-          <Search size={16} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-          <span className="text-13 truncate" style={{ color: "var(--text-secondary)" }}>
-            {t("search.homeHint")}
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={() => navigate("/admin/search")}
+            aria-label={t("common.search")}
+            data-testid="home-search"
+            className="flex min-w-0 flex-1 items-center gap-2.5 text-start ds-pressable"
+          >
+            <Search size={16} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
+            <span className="text-13 truncate" style={{ color: "var(--text-secondary)" }}>
+              {t("search.homeHint")}
+            </span>
+          </button>
+          {/* The same backgroundless microphone every search field carries, and the only one that
+              can open its own screen: it lands on search already listening, so a spoken query is
+              one tap from home instead of tapping through and then tapping a second mic. */}
+          <button
+            type="button"
+            onClick={() => navigate("/admin/search?voice=1")}
+            aria-label={t("search.voiceSearch")}
+            title={t("search.voiceSearch")}
+            data-testid="home-search-voice"
+            className="-me-1.5 flex size-9 shrink-0 items-center justify-center border-0 bg-transparent ds-pressable"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            <Mic size={17} />
+          </button>
+        </div>
       </div>
 
       {/* ── Time-period filter — controls all figures below ── */}
@@ -805,21 +846,55 @@ export default function AdminDashboardPage() {
             brand at one step over the page, so the card reads green in both themes while the
             only solid green on the screen is the New Sale button. Its labels take
             `--brand-dark` and its values `--text-primary`, which is what the two ramps are for. */}
-        <button
-          className="w-full rounded-[var(--radius-card)] p-5 text-start transition-transform hover:opacity-95 active:scale-[0.98]"
+        {/* A div rather than a button: the refresh arrow lives inside the card, and a control
+            cannot nest inside a button. It keeps the button's behaviour — the whole card still
+            opens Finance, with the keyboard too — while giving the arrow a real button of its own. */}
+        <div
+          role="button"
+          tabIndex={0}
+          className="w-full cursor-pointer rounded-[var(--radius-card)] p-5 text-start transition-transform hover:opacity-95 active:scale-[0.98]"
           style={{ background: "var(--brand-tint)" }}
           onClick={() => navigate("/admin/settings/hub/finance")}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              navigate("/admin/settings/hub/finance");
+            }
+          }}
           data-testid="dashboard-overview-card"
         >
-          <p className="ds-section-label mb-1" style={{ color: "var(--brand-dark)" }}>
-            {t("admin.totalSales")}
-          </p>
-          {/* The figures on this card are what All / Today / Yesterday change, so they roll to
-              their new value instead of being repainted — the movement is what ties the pill above
-              to the number below it. */}
-          <p className="text-28 font-semibold leading-none" style={{ color: "var(--text-primary)" }} data-testid="home-total-sales">
-            <RollingNumber value={heroTotalSales} format={formatRs} animateOnMount />
-          </p>
+          {/* The figure on the left, its refresh arrow in the right corner, each owning its side
+              (owner, 2026-11-19, twice). The row is pinned to LTR on purpose: this is the one
+              place the owner wants a fixed physical arrangement rather than a mirrored one, so
+              the number stays left and the arrow stays right in Urdu exactly as in English. The
+              Urdu label still shapes and reads right to left inside its own run. */}
+          <div dir="ltr" className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="ds-section-label mb-1" style={{ color: "var(--brand-dark)" }}>
+                {t("admin.totalSales")}
+              </p>
+              {/* The figures on this card are what All / Today / Yesterday change, so they roll
+                  to their new value instead of being repainted — the movement is what ties the
+                  pill above to the number beside it. */}
+              <p className="text-28 font-semibold leading-none" style={{ color: "var(--text-primary)" }} data-testid="home-total-sales">
+                <RollingNumber value={heroTotalSales} format={formatRs} animateOnMount />
+              </p>
+            </div>
+            {/* A 40px target with a 22px mark — the size the owner asked for, and the control
+                sits on the figure it re-reads. */}
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); void refreshNow(); }}
+              disabled={refreshing}
+              aria-label={t("common.refresh")}
+              title={t("common.refresh")}
+              data-testid="home-refresh"
+              className="flex size-10 shrink-0 items-center justify-center rounded-full ds-pressable disabled:opacity-50"
+              style={{ color: "var(--brand-dark)" }}
+            >
+              <RefreshCw size={22} className={refreshing ? "animate-spin" : undefined} />
+            </button>
+          </div>
 
           <div className="flex items-end justify-between mt-4">
             <div>
@@ -853,7 +928,7 @@ export default function AdminDashboardPage() {
               </div>
             </div>
           </div>
-        </button>
+        </div>
       </div>
       )}
 

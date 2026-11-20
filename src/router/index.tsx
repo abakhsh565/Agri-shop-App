@@ -137,6 +137,9 @@ import InvoiceListPage from "@/pages/admin/invoices/InvoiceListPage";
 import InvoiceFormPage from "@/pages/admin/invoices/InvoiceFormPage";
 import InvoiceDetailPage from "@/pages/admin/invoices/InvoiceDetailPage";
 import InvoicePrintPage from "@/pages/admin/invoices/InvoicePrintPage";
+import InvoiceSettingsPage from "@/pages/admin/invoices/InvoiceSettingsPage";
+import AdminHistoryPage from "@/pages/admin/history/AdminHistoryPage";
+import AdminHistoryListPage from "@/pages/admin/history/AdminHistoryListPage";
 import SaleSuccessPage from "@/pages/employee/sale/SaleSuccessPage";
 const SalesListPage = React.lazy(() => import("@/pages/employee/sales/SalesListPage"));
 const CustomersListPage = React.lazy(() => import("@/pages/employee/customers/CustomersListPage"));
@@ -154,6 +157,7 @@ import ReturnSuccessPage from "@/pages/employee/returns/ReturnSuccessPage";
 import SearchPage from "@/pages/employee/search/SearchPage";
 // The search screen's filters are a screen, not a strip that would have to hold six dimensions.
 import SearchFiltersPage from "@/pages/employee/search/SearchFiltersPage";
+import SearchPersonPickerPage from "@/pages/employee/search/SearchPersonPickerPage";
 import SettingsPage from "@/pages/employee/settings/SettingsPage";
 import MyReportsPage from "@/pages/employee/reports/MyReportsPage";
 import ActivityLogPage from "@/pages/employee/activity/ActivityLogPage";
@@ -231,6 +235,12 @@ export const router = createBrowserRouter([
       // way round: a business module belongs one tap from the bar, not inside an account page.
       { path: "more",       element: <AdminMorePage /> },
       { path: "messages",   element: <AdminMessagesPage /> },
+      // Every ledger, read through one date range. The screen is an index over the screens that
+      // already own each book; it does not keep a second copy of any of them.
+      { path: "history",    element: <AdminHistoryPage /> },
+      // One ledger, with its own date range and transaction cards. The address names the book;
+      // the screen reads it for the period chosen there.
+      { path: "history/:kind", element: <AdminHistoryListPage /> },
       { path: "guide",      element: <AppGuidePage /> },
       // One explanation, its own page: the guide's rows lead here instead of jumping at a live
       // screen or opening a sheet with no words in it.
@@ -238,6 +248,7 @@ export const router = createBrowserRouter([
       { path: "guide/step/:workflowId/:step", element: <GuideDetailPage /> },
       { path: "search", element: <SearchPage /> },
       { path: "search/filters", element: <SearchFiltersPage /> },
+      { path: "search/filters/people", element: <SearchPersonPickerPage /> },
 
       // ── Customers (requires customers.view) ──────────────────────────────
       { element: <PermissionGuard requires="customers.view" />,
@@ -311,6 +322,9 @@ export const router = createBrowserRouter([
           // the same grants as the sale that produces the goods on the bill (0319/0320).
           { path: "invoices", element: <InvoiceListPage /> },
           { path: "invoices/new", element: <InvoiceFormPage /> },
+          // The shop's paper, before the parameter route: `invoices/:invoiceId` would otherwise
+          // open a bill called "settings".
+          { path: "invoices/settings", element: <InvoiceSettingsPage /> },
           { path: "invoices/:invoiceId", element: <InvoiceDetailPage /> },
           { path: "invoices/:invoiceId/edit", element: <InvoiceFormPage /> },
           { path: "invoices/:invoiceId/print", element: <InvoicePrintPage /> },
@@ -633,6 +647,7 @@ export const router = createBrowserRouter([
         ] },
       { path: "search", element: <SearchPage /> },
       { path: "search/filters", element: <SearchFiltersPage /> },
+      { path: "search/filters/people", element: <SearchPersonPickerPage /> },
     ],
   }],
   },
@@ -698,6 +713,7 @@ export const router = createBrowserRouter([
       { path: "team", element: <EmployeeTeamPage /> },
       { path: "search", element: <SearchPage /> },
       { path: "search/filters", element: <SearchFiltersPage /> },
+      { path: "search/filters/people", element: <SearchPersonPickerPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "reports", element: <MyReportsPage /> },
       { path: "activity", element: <ActivityLogPage /> },

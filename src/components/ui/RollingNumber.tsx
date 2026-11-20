@@ -1,6 +1,15 @@
 import { useState } from "react";
 
 /**
+ * Scripts written right to left. A label containing one cannot be printed as one box per
+ * character: each box is its own flex item, so the letters stop joining, and a flex row lays
+ * its items out in the paragraph's direction — which prints the sentence backwards, word by
+ * word (`32 دن پہلے میعاد ختم` came out shuffled and unjoined). Those labels are drawn as a
+ * single text run instead and the browser's bidi algorithm does the ordering.
+ */
+const RTL_SCRIPT = /[\u0590-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+/**
  * A figure whose changed digits roll into place.
  *
  * ONE ANIMATION, EVERY FIGURE. The app shows money in a dozen places — the home card's total,
@@ -72,10 +81,34 @@ export default function RollingNumber({
    */
   const offset = before.length - label.length;
 
+  /**
+   * THE FIGURE'S OWN DIRECTION IS LEFT TO RIGHT, ALWAYS.
+   *
+   * `Rs. 1,052,951` is a Latin figure even on an Urdu screen, and it was being printed as
+   * `052,951 .sR`: the characters live in one flex row, the page is `dir="rtl"`, and flex
+   * places its items along the reading direction — so the row ran backwards and overflowed its
+   * card. The row now states its own direction, and `unicode-bidi: isolate` in the stylesheet
+   * keeps it from being reordered by the Urdu sentence it sits in.
+   *
+   * A label that already contains Urdu is not split at all (see `RTL_SCRIPT`): one text run,
+   * shaped and ordered by the browser. It does not roll, and it should not — a rolling Urdu
+   * sentence is exactly the broken line this fixes.
+   */
+  const rtl = RTL_SCRIPT.test(label);
+
+  if (rtl) {
+    return (
+      <span className={className} style={style}>
+        <span className="sr-only">{label}</span>
+        <span aria-hidden="true">{label}</span>
+      </span>
+    );
+  }
+
   return (
     <span className={className} style={style}>
       <span className="sr-only">{label}</span>
-      <span className="nr" aria-hidden="true">
+      <span className="nr" dir="ltr" aria-hidden="true">
         {Array.from(label).map((char, i) => {
           const wasIndex = i + offset;
           const peer = wasIndex >= 0 && wasIndex < before.length ? before[wasIndex] : undefined;

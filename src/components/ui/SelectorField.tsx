@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, Search, Check, Plus } from "lucide-react";
+import { ChevronDown, Check, Plus } from "lucide-react";
+import SearchBar from "@/components/ui/SearchBar";
 import Sheet from "@/components/ui/Sheet";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -121,17 +122,14 @@ export default function SelectorField({
       <Sheet open={open} title={title} onClose={() => setOpen(false)} closeButton={false}>
         {searchable && (
           <div className="px-4 pb-3">
-            <div className="ds-field" style={{ minHeight: 48 }}>
-              <Search size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t("common.searchPlaceholder")}
-                className="h-full flex-1 bg-transparent outline-none ds-body"
-                style={{ color: "var(--text-primary)" }}
-              />
-            </div>
+            {/* The one field, so a picker speaks as well as types. */}
+            <SearchBar
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onClear={() => setQuery("")}
+              placeholder={t("common.searchPlaceholder")}
+            />
           </div>
         )}
 

@@ -19,10 +19,54 @@ export type InvoicePartyType = "customer" | "supplier" | "employee" | "other";
  * bill needs somebody to chase, a service bill has no stock behind it.
  */
 export type InvoiceType = "sale" | "credit" | "service" | "other";
-/** The three paper layouts; stored per invoice so a reprint looks like the hand-over. */
-export type InvoiceDesign = "atelier" | "royal" | "aurora";
+/**
+ * The paper layouts.
+ *
+ * The first three are the original A4 sheets; the next six are the alternatives the owner asked
+ * for, and the four `receipt-*` presets are the 80 mm thermal receipt. A design is stored per
+ * invoice so a reprint looks like the hand-over; the shop's default lives in
+ * `lib/invoiceSettings` and is what a new bill starts on.
+ */
+export type PageDesign =
+  | "atelier"
+  | "royal"
+  | "aurora"
+  | "classic"
+  | "modern"
+  | "elegant"
+  | "minimal"
+  | "corporate"
+  | "bold";
 
-export const INVOICE_DESIGNS: InvoiceDesign[] = ["atelier", "royal", "aurora"];
+export type ThermalDesign = "receipt-simple" | "receipt-bordered" | "receipt-compact" | "receipt-bold";
+
+export type InvoiceDesign = PageDesign | ThermalDesign;
+
+export const PAGE_DESIGNS: PageDesign[] = [
+  "atelier",
+  "royal",
+  "aurora",
+  "classic",
+  "modern",
+  "elegant",
+  "minimal",
+  "corporate",
+  "bold",
+];
+
+export const THERMAL_DESIGNS: ThermalDesign[] = [
+  "receipt-simple",
+  "receipt-bordered",
+  "receipt-compact",
+  "receipt-bold",
+];
+
+export const INVOICE_DESIGNS: InvoiceDesign[] = [...PAGE_DESIGNS, ...THERMAL_DESIGNS];
+
+/** A stored or submitted value is a known design, or it is not a design at all. */
+export function isInvoiceDesign(value: unknown): value is InvoiceDesign {
+  return typeof value === "string" && (INVOICE_DESIGNS as string[]).includes(value);
+}
 
 export interface InvoiceItem {
   id?: string;
