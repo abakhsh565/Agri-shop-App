@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, Search, Check } from "lucide-react";
+import { ChevronDown, Check, Plus } from "lucide-react";
+import SearchBar from "@/components/ui/SearchBar";
 import Sheet from "@/components/ui/Sheet";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -33,6 +34,13 @@ interface SelectorFieldProps {
    * told what is missing and given nowhere to go.
    */
   emptyAction?: { label: string; onClick: () => void };
+  /**
+   * The create action, offered under the search on EVERY open — not only when the list is empty.
+   * Tied to the empty state it disappeared the moment the shop had one supplier, so "add the new
+   * one" became a hunt through another screen; and it moved between opens, because an empty list
+   * and a full one lay the button out differently. Same place, every time.
+   */
+  action?: { label: string; onClick: () => void };
   disabled?: boolean;
   /**
    * Whether rows carry a leading logo tile. True for records that have a mark
@@ -64,6 +72,7 @@ export default function SelectorField({
   searchable = false,
   emptyLabel,
   emptyAction,
+  action,
   disabled = false,
   showTile = true,
 }: SelectorFieldProps) {
@@ -113,17 +122,28 @@ export default function SelectorField({
       <Sheet open={open} title={title} onClose={() => setOpen(false)} closeButton={false}>
         {searchable && (
           <div className="px-4 pb-3">
-            <div className="ds-field" style={{ minHeight: 48 }}>
-              <Search size={18} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t("common.searchPlaceholder")}
-                className="h-full flex-1 bg-transparent outline-none ds-body"
-                style={{ color: "var(--text-primary)" }}
-              />
-            </div>
+            {/* The one field, so a picker speaks as well as types. */}
+            <SearchBar
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onClear={() => setQuery("")}
+              placeholder={t("common.searchPlaceholder")}
+            />
+          </div>
+        )}
+
+        {action && (
+          <div className="px-4 pb-3">
+            <button
+              type="button"
+              onClick={action.onClick}
+              data-testid="selector-create-action"
+              className="w-full h-11 rounded-full flex items-center justify-center gap-1.5 text-13 font-semibold ds-pressable"
+              style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}
+            >
+              <Plus size={16} strokeWidth={2.5} /> {action.label}
+            </button>
           </div>
         )}
 

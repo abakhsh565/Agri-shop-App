@@ -41,7 +41,14 @@ export function suspendCachedData(): void {
 }
 
 export function confirmCacheBranch(tenantId: string, userId: string, branchId: string): void {
-  adoptCacheOwner(`${tenantId}:${userId}:${branchId}`);
+  //
+  // ONE OWNER KEY, ONE FORMAT. This wrote `shop:user:branch` while the auth store wrote
+  // `shop:user`, so the two disagreed on every boot and every confirmation: `adoptCacheOwner`
+  // saw a different owner, cleared every cached row, and the next screen re-fetched from an
+  // empty cache. The branch is not part of the privacy boundary — `switchBranch` already clears
+  // both the scoped stores and the caches before it adopts the next one — so the account is the
+  // key, and it now matches `ownerIdFor` in the auth store exactly.
+  adoptCacheOwner(`${tenantId}:${userId}`);
   confirmedContext = { tenantId, userId, branchId };
   suspended = false;
   // Release the reads that arrived before the context existed. Nothing else wakes them, and a

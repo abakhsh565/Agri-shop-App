@@ -301,27 +301,6 @@ async function readActiveBranch(page: Page): Promise<string> {
   return branchId;
 }
 
-/**
- * The fallback half of the COGS reading lives in the products store: a line whose snapshot is
- * NULL is priced from the ACTIVE variant's current cost, and until that store is ready the
- * screen itself cannot know those lines — the three-state classification below would then be
- * read from a half-loaded app. Wait for it, bounded, before judging the figure.
- */
-async function waitForProductsReady(page: Page): Promise<void> {
-  await expect
-    .poll(
-      async () => {
-        const state = await readStoreState(page, 'useProductsStore', '/src/stores/productsStore.ts');
-        return state?.ready === true;
-      },
-      {
-        timeout: 20_000,
-        message: 'the products store never became ready, so a line without a cost snapshot cannot be priced',
-      },
-    )
-    .toBe(true);
-}
-
 test.describe('Locked dashboard scope: figures reconcile with the database', () => {
   test.afterAll(async () => {
     // The figures are asserted against the DB, so leave the QA base as it was found.
@@ -394,8 +373,10 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
       .toContain(rs(Number(gateSales.total)));
 
     const body = (await page.textContent('body')) ?? '';
-    // ADM-DASH-HOME metrics that remain: the hero figures and the action rows.
-    for (const label of ['Total Sales', 'Gross profit', 'Credit collect', 'Action needed']) {
+    // ADM-DASH-HOME metrics that remain: the hero figures, and the quick actions under them.
+    // "Action needed" is gone from the hero's summary row (2026-11-15) — what needs an answer
+    // is in Quick Alerts, ranked; the three-count summary was a second, quieter copy of it.
+    for (const label of ['Total Sales', 'Net profit', 'Credit collect']) {
       expect(body, `dashboard is missing the "${label}" metric`).toContain(label);
     }
     expect(body, 'Quick Alerts section missing').toContain('Quick Alerts');
@@ -559,28 +540,53 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
 
     expect(body, 'Total Sales does not match the DB').toContain(rs(total));
 
-    // Gross Profit is deliberately three-state (src/lib/profit.ts `profitDisplay`): exact when
-    // every line has a usable cost, "≥" when some do not, and "—" when none does. Assert the
-    // state the data justifies — the figure the screen is allowed to show — instead of
-    // re-adding the unknown lines as zero.
-    const grossProfit = page.getByTestId('home-gross-profit');
-    await waitForProductsReady(page);
-    if (unknownLines === 0) {
-      await expect(
-        grossProfit,
-        'Gross Profit does not match revenue minus the recorded line costs',
-      ).toHaveText(rs(total - cogsKnown));
-    } else if (unknownLines === pricedLines) {
-      await expect(
-        grossProfit,
-        'no line has a known cost, so Home must show no profit figure at all',
-      ).toHaveText('—');
-    } else {
-      await expect(
-        grossProfit,
-        'Gross Profit must be labelled as a floor while some line costs are unknown',
-      ).toHaveText(`≥ ${rs(total - cogsKnown)}`);
-    }
+    // Net profit, not gross: the hero prints what the shop kept after the cost of the goods
+    // AND the expenses it recorded — the same figure Finance prints, from the same read
+    // (`netProfitOf` in src/lib/financeEntries.ts). Recomputed here from the tables with the
+    // definitions the server functions use (0253 for sales/cogs/returns, 0254 for expenses):
+    //   net sales − COGS − recorded expenses
+    // Showing gross profit here would ignore every expense the shop paid and tell the owner
+    // it earned money it did not.
+    const [profit] = await execSql(`
+      WITH gross AS (
+        SELECT coalesce(sum(s.total_amount),0) AS v
+          FROM sales s
+         WHERE s.is_voided = false
+           AND s.shop_id = '${QA_IDS.shop}'
+           AND s.branch_id = '${activeBranch}'
+      ), refunds AS (
+        SELECT coalesce(sum(CASE WHEN coalesce(r.total_refund,0) <> 0 THEN r.total_refund
+                                 ELSE coalesce(r.refund_amount,0) END),0) AS v
+          FROM returns r
+          LEFT JOIN sales s ON s.id = r.sale_id
+         WHERE r.shop_id = '${QA_IDS.shop}'
+           AND coalesce(r.branch_id, s.branch_id) = '${activeBranch}'
+      ), cogs AS (
+        SELECT coalesce(sum(si.cogs_amount),0) AS v
+          FROM sale_items si
+          JOIN sales s ON s.id = si.sale_id
+         WHERE s.is_voided = false
+           AND s.shop_id = '${QA_IDS.shop}'
+           AND s.branch_id = '${activeBranch}'
+           AND si.cogs_amount IS NOT NULL
+      ), expenses AS (
+        SELECT coalesce(sum(f.amount),0) AS v
+          FROM finance_entries f
+         WHERE f.shop_id = '${QA_IDS.shop}'
+           AND f.branch_id = '${activeBranch}'
+           AND f.kind = 'expense'
+           AND f.occurred_on BETWEEN date '2000-01-01'
+                                 AND (now() AT TIME ZONE 'Asia/Karachi')::date
+      )
+      SELECT (gross.v - refunds.v - cogs.v - expenses.v)::text AS net
+        FROM gross, refunds, cogs, expenses`);
+
+    const netProfit = page.getByTestId('home-net-profit');
+    const expectedNet = Number(profit.net);
+    await expect(
+      netProfit,
+      'Home must show net profit — net sales less cost of goods less recorded expenses — not gross profit',
+    ).toHaveText(expectedNet < 0 ? `−${rs(Math.abs(expectedNet))}` : rs(expectedNet));
 
     // Read the figure the owner actually sees, then hold it to the DB value.
     const overdueEl = page.locator('p').filter({ hasText: /overdue/ }).first();
@@ -626,7 +632,7 @@ test.describe('Locked dashboard scope: figures reconcile with the database', () 
     const body = await page.textContent('body');
     // The hero figures are translated in Urdu.
     expect(body, 'Total Sales not translated').toContain('کل فروخت');
-    expect(body, 'Gross Profit not translated').toContain('مجموعی منافع');
+    expect(body, 'Net profit not translated').toContain('خالص منافع');
     expect(body, 'Credit collect not translated').toContain('ادھار کی وصولی');
     // The overview is not on Home any more, so its Urdu labels are checked where it now lives.
     expect(body).not.toContain('ملازم کو مدعو کریں اور رسائی مقرر کریں');

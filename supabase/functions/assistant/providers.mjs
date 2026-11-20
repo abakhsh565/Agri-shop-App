@@ -35,14 +35,57 @@ THE RULES, IN ORDER OF IMPORTANCE
    without guessing at the figure, and without suggesting they find it elsewhere. Do not
    volunteer what their permission is called unless they ask.
 4. Money is in rupees. Say "45,250 rupees", never "Rs. 45,250".
-5. Keep answers to two or three sentences unless the person asks for detail. Answer in the
-   language they used; if they write in Urdu, answer in Urdu.
+5. Answer only what was asked, and nothing around it. The answer is one or two short sentences:
+   the figure or the fact first, then at most one clause of what it means. No greeting, no
+   repeating their question, no describing what you did or which tool you used, no list of other
+   things they could ask, and no offer to help further. If a card already shows the detail, say
+   the one sentence it needs rather than reading the card back. Answer in the language they used;
+   if they write in Urdu, answer in Urdu.
 6. When a tool result carries a screen, offer it at the end in plain words: "You can open it
    from Sales." Never invent a screen.
 7. If they ask how to do something, use help_topic and pass on the app's own words. If they
    say they do not understand, explain gently and offer the guide.
 8. If you are not sure which customer, product or sale they mean, ask. Reading out the wrong
    person's balance is worse than one extra question.
+
+WHAT THIS APP DOES, IN ITS OWN TERMS
+
+These are answers to "how does this work" and "can I do this" questions. They need no tool: say
+the relevant line plainly in a sentence or two, and name the screen only if the question was where
+to find something.
+
+- Sales total is the sum of the sale amounts in the period. A credit sale counts in sales now; the
+  money arrives later.
+- The app has two profit figures and they are not the same thing, so use the one that was asked
+  for. Profit on the Profit report is sales revenue minus the cost of the goods sold, using the
+  cost recorded on each line at the time of the sale; margin is that profit divided by revenue.
+  Net profit on the Finance screen is net sales minus cost of goods minus the expenses recorded in
+  Finance (rent, bills and the like). That is the whole formula: nothing else is subtracted,
+  drawings are tracked separately and are not part of it, and no tax is added. If a sold line has
+  no recorded cost the report leaves that line out and says the profit is at least that much — a
+  missing cost is never treated as zero.
+- When somebody asks how a figure is worked out, give exactly the formula above and stop. Do not
+  add costs, taxes or adjustments that are not written there, and do not describe a screen that is
+  not named there.
+- Udhaar (credit): a credit sale adds to that customer's balance; recording a payment reduces it.
+  Recording a payment is not a sale and does not change sales totals.
+- A sale does not need a customer. A walk-in sale can be recorded on its own, and it is not added
+  to anybody's credit balance.
+- Stock is what came in through purchases minus what went out through sales, per branch. A product
+  can carry a low-stock level; when the count falls to it, the reorder list picks it up.
+- Returns and cancellations are recorded against the sale they belong to, and the totals move with
+  them.
+- Roles: the owner sees the whole shop. A Co-Owner is limited to the branch they are working in.
+  An employee sees only the screens and figures their role allows — for example, cost and profit
+  need the reports permission, so an employee without it is told their account does not have
+  access and that the owner can change it in Roles and access. Never estimate what they may not
+  see, and never suggest another screen as a way around it.
+- Name only screens that a tool in this conversation named, or that appear in this list: Sales,
+  Purchases, Inventory, Customers, Finance, Reports, Roles and access. Never invent a screen or a
+  menu path; if you are not sure where something lives, say you are not sure and offer to look it
+  up.
+- Nothing in the app is destructive without a confirmation step, and the assistant never records
+  money or changes stock by itself: it can prepare a draft in the chat for the person to send.
 `;
 
 /** One tool call, in the shape both layers produce. */
@@ -610,6 +653,179 @@ export async function askGemini({ apiKey, model, text, ctx, photo, history = [],
   };
 }
 
+/**
+ * GROQ — the fast provider, in the OpenAI wire format.
+ *
+ * WHY IT EXISTS. Gemini is the fallback now, not the only answer: this path answers the small
+ * everyday questions in a fraction of a second, which is what a shopkeeper asking "today's sales"
+ * while a customer waits actually needs. Both providers run the SAME tools under the SAME gate and
+ * are held to the same rule about numbers — this function is a second transport, never a second
+ * set of permissions.
+ *
+ * The wire format differs from Gemini's in three places, and all three are handled here rather than
+ * leaked upward: tools are `{type:"function", function:{…}}`, results come back as `tool_calls` on
+ * the assistant message and go back as `role:"tool"` messages carrying the call id, and the system
+ * instruction is a plain message instead of `systemInstruction`.
+ */
+const GROQ_HOST = "https://api.groq.com/openai/v1";
+
+function groqHost(baseUrl) {
+  const trimmed = String(baseUrl ?? "").trim().replace(/\/+$/, "");
+  return trimmed || GROQ_HOST;
+}
+
+async function callGroq({ apiKey, body, baseUrl }) {
+  const res = await fetch(`${groqHost(baseUrl)}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(json?.error?.message ?? `Groq answered ${res.status}`);
+  }
+  return json;
+}
+
+export async function askGroq({ apiKey, model, text, ctx, photo, history = [], maxRounds = 4, baseUrl }) {
+  const tools = toolSpecs(ctx.permissions).map((t) => ({
+    type: "function",
+    function: { name: t.name, description: t.description, parameters: t.parameters },
+  }));
+
+  const messages = [
+    {
+      role: "system",
+      content: `${PROMPT}\n${scopeInstruction(ctx)}\nToday is ${new Date().toISOString().slice(0, 10)}.`,
+    },
+  ];
+  for (const m of history.slice(-8)) {
+    messages.push({ role: m.role === "user" ? "user" : "assistant", content: String(m.text ?? "") });
+  }
+  messages.push({
+    role: "user",
+    content: photo?.data && photo?.mimeType
+      ? [
+          { type: "text", text },
+          { type: "image_url", image_url: { url: `data:${photo.mimeType};base64,${photo.data}` } },
+        ]
+      : text,
+  });
+
+  const calls = [];
+  const sources = [];
+  const widgets = [];
+  const toolResults = [];
+  let lastText = "";
+  let lastGood = null;
+
+  for (let round = 0; round < maxRounds; round++) {
+    const json = await callGroq({
+      apiKey,
+      baseUrl,
+      body: {
+        model,
+        messages,
+        tools: tools.length ? tools : undefined,
+        tool_choice: tools.length ? "auto" : undefined,
+        temperature: 0.2,
+        max_tokens: 700,
+      },
+    });
+
+    const message = json?.choices?.[0]?.message ?? {};
+    const textOut = String(message.content ?? "").trim();
+    if (textOut) lastText = textOut;
+
+    const wanted = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+    if (!wanted.length) {
+      const check = verifyFigures(lastText, toolResults);
+      if (!check.ok && lastGood) {
+        return {
+          model,
+          answer: lastGood.spoken,
+          speak: lastGood.spoken,
+          calls,
+          widgets,
+          sources: dedupeSources(sources.length ? sources : lastGood.sources ?? []),
+          notes: [
+            `The language model used a figure the records do not contain (${check.invented.join(", ")}), so its wording was set aside and the record's own sentence is shown instead.`,
+          ],
+        };
+      }
+      return {
+        model,
+        answer: lastText || "I could not put that into words.",
+        speak: speechify(lastText),
+        calls,
+        widgets,
+        sources: dedupeSources(sources),
+      };
+    }
+
+    messages.push({ role: "assistant", content: message.content ?? "", tool_calls: wanted });
+    for (const call of wanted) {
+      const name = call?.function?.name ?? "";
+      let args = {};
+      try {
+        args = JSON.parse(String(call?.function?.arguments ?? "{}"));
+      } catch {
+        args = {};
+      }
+      try {
+        const result = await runTool(name, ctx, args ?? {});
+        calls.push(traceEntry(name, args ?? {}, { ok: true, ms: result.ms, permission: result.permission }));
+        for (const s of result.sources ?? []) sources.push(s);
+        toolResults.push(forModel(result));
+        widgets.push(widgetFor(result));
+        if (result.spoken) lastGood = result;
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id ?? name,
+          content: JSON.stringify({ ok: true, result: forModel(result), sources: result.sources ?? [] }),
+        });
+      } catch (error) {
+        calls.push(traceEntry(name, args ?? {}, { ok: false, refused: !!error.refused, permission: error.permission }));
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id ?? name,
+          content: JSON.stringify({
+            ok: false,
+            refused: !!error.refused,
+            permission: error.permission ?? null,
+            message: error.refused
+              ? `${error.message} Do not attempt another way to obtain this, and do not estimate it.`
+              : `${error.message}. Report that you could not retrieve it.`,
+          }),
+        });
+      }
+    }
+  }
+
+  const finalCheck = verifyFigures(lastText, toolResults);
+  if (!finalCheck.ok && lastGood) {
+    return {
+      model,
+      answer: lastGood.spoken,
+      speak: lastGood.spoken,
+      calls,
+      widgets,
+      sources: dedupeSources(sources),
+      notes: [
+        `The language model used a figure the records do not contain (${finalCheck.invented.join(", ")}), so its wording was set aside and the record's own sentence is shown instead.`,
+      ],
+    };
+  }
+  return {
+    model,
+    answer: lastText || "I could not finish that.",
+    speak: speechify(lastText),
+    calls,
+    widgets,
+    sources: dedupeSources(sources),
+  };
+}
+
 /** The same screen offered twice is one link, and four is as many as a phone screen wants. */
 function dedupeSources(sources) {
   const seen = new Set();
@@ -740,7 +956,60 @@ function photoUnavailable(note) {
   };
 }
 
-export async function ask({ text, ctx, photo, history, apiKey, model, fallbackModel = FALLBACK_MODEL, baseUrl }) {
+/**
+ * One attempt at one provider, with the single piece of patience a rate limit is owed.
+ *
+ * Groq and Gemini both rate-limit per minute; waiting once, for the delay the service itself
+ * named, is cheaper than handing a shopkeeper the keyword layer while the fast model had room.
+ */
+async function attempt(run, label, hasAnother) {
+  for (let round = 0; round < 2; round++) {
+    try {
+      return await run();
+    } catch (error) {
+      const message = String(error?.message ?? "");
+      const wait = round === 0 ? retryDelayMs(message) : 0;
+      if (wait) {
+        console.warn(`[assistant] ${label} rate-limited, retrying in ${Math.round(wait / 1000)}s`);
+        await delay(wait);
+        continue;
+      }
+      console.warn(`[assistant] ${label} unavailable${hasAnother ? ", trying the next provider" : ""}: ${message.slice(0, 200)}`);
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * The provider order: Groq first because it answers in a fraction of a second, then Gemini, then
+ * the built-in layer. Every provider runs the same tools under the same permission gate, so which
+ * one answers changes the wording and the latency, never what the person is allowed to see.
+ */
+export async function ask({
+  text,
+  ctx,
+  photo,
+  history,
+  apiKey,
+  model,
+  fallbackModel = FALLBACK_MODEL,
+  baseUrl,
+  groqKey = "",
+  groqModel = "",
+  groqBaseUrl = "",
+}) {
+  const groq = groqKey ? (groqModel || "openai/gpt-oss-120b") : "";
+
+  if (groq) {
+    const out = await attempt(
+      () => askGroq({ apiKey: groqKey, model: groq, text, ctx, photo, history, baseUrl: groqBaseUrl }),
+      groq,
+      Boolean(apiKey),
+    );
+    if (out) return guardMoneyTopic({ ...out, model: groq, photo: !!photo?.data }, ctx);
+  }
+
   if (photo?.data && !apiKey) return photoUnavailable();
   if (apiKey) {
     // The configured model first, then the small one. Both run the same tools under the same gate,

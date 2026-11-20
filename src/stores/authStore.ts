@@ -227,10 +227,14 @@ export const useAuthStore = create<AuthState>()(
     {
       name: "agri_auth",
       partialize: (s) => ({ user: s.user }),
-      // Launching with a stored session skips setUser, so re-claim the cache
-      // here too — otherwise the guard only holds on an explicit sign-in.
+      //
+      // CLAIM THE CACHE, DO NOT DELETE IT (measured 2026-11-20). This used to call
+      // `suspendCachedData()` on every launch that found a stored session — which deletes every
+      // cached row. The offline launch is exactly that launch, so the app booted into its shell
+      // and showed zeros over data that was sitting on the device. The guard it was reaching for
+      // is `adoptCacheOwner`: it keeps this account's rows and drops another account's.
       onRehydrateStorage: () => (state) => {
-        if (state?.user) suspendCachedData();
+        if (state?.user) adoptCacheOwner(ownerIdFor(state.user));
       },
     }
   )

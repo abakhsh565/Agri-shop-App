@@ -27,6 +27,7 @@ import RegisterStatusPage from "@/pages/register/RegisterStatusPage";
 // Layout
 import EmployeeLayout from "@/components/layout/EmployeeLayout";
 import AppGuidePage from "@/pages/shared/AppGuidePage";
+import GuideDetailPage from "@/pages/shared/GuideDetailPage";
 import IntroPage from "@/pages/onboarding/IntroPage";
 import AdminLayout from "@/components/layout/AdminLayout";
 
@@ -59,6 +60,7 @@ import AddCompanyPage from "@/pages/admin/companies/AddCompanyPage";
 import CompanyDetailPage, { SupplierDetailRedirect } from "@/pages/admin/companies/CompanyDetailPage";
 import AdminSettingsPage from "@/pages/admin/settings/AdminSettingsPage";
 import SecuritySettingsPage from "@/pages/admin/settings/SecuritySettingsPage";
+import AppPermissionsPage from "@/pages/admin/settings/AppPermissionsPage";
 import PreferencesPage from "@/pages/admin/settings/PreferencesPage";
 import ProfileDetailsPage from "@/pages/admin/settings/ProfileDetailsPage";
 import SectionHubPage from "@/pages/admin/settings/SectionHubPage";
@@ -69,7 +71,6 @@ import BusinessProfilePage from "@/pages/admin/settings/BusinessProfilePage";
 import CustomerReceivablePage from "@/pages/admin/settings/CustomerReceivablePage";
 import SupplierPayablePage from "@/pages/admin/settings/SupplierPayablePage";
 // The pending and overdue books behind the collection tiles, and one supplier's own payable page.
-import CustomerCreditPage from "@/pages/admin/settings/CustomerCreditPage";
 import SupplierCreditPage from "@/pages/admin/settings/SupplierCreditPage";
 import RolesAccessPage from "@/pages/admin/settings/RolesAccessPage";
 import AdminNotificationsPage from "@/pages/admin/notifications/AdminNotificationsPage";
@@ -81,6 +82,7 @@ const SupplierPaymentsPage = React.lazy(() => import("@/pages/admin/purchases/Su
 const SupplierPaymentDetailPage = React.lazy(() => import("@/pages/admin/purchases/SupplierPaymentDetailPage"));
 const PurchasesPayablesPage = React.lazy(() => import("@/pages/admin/purchases/PurchasesPayablesPage"));
 import RecordSupplierPaymentPage from "@/pages/admin/payments/RecordSupplierPaymentPage";
+import SelectSupplierPage from "@/pages/admin/purchases/SelectSupplierPage";
 const AdminReportsPage = React.lazy(() => import("@/pages/admin/reports/AdminReportsPage"));
 // The Reports *hub* and its Profit screen are eager: both are entered from Settings, whose
 // section pages are already in the shell's first bundle, and one is the parent of the other.
@@ -118,7 +120,6 @@ const UnitsPage = React.lazy(() => import("@/pages/admin/inventory/UnitsPage"));
 import PurchaseDetailPage from "@/pages/admin/purchases/PurchaseDetailPage";
 import StockMovementHistoryPage from "@/pages/admin/inventory/StockMovementHistoryPage";
 import ReorderSuggestionsPage from "@/pages/admin/inventory/ReorderSuggestionsPage";
-import DailyCashReconciliationPage from "@/pages/admin/payments/DailyCashReconciliationPage";
 import CashPositionPage from "@/pages/admin/payments/CashPositionPage";
 
 // Employee pages
@@ -130,6 +131,15 @@ import SelectCustomerPage from "@/pages/employee/sale/SelectCustomerPage";
 import BrowseProductsPage from "@/pages/employee/sale/BrowseProductsPage";
 import VariantSelectorPage from "@/pages/employee/sale/VariantSelectorPage";
 import CartPage from "@/pages/employee/sale/CartPage";
+// Every unfinished sale, for the cart icon: a counter serving three people has three baskets.
+import CartDraftsPage from "@/pages/employee/sale/CartDraftsPage";
+import InvoiceListPage from "@/pages/admin/invoices/InvoiceListPage";
+import InvoiceFormPage from "@/pages/admin/invoices/InvoiceFormPage";
+import InvoiceDetailPage from "@/pages/admin/invoices/InvoiceDetailPage";
+import InvoicePrintPage from "@/pages/admin/invoices/InvoicePrintPage";
+import InvoiceSettingsPage from "@/pages/admin/invoices/InvoiceSettingsPage";
+import AdminHistoryPage from "@/pages/admin/history/AdminHistoryPage";
+import AdminHistoryListPage from "@/pages/admin/history/AdminHistoryListPage";
 import SaleSuccessPage from "@/pages/employee/sale/SaleSuccessPage";
 const SalesListPage = React.lazy(() => import("@/pages/employee/sales/SalesListPage"));
 const CustomersListPage = React.lazy(() => import("@/pages/employee/customers/CustomersListPage"));
@@ -145,6 +155,9 @@ import ReturnSelectItemsPage from "@/pages/employee/returns/ReturnSelectItemsPag
 import ReturnConfirmPage from "@/pages/employee/returns/ReturnConfirmPage";
 import ReturnSuccessPage from "@/pages/employee/returns/ReturnSuccessPage";
 import SearchPage from "@/pages/employee/search/SearchPage";
+// The search screen's filters are a screen, not a strip that would have to hold six dimensions.
+import SearchFiltersPage from "@/pages/employee/search/SearchFiltersPage";
+import SearchPersonPickerPage from "@/pages/employee/search/SearchPersonPickerPage";
 import SettingsPage from "@/pages/employee/settings/SettingsPage";
 import MyReportsPage from "@/pages/employee/reports/MyReportsPage";
 import ActivityLogPage from "@/pages/employee/activity/ActivityLogPage";
@@ -222,8 +235,20 @@ export const router = createBrowserRouter([
       // way round: a business module belongs one tap from the bar, not inside an account page.
       { path: "more",       element: <AdminMorePage /> },
       { path: "messages",   element: <AdminMessagesPage /> },
+      // Every ledger, read through one date range. The screen is an index over the screens that
+      // already own each book; it does not keep a second copy of any of them.
+      { path: "history",    element: <AdminHistoryPage /> },
+      // One ledger, with its own date range and transaction cards. The address names the book;
+      // the screen reads it for the period chosen there.
+      { path: "history/:kind", element: <AdminHistoryListPage /> },
       { path: "guide",      element: <AppGuidePage /> },
+      // One explanation, its own page: the guide's rows lead here instead of jumping at a live
+      // screen or opening a sheet with no words in it.
+      { path: "guide/:kind/:id", element: <GuideDetailPage /> },
+      { path: "guide/step/:workflowId/:step", element: <GuideDetailPage /> },
       { path: "search", element: <SearchPage /> },
+      { path: "search/filters", element: <SearchFiltersPage /> },
+      { path: "search/filters/people", element: <SearchPersonPickerPage /> },
 
       // ── Customers (requires customers.view) ──────────────────────────────
       { element: <PermissionGuard requires="customers.view" />,
@@ -289,9 +314,20 @@ export const router = createBrowserRouter([
           { path: "sale/products", element: <BrowseProductsPage /> },
           { path: "sale/products/:productId", element: <VariantSelectorPage /> },
           { path: "sale/cart",  element: <CartPage /> },
+          { path: "sale/carts", element: <CartDraftsPage /> },
           { path: "sale/success", element: <SaleSuccessPage /> },
           { path: "sales",      element: <AdminSalesListPage /> },
           { path: "sales/:saleId", element: <SaleDetailView /> },
+          // The shop's bill book. Reading follows sales.view, writing follows sales.create —
+          // the same grants as the sale that produces the goods on the bill (0319/0320).
+          { path: "invoices", element: <InvoiceListPage /> },
+          { path: "invoices/new", element: <InvoiceFormPage /> },
+          // The shop's paper, before the parameter route: `invoices/:invoiceId` would otherwise
+          // open a bill called "settings".
+          { path: "invoices/settings", element: <InvoiceSettingsPage /> },
+          { path: "invoices/:invoiceId", element: <InvoiceDetailPage /> },
+          { path: "invoices/:invoiceId/edit", element: <InvoiceFormPage /> },
+          { path: "invoices/:invoiceId/print", element: <InvoicePrintPage /> },
           { path: "sales/:saleId/return", element: <AdminReturnSelectItemsPage /> },
           { path: "sales/:saleId/return/confirm", element: <AdminReturnConfirmPage /> },
           { path: "sales/:saleId/return/success", element: <AdminReturnSuccessPage /> },
@@ -301,6 +337,8 @@ export const router = createBrowserRouter([
       { element: <PermissionGuard requires="purchases.view" />,
         children: [
           { path: "purchases",  element: <AdminPurchasesPage /> },
+          // The supplier a delivery came from is a screen of its own, not a sheet over the form.
+          { path: "purchases/party", element: <SelectSupplierPage /> },
           { path: "purchases/new", element: <RecordPurchasePage /> },
           { path: "purchases/payments", element: <SupplierPaymentsPage /> },
           { path: "purchases/payments/:paymentId", element: <SupplierPaymentDetailPage /> },
@@ -315,11 +353,12 @@ export const router = createBrowserRouter([
           // opens the one screen, and the old settings routes are aliases to the same page.
           { path: "payments",   element: <MoneyStatementPage /> },
           { path: "payments/supplier/:companyId", element: <RecordSupplierPaymentPage /> },
-          { path: "payments/daily-cash", element: <DailyCashReconciliationPage /> },
-          // Cash position is its own screen: the figure the Finance hub opens with, the money
-          // that moved each way, and the last movements. The daily check stays beside it —
-          // counting the till at closing time is a different job from reading the position.
-          { path: "payments/cash-position", element: <CashPositionPage /> },
+          // ONE cash screen (owner, 2026-11-16). The till count and the position were two
+          // screens answering the same question — what cash should be here, what was recorded,
+          // and what moved — and only one of them actually saved the count. `daily-cash` is the
+          // one route now; `cash-position` stays as an alias so an old link still lands on it.
+          { path: "payments/daily-cash", element: <CashPositionPage /> },
+          { path: "payments/cash-position", element: <Navigate to="/admin/payments/daily-cash" replace /> },
         ] },
 
       // ── Suppliers/Companies (requires companies.view) ────────────────────
@@ -363,6 +402,9 @@ export const router = createBrowserRouter([
           { path: "settings",   element: <AdminSettingsPage /> },
           { path: "settings/profile", element: <ProfileDetailsPage /> },
           { path: "settings/security", element: <SecuritySettingsPage /> },
+          // What the app asks the phone for, and what Android has answered (0322-era capability
+          // registry, see src/lib/appPermissions.ts).
+          { path: "settings/permissions", element: <AppPermissionsPage /> },
           { path: "settings/preferences", element: <PreferencesPage /> },
           // One hub per menu section: the jobs inside Sales, Finance, Branches and the rest,
           // listed from the same catalogue the menu itself reads (`lib/settingsHub`).
@@ -441,8 +483,12 @@ export const router = createBrowserRouter([
           // redirects to it instead of drawing a second copy.
           { path: "settings/overview", element: <Navigate to="/admin/settings/hub/finance" replace /> },
           { path: "settings/overview/customers", element: <CustomerReceivablePage /> },
-          { path: "settings/overview/customers/pending", element: <CustomerCreditPage mode="pending" /> },
-          { path: "settings/overview/customers/overdue", element: <CustomerCreditPage mode="overdue" /> },
+          // BOTH customer credit books are gone (owner, 2026-11-16): pending and overdue were
+          // the two halves of one list the receivables page already computes and filters to,
+          // and the overdue money is a plate figure on Finance now. Their addresses stay as
+          // redirects so an old bookmark does not 404; no action opens either of them.
+          { path: "settings/overview/customers/pending", element: <Navigate to="/admin/settings/overview/customers" replace /> },
+          { path: "settings/overview/customers/overdue", element: <Navigate to="/admin/settings/overview/customers" replace /> },
           { path: "settings/overview/suppliers", element: <SupplierPayablePage /> },
           { path: "settings/overview/suppliers/pending", element: <SupplierCreditPage mode="pending" /> },
           { path: "settings/overview/suppliers/overdue", element: <SupplierCreditPage mode="overdue" /> },
@@ -533,6 +579,7 @@ export const router = createBrowserRouter([
               { path: "sale/products", element: <BrowseProductsPage /> },
               { path: "sale/products/:productId", element: <VariantSelectorPage /> },
               { path: "sale/cart", element: <CartPage /> },
+              { path: "sale/carts", element: <CartDraftsPage /> },
               { path: "sale/success", element: <SaleSuccessPage /> },
             ] },
           { path: "sales", element: <AdminSalesListPage /> },
@@ -572,7 +619,10 @@ export const router = createBrowserRouter([
           { path: "purchases", element: <AdminPurchasesPage /> },
           { path: "purchases/:purchaseId", element: <PurchaseDetailPage /> },
           { element: <PermissionGuard requires="purchases.create" fallback="/co-owner/purchases" />,
-            children: [{ path: "purchases/new", element: <RecordPurchasePage /> }] },
+            children: [
+              { path: "purchases/party", element: <SelectSupplierPage /> },
+              { path: "purchases/new", element: <RecordPurchasePage /> },
+            ] },
         ] },
       { element: <PermissionGuard requires="companies.view" fallback="/co-owner/dashboard" />,
         children: [
@@ -596,6 +646,8 @@ export const router = createBrowserRouter([
           { path: "settings/hub/people/activity/:employeeId", element: <AdminEmployeeActivityDetailPage /> },
         ] },
       { path: "search", element: <SearchPage /> },
+      { path: "search/filters", element: <SearchFiltersPage /> },
+      { path: "search/filters/people", element: <SearchPersonPickerPage /> },
     ],
   }],
   },
@@ -613,6 +665,7 @@ export const router = createBrowserRouter([
       { path: "sale/products", element: <BrowseProductsPage /> },
       { path: "sale/products/:productId", element: <VariantSelectorPage /> },
       { path: "sale/cart", element: <CartPage /> },
+      { path: "sale/carts", element: <CartDraftsPage /> },
 
       { path: "sale/success", element: <SaleSuccessPage /> },
       { path: "sales", element: <SalesListPage /> },
@@ -648,6 +701,7 @@ export const router = createBrowserRouter([
         ] },
       { path: "finance", element: <MoneyStatementPage /> },
       { path: "purchases", element: <AdminPurchasesPage /> },
+      { path: "purchases/party", element: <SelectSupplierPage /> },
       { path: "purchases/new", element: <RecordPurchasePage /> },
       { path: "purchases/payments", element: <SupplierPaymentsPage /> },
       { path: "purchases/payments/:paymentId", element: <SupplierPaymentDetailPage /> },
@@ -658,12 +712,16 @@ export const router = createBrowserRouter([
       { path: "stock", element: <StockManagementPage /> },
       { path: "team", element: <EmployeeTeamPage /> },
       { path: "search", element: <SearchPage /> },
+      { path: "search/filters", element: <SearchFiltersPage /> },
+      { path: "search/filters/people", element: <SearchPersonPickerPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "reports", element: <MyReportsPage /> },
       { path: "activity", element: <ActivityLogPage /> },
       { path: "notifications", element: <EmployeeNotificationsPage /> },
       { path: "more", element: <EmployeeMorePage /> },
       { path: "guide", element: <AppGuidePage /> },
+      { path: "guide/:kind/:id", element: <GuideDetailPage /> },
+      { path: "guide/step/:workflowId/:step", element: <GuideDetailPage /> },
     ],
   }],
   },

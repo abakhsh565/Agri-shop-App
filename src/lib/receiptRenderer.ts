@@ -113,6 +113,8 @@ export function renderReceiptBlob(s: {
   employeeName: string; paymentMethod: string; paymentType: string;
   createdAt: string; totalAmount: number; amountPaid: number;
   outstandingBalance: number; subtotal: number;
+  /** The bill's discount, if any. Absent on receipts printed before it existed. */
+  discount?: number;
   items: { productName: string; variantName: string; qty: number; unitPrice: number }[];
 }, t: TranslateFn): Promise<Blob | null> {
   return new Promise((resolve) => {
@@ -207,6 +209,11 @@ export function renderReceiptBlob(s: {
 
       const summaryItems = [
         { label: t("receipt.subtotal"), value: formatCurrency(s.subtotal) },
+        // A discount is a line on the paper, not a quietly smaller subtotal: the customer holding
+        // this receipt is the one person most entitled to see what was taken off.
+        ...((s.discount ?? 0) > 0
+          ? [{ label: t("sale.discount"), value: `-${formatCurrency(s.discount ?? 0)}`, color: "#ef4444" }]
+          : []),
         { label: t("receipt.paid"), value: formatCurrency(s.amountPaid), color: "#22c55e" },
         ...(s.outstandingBalance > 0
           ? [{ label: t("receipt.outstanding"), value: formatCurrency(s.outstandingBalance), color: "#ef4444" }]

@@ -18,14 +18,7 @@ import { getStockStatus, productLowStockThreshold } from "@/lib/formatters";
 import { ChevronRight, Package } from "lucide-react";
 import ScanButton from "@/components/ui/ScanButton";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import type { ProductCategory } from "@/types";
-
-const FILTERS: { key: "all" | ProductCategory; labelKey: string }[] = [
-  { key: "all", labelKey: "products.all" },
-  { key: "pesticide", labelKey: "category.pesticide" },
-  { key: "seed", labelKey: "category.seed" },
-  { key: "fertilizer", labelKey: "category.fertilizer" },
-];
+import { useCatalogueStore } from "@/stores/catalogueStore";
 
 const CATEGORY_LABEL_KEY: Record<string, string> = {
   pesticide: "category.pesticide",
@@ -51,7 +44,11 @@ export default function BrowseProductsPage() {
   const { customer } = useCartStore();
   const { addToast } = useUIStore();
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<"all" | ProductCategory>("all");
+  // The shelf ids are the inventory's own shelves, not a second list written into this screen:
+  // a category the owner made in Products is the category a sale is filed under (owner,
+  // 2026-11-17). The seven fixed kinds survive only on rows written before shelves existed.
+  const [category, setCategory] = useState<string>("all");
+  const shelves = useCatalogueStore((s) => s.categories);
   const products = useProductsStore((s) => s.products);
   const ready = useProductsStore((s) => s.ready);
   const findByBarcode = useProductsStore((s) => s.findByBarcode);
@@ -109,13 +106,19 @@ export default function BrowseProductsPage() {
     const matchSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.company.toLowerCase().includes(search.toLowerCase());
-    // Pesticide also answers rows still filed under the old "spray" name (0162).
+    if (category === "all") return matchSearch;
+    const shelf = shelves.find((c) => c.id === category);
+    // A row filed on the shelf matches by id; a row written before shelves existed still matches
+    // when its old kind is the one this shelf was seeded from.
     const matchCat =
-      category === "all" ||
-      p.category === category ||
-      (category === "pesticide" && p.category === "spray");
+      p.categoryId === category ||
+      (!p.categoryId && !!shelf?.legacyCategory && p.category === shelf.legacyCategory);
     return matchSearch && matchCat;
   });
+
+  const shelfName = (product: (typeof products)[number]) =>
+    shelves.find((c) => c.id === product.categoryId)?.name ??
+    (CATEGORY_LABEL_KEY[product.category] ? t(CATEGORY_LABEL_KEY[product.category] as any) : product.category);
 
   const initColor = (name: string) => {
     const colors = ["#3b82f6","#84cc16","#f59e0b","#8b5cf6","#06b6d4","#ec4899"];
@@ -147,19 +150,29 @@ export default function BrowseProductsPage() {
         />
       </div>
 
-      {/* Category filters */}
-      <div className="flex gap-2 px-4 pb-3 overflow-x-auto">
-        {FILTERS.map((f) => (
+      {/* Category filters — the shop's own shelves, in their own order */}
+      <div className="flex gap-2 px-4 pb-3 overflow-x-auto no-scrollbar">
+        <button
+          onClick={() => setCategory("all")}
+          className="shrink-0 h-8 px-4 rounded-full text-xs font-medium transition-colors"
+          style={{
+            background: category === "all" ? "var(--brand)" : "var(--surface-2)",
+            color: category === "all" ? "#0a0a0a" : "var(--text-secondary)",
+          }}
+        >
+          {t("products.all")}
+        </button>
+        {shelves.map((shelf) => (
           <button
-            key={f.key}
-            onClick={() => setCategory(f.key)}
+            key={shelf.id}
+            onClick={() => setCategory(shelf.id)}
             className="shrink-0 h-8 px-4 rounded-full text-xs font-medium transition-colors"
             style={{
-              background: category === f.key ? "var(--brand)" : "var(--surface-2)",
-              color: category === f.key ? "#0a0a0a" : "var(--text-secondary)",
+              background: category === shelf.id ? "var(--brand)" : "var(--surface-2)",
+              color: category === shelf.id ? "#0a0a0a" : "var(--text-secondary)",
             }}
           >
-            {t(f.labelKey as any)}
+            {shelf.name}
           </button>
         ))}
       </div>
@@ -231,10 +244,10 @@ export default function BrowseProductsPage() {
                   <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{p.company}</p>
                   <div className="flex items-center gap-2">
                     <span
-                      className="self-start inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold uppercase"
+                      className="self-start inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold uppercase max-w-[140px] truncate"
                       style={{ background: catColor.bg, color: catColor.fg }}
                     >
-                      {t(CATEGORY_LABEL_KEY[p.category] as any) || p.category}
+                      {shelfName(p)}
                     </span>
                     <StockBadge status={getStockStatus(p.stockQty, productLowStockThreshold(p.variants))} outline />
                   </div>

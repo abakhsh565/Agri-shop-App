@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import OverflowMenu from "@/components/ui/OverflowMenu";
 import Photo from "@/components/ui/Photo";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ImageCrop from "@/components/ui/ImageCrop";
@@ -13,6 +14,7 @@ import { useProductsStore } from "@/stores/productsStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useUIStore } from "@/stores/uiStore";
 import { formatCurrency, getStockStatusColor } from "@/lib/formatters";
+import { referenceCode } from "@/lib/referenceCode";
 import { useShellBase } from "@/lib/useShellBase";
 import { hasPermission } from "@/lib/tenantContext";
 import { rpcDeleteProduct, rpcDeleteProductBarcode, rpcPreviewProductBarcode, rpcSetProductBarcode } from "@/lib/db";
@@ -66,7 +68,6 @@ export default function ProductDetailPage() {
   // quantity in — so a pack reads the same here as it does on the shelf it sits on.
   const products = useProductsStore((s) => s.products);
   const productsReady = useProductsStore((s) => s.ready);
-  const activeBranchName = useShopStore((s) => s.activeBranchName);
   const product = products.find((p) => p.id === productId);
   // The shelf this product is filed on, when it has one (0259).
   const categories = useCatalogueStore((s) => s.categories);
@@ -232,7 +233,55 @@ export default function ProductDetailPage() {
   return (
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
-      <NavHeader title={t("sale.productDetails")} />
+      <NavHeader
+        title={t("sale.productDetails")}
+        right={
+          <OverflowMenu
+            testId="product-actions"
+            title={t("sale.productDetails")}
+            label={t("common.more")}
+            actions={[
+              ...(canEditProduct
+                ? [{
+                    icon: Pencil,
+                    label: t("products.editProduct"),
+                    onClick: () => navigate(`${base}/inventory/${product.id}/edit`),
+                    testId: "product-action-edit",
+                  }]
+                : []),
+              ...(canAdjustStock
+                ? [{
+                    icon: TrendingUp,
+                    label: t("products.adjustStock"),
+                    onClick: () => navigate(`${base}/inventory/${product.id}/adjust`),
+                    testId: "product-action-adjust",
+                  }]
+                : []),
+              ...(canEditProduct
+                ? [{
+                    icon: Barcode,
+                    label: t("products.generateBarcode"),
+                    disabled: barcodeMinting,
+                    onClick: () =>
+                      product.barcode
+                        ? navigate(`${base}/inventory/barcodes?product=${product.id}`)
+                        : void handleGenerateBarcode(),
+                    testId: "product-barcode-generate",
+                  }]
+                : []),
+              ...(canDeleteProduct
+                ? [{
+                    icon: Trash2,
+                    label: t("products.deleteProduct"),
+                    destructive: true,
+                    onClick: () => setToDelete(true),
+                    testId: "product-action-delete",
+                  }]
+                : []),
+            ]}
+          />
+        }
+      />
 
       <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
         {/* ── HERO CARD: Image + Name + Category + Stock Badge ── */}
@@ -262,6 +311,13 @@ export default function ProductDetailPage() {
                 so naming it here too read as the same fact stated twice on one card. */}
             <p className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>
               {product.company}
+            </p>
+            {/* The record's own name, on the record's own page — never on a card in a list, where
+                it competes with the facts the row exists to show. A pack's SKU belongs to the
+                pack, and the barcode below is the product's own printed identity, so this line is
+                the reference code and nothing else. */}
+            <p className="text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>
+              {referenceCode("product", product.id)}
             </p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               {/* The shop's own shelf when the product is filed on one (0259); the fixed kind
@@ -298,9 +354,7 @@ export default function ProductDetailPage() {
           </div>
           <div className="text-center" style={{ borderLeft: "1px solid var(--divider)", borderRight: "1px solid var(--divider)" }}>
             <p className="ds-section-label" style={{ color: "var(--text-secondary)" }}>
-              {activeBranchName
-                ? t("products.stockInBranch", { branch: activeBranchName })
-                : t("products.stock")}
+              {t("products.stock")}
             </p>
             <p className="text-sm font-bold mt-0.5" style={{ color: "var(--text-primary)" }}>
               {t("common.itemsCount", { count: String(totalStock) })}
@@ -440,60 +494,6 @@ export default function ProductDetailPage() {
         {/* ── CUSTOMERS LIKELY TO WANT THIS ── */}
         <ProductCustomerRecommendations productId={product.id} />
 
-        {/* ── ALL ACTIONS: Edit + Adjust + Barcode + Delete (unified) ── */}
-        <div
-          className="rounded-[var(--radius-card)] overflow-hidden"
-          style={{ border: "1px solid var(--divider)" }}
-        >
-          {canEditProduct && (
-            <button
-              onClick={() => navigate(`${base}/inventory/${product.id}/edit`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
-              style={{ color: "var(--text-primary)" }}
-            >
-              <Pencil size={16} style={{ color: "var(--brand)" }} />
-              {t("products.editProduct")}
-            </button>
-          )}
-          {canAdjustStock && (
-            <button
-              onClick={() => navigate(`${base}/inventory/${product.id}/adjust`)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
-              style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
-            >
-              <TrendingUp size={16} style={{ color: "var(--brand)" }} />
-              {t("products.adjustStock")}
-            </button>
-          )}
-          {canEditProduct && (
-            <button
-              onClick={() =>
-                product.barcode
-                  ? navigate(`${base}/inventory/barcodes?product=${product.id}`)
-                  : void handleGenerateBarcode()
-              }
-              disabled={barcodeMinting}
-              data-testid="product-barcode-generate"
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70 disabled:opacity-60"
-              style={{ color: "var(--text-primary)", borderTop: "1px solid var(--divider)" }}
-            >
-              {barcodeMinting
-                ? <Loader2 size={16} className="animate-spin" style={{ color: "var(--brand)" }} />
-                : <Barcode size={16} style={{ color: "var(--brand)" }} />}
-              {t("products.generateBarcode")}
-            </button>
-          )}
-          {canDeleteProduct && (
-            <button
-              onClick={() => setToDelete(true)}
-              className="flex items-center gap-3 w-full px-4 py-3.5 text-start text-13 font-medium active:opacity-70"
-              style={{ color: "var(--error)", borderTop: "1px solid var(--divider)" }}
-            >
-              <Trash2 size={16} />
-              {t("products.deleteProduct")}
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Edit Product Bottom Sheet */}

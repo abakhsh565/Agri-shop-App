@@ -100,10 +100,10 @@ export default function LoginPage() {
       <div className="flex flex-col flex-1 justify-between">
         <div className="flex flex-col gap-6 p-6">
           <div className="flex flex-col gap-2">
-            <p className="text-26 font-bold" style={{ color: "var(--text-primary)" }}>
+            <p className="text-28 font-bold text-foreground">
               {t("auth.welcomeBack")}
             </p>
-            <p className="text-14" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-sm text-caption">
               {t("auth.enterPhoneOwner")}
             </p>
           </div>

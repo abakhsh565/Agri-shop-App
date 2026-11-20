@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 /**
@@ -36,6 +36,7 @@ export default function InlineSelect({
   placeholder,
   testId,
   disabled = false,
+  action,
 }: {
   value: string;
   options: InlineSelectOption[];
@@ -44,6 +45,11 @@ export default function InlineSelect({
   placeholder?: string;
   testId: string;
   disabled?: boolean;
+  /**
+   * A create action at the top of the panel, present on every open rather than only when the list
+   * is empty — so adding the next one is always one tap away, in the same place.
+   */
+  action?: { label: string; onClick: () => void };
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -96,6 +102,20 @@ export default function InlineSelect({
               boxShadow: "0 16px 40px rgba(0,0,0,0.45)",
             }}
           >
+            {action && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  action.onClick();
+                }}
+                data-testid={`${testId}-create-action`}
+                className="w-full flex items-center gap-2 px-4 py-2.5 text-start text-13 font-semibold ds-pressable"
+                style={{ color: "var(--brand-dark)" }}
+              >
+                <Plus size={15} strokeWidth={2.5} /> {action.label}
+              </button>
+            )}
             {options.map((option) => {
               const active = option.value === value;
               return (

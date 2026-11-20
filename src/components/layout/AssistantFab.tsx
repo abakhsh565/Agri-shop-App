@@ -1,5 +1,5 @@
-import { Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import BrandLogo from "@/components/brand/BrandLogo";
 import { useT } from "@/lib/i18n";
 import { clearNav } from "@/lib/navContext";
 
@@ -45,15 +45,19 @@ export default function AssistantFab({ path }: { path: string }) {
           onClick={() => { clearNav(); navigate(path); }}
           aria-label={t("nav.assistant")}
           data-testid="assistant-fab"
-          className="pointer-events-auto flex items-center justify-center rounded-full ds-pressable"
-          style={{
-            width: 56,
-            height: 56,
-            background: "var(--brand)",
-            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.22)",
-          }}
+          className="ds-assistant-fab pointer-events-auto ds-pressable"
         >
-          <Sparkles size={26} strokeWidth={2.5} color="#0a0a0a" />
+          {/* A liquid-glass sphere with the shop's mark suspended in it. The sphere is drawn by
+              the button itself (refracted rim and specular sweep are its own pseudo-elements),
+              so there is nothing extra to focus or read; the name is in aria-label and every
+              loop stops for reduced-motion. */}
+          <BrandLogo
+            variant="mark"
+            tone="mesh"
+            size={50}
+            animated={false}
+            className="ds-assistant-fab-mark"
+          />
         </button>
       </div>
     </div>

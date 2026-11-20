@@ -41,8 +41,16 @@ export default function ToastContainer() {
   if (!shown.length) return null;
 
   return (
+    /*
+      Centred by auto margins, not by a half-width translate.
+      `start-1/2` is logical — in Urdu it becomes `right: 50%` — while `-translate-x-1/2` is
+      physical and always moves LEFT. The two together put the card half off the right edge of an
+      Urdu screen, so only a slice of the message was visible and the rest sat outside the phone.
+      `inset-x-0 mx-auto` is centred by the browser in either direction, and the width cap keeps
+      it inside the phone frame on a desktop browser too.
+    */
     <div
-      className="fixed start-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-[calc(100%-32px)] max-w-sm"
+      className="fixed inset-x-0 z-50 mx-auto flex w-[calc(100%-32px)] max-w-[448px] flex-col gap-2"
       style={{ bottom: "calc(var(--tabbar-height, 72px) + 16px)" }}
       aria-live="polite"
     >
@@ -79,7 +87,9 @@ export default function ToastContainer() {
             }}
           >
             <Icon size={18} className="shrink-0 mt-0.5" aria-hidden />
-            <span className="ds-body flex-1" style={{ color: "inherit" }}>
+            {/* `min-w-0` + `break-words`: an Urdu sentence wraps like any other, and a long
+                unbroken token (a product name, a bill number) wraps instead of leaving the card. */}
+            <span className="ds-body min-w-0 flex-1 break-words" style={{ color: "inherit" }}>
               {toast.message}
             </span>
             {action && (

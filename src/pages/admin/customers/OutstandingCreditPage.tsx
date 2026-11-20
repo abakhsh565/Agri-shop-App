@@ -4,7 +4,9 @@ import { ChevronRight, Wallet } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SearchBar from "@/components/ui/SearchBar";
+import Photo from "@/components/ui/Photo";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import RollingNumber from "@/components/ui/RollingNumber";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useT } from "@/lib/i18n";
@@ -149,7 +151,7 @@ export default function OutstandingCreditPage() {
                 {t("receivable.totalOutstanding")}
               </p>
               <p className="text-22 font-bold mt-1 tabular-nums break-words" data-testid="outstanding-total">
-                {ready ? formatCurrency(totals.outstanding) : "—"}
+                <RollingNumber text={ready ? formatCurrency(totals.outstanding) : "—"} />
               </p>
             </div>
             <div className="min-w-0 text-end">
@@ -161,7 +163,7 @@ export default function OutstandingCreditPage() {
                 style={{ color: totals.overdue > 0 ? "var(--error)" : "var(--text-primary)" }}
                 data-testid="outstanding-overdue"
               >
-                {ready ? formatCurrency(totals.overdue) : "—"}
+                <RollingNumber text={ready ? formatCurrency(totals.overdue) : "—"} />
               </p>
             </div>
           </div>
@@ -169,7 +171,6 @@ export default function OutstandingCreditPage() {
             {ready
               ? t("outstanding.scope", {
                   count: String(totals.accounts),
-                  branch: branchName ?? t("hub.inventory.selectedBranch"),
                 })
               : t("common.loading")}
           </p>
@@ -225,17 +226,35 @@ export default function OutstandingCreditPage() {
                 data-testid={`outstanding-row-${c.id}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-15 font-semibold truncate">{c.name}</p>
-                    <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                      {branchName ? `${branchName} · ` : ""}
-                      {c.dueDate
-                        ? t("outstanding.dueOn", { date: formatDate(c.dueDate) })
-                        : t("outstanding.noDueDate")}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-3">
+                    {/* The customer's own picture, always the latest one saved on the account:
+                        a row of names is how an owner loses track of who is who. */}
+                    <Photo
+                      src={c.imageUrl}
+                      alt={c.name}
+                      className="size-10 rounded-full object-cover shrink-0"
+                      fallback={
+                        <span
+                          className="size-10 rounded-full flex items-center justify-center text-13 font-bold shrink-0"
+                          style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                        >
+                          {c.name.charAt(0).toUpperCase()}
+                        </span>
+                      }
+                    />
+                    <div className="min-w-0">
+                      <p className="text-15 font-semibold truncate">{c.name}</p>
+                      <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+                        {c.dueDate
+                          ? t("outstanding.dueOn", { date: formatDate(c.dueDate) })
+                          : t("outstanding.noDueDate")}
+                      </p>
+                    </div>
                   </div>
                   <div className="shrink-0 text-end">
-                    <p className="text-14 font-bold tabular-nums">{formatCurrency(c.outstandingBalance)}</p>
+                    <p className="text-14 font-bold tabular-nums">
+                      <RollingNumber text={formatCurrency(c.outstandingBalance)} />
+                    </p>
                     <span
                       className="inline-block text-10 font-bold px-2 py-0.5 rounded-full mt-1"
                       style={{

@@ -4,8 +4,8 @@ import { useT, tNow } from "@/lib/i18n";
 import ToastContainer from "@/components/ui/Toast";
 import NavTracker from "@/components/ui/NavTracker";
 import FirstRunGate from "@/components/education/FirstRunGate";
-import ContextHelp from "@/components/education/ContextHelp";
 import { useBootstrapData } from "@/stores/useBootstrapData";
+import BootGate from "@/components/ui/BootGate";
 import { isTopLevel } from "@/lib/navDepth";
 import { Suspense, useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import useOverlayScrollLock from "@/hooks/useOverlayScrollLock";
@@ -17,8 +17,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { clearNav } from "@/lib/navContext";
 import BackButtonHandler from "@/components/ui/BackButtonHandler";
 import AssistantFab from "@/components/layout/AssistantFab";
-import { useOfflineStore } from "@/stores/offlineStore";
-import { getPendingCount } from "@/lib/offlineQueue";
+import { useConnectivityToasts } from "@/hooks/useConnectivityToasts";
 import { useAuthStore } from "@/stores/authStore";
 import PINInput from "@/components/ui/PINInput";
 import { verifyPinDetailed } from "@/lib/pinLock";
@@ -57,7 +56,6 @@ export default function AdminLayout() {
   const noActiveShop = useNoActiveShop();
   const { user, isLocked, lock, unlock, logout } = useAuthStore();
   const refreshPermissions = useAuthStore((s) => s.refreshPermissions);
-  const { setOnline, syncQueue } = useOfflineStore();
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [pinShake, setPinShake] = useState(false);
@@ -66,29 +64,8 @@ export default function AdminLayout() {
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [indicator, setIndicator] = useState({ left: 0, width: 0, ready: false });
 
-  // Online/offline detection + auto-sync
-  useEffect(() => {
-    const handleOnline = () => {
-      setOnline(true);
-      addToast(tNow("copy.backOnline"), "success");
-      syncQueue();
-    };
-    const handleOffline = () => {
-      setOnline(false);
-      addToast(tNow("copy.wentOffline"), "warning");
-    };
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    // Check initial pending ops count
-    const pending = getPendingCount();
-    if (pending > 0) {
-      setOnline(navigator.onLine);
-    }
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  // Online/offline detection, auto-sync, and the toast that reports how many changes it sent.
+  useConnectivityToasts();
 
   // Session lock timer (same as employee side)
   function resetLockTimer() {
@@ -249,6 +226,12 @@ export default function AdminLayout() {
         // The assistant is a chat, not a document: it owns the visible viewport so the header
         // stays put and the transcript scrolls inside it while the Android keyboard is open.
         ...(isAssistant ? { height: "var(--assistant-viewport-height, 100dvh)" } : {}),
+        // The tab bar's reserve comes OFF the screen's minimum height instead of being added on
+        // top of it. `min-h-full` plus an 86px bottom reserve made every tab screen taller than
+        // the phone by exactly the bar's height, so a screen whose content fitted still scrolled
+        // to show blank space. A short screen is now 100% − reserve tall and its reserve fills
+        // exactly the gap; a long one still scrolls and still ends clear of the bar.
+        ...(!isAssistant && showTabBar ? { minHeight: "calc(100% - var(--tabbar-height))" } : {}),
         // The admin shell's floating pill is taller than the legacy bar. Keep the page reserve,
         // toasts and floating actions in step with it without changing the other shells.
         "--tabbar-height": "calc(86px + var(--safe-bottom))",
@@ -261,7 +244,12 @@ export default function AdminLayout() {
       {/* ── Session lock overlay ── */}
       {isLocked && (
         <div
-          className="absolute inset-0 z-50 flex flex-col"
+          // Fixed, not absolute: the shell's content is often taller than the phone, and an
+          // absolutely-positioned lock screen centred itself in that whole page — the PIN card
+          // sat below the fold and had to be scrolled to. A viewport overlay is centred on the
+          // screen, and because it is a `.fixed.inset-0` the scroll-lock hook also freezes the
+          // screen behind it, so nothing moves while the PIN is being typed.
+          className="fixed inset-0 z-50 mx-auto flex w-full max-w-[480px] flex-col"
           style={{ background: "var(--background)" }}
         >
           <div className="safe-top" />
@@ -331,7 +319,7 @@ export default function AdminLayout() {
       {/* ── Main content ── */}
       <div
         data-app-scroll
-        className={`flex flex-col flex-1 ${isAssistant ? "min-h-0 overflow-hidden" : "overflow-y-auto"}`}
+        className={`flex flex-col flex-1 min-h-0 ${isAssistant ? "overflow-hidden" : "overflow-y-auto"}`}
         style={{ paddingBottom: showTabBar ? "var(--tabbar-height)" : "0px" }}
       >
         <Suspense fallback={<div className="flex items-center justify-center flex-1" style={{ color: "var(--text-secondary)" }}><div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" /></div>}>
@@ -346,7 +334,7 @@ export default function AdminLayout() {
           >
             {/* An account the database accepts nothing from is told so, instead of being shown
                 the owner's screens with nothing in them. */}
-            {noActiveShop ? <ShopAccessNotice /> : <Outlet />}
+            {noActiveShop ? <ShopAccessNotice /> : <BootGate><Outlet /></BootGate>}
           </div>
         </Suspense>
       </div>
@@ -355,7 +343,6 @@ export default function AdminLayout() {
           shell, so a tour step can move between the screens it teaches without the
           overlay ever having to exist outside a signed-in app. */}
       <FirstRunGate />
-      <ContextHelp />
 
       {/* The shop selector, mounted once for the whole shell. Screens open it through
           `useShopStore.openSwitcher()` rather than each mounting their own copy — one
@@ -383,6 +370,10 @@ export default function AdminLayout() {
                 boxShadow: "0 10px 30px rgba(0, 0, 0, 0.16)",
               }}
             >
+              {/* The travelling pill is a green TINT with brand-dark type, not a solid brand
+                  block (owner, 2026-11-16): on the tab bar the tint marks the active destination
+                  without competing with the solid-green New Sale and Scan actions, which are the
+                  two things the screen wants pressed. */}
               {indicator.ready && (
                 <span
                   aria-hidden
@@ -390,7 +381,7 @@ export default function AdminLayout() {
                   style={{
                     left: indicator.left,
                     width: indicator.width,
-                    background: "var(--brand)",
+                    background: "var(--brand-tint)",
                   }}
                 />
               )}
@@ -412,7 +403,7 @@ export default function AdminLayout() {
                     }
                     style={
                       isActive
-                        ? { color: "#0a0a0a" }
+                        ? { color: "var(--brand-dark)" }
                         : { color: "var(--text-secondary)" }
                     }
                   >
@@ -422,6 +413,9 @@ export default function AdminLayout() {
                 );
               })}
             </div>
+            {/* The scan action is a green TINT, not a solid brand circle (owner, 2026-11-16):
+                the one solid green left in the shell is New Sale, and a second loud green beside
+                the tab bar made the two compete. It still reads as the green action. */}
             <button
               type="button"
               onClick={handleNavScan}
@@ -430,12 +424,12 @@ export default function AdminLayout() {
               aria-busy={scanning}
               data-tour="tab:scan"
               className="flex size-14 shrink-0 items-center justify-center rounded-full ds-pressable disabled:opacity-60"
-              style={{ background: "var(--brand)", boxShadow: "0 8px 24px rgba(0, 0, 0, 0.2)" }}
+              style={{ background: "var(--brand-tint)", boxShadow: "0 8px 24px rgba(0, 0, 0, 0.2)" }}
             >
               <ScanLine
                 size={24}
                 strokeWidth={2.5}
-                color="#0a0a0a"
+                color="var(--brand-dark)"
                 className={scanning ? "animate-pulse" : undefined}
               />
             </button>

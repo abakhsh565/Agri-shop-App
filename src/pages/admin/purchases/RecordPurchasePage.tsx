@@ -3,16 +3,17 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import SelectSheet from "@/components/ui/SelectSheet";
+import LogoTile from "@/components/ui/LogoTile";
 import { useCompaniesStore } from "@/stores/companiesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { rpcCreatePurchase } from "@/lib/db";
-import { dependencyHint } from "@/lib/dependencyGraph";
 import { formatCurrency } from "@/lib/formatters";
 import { markupPercent, sellingFromMarkup } from "@/lib/profit";
 import { useUIStore } from "@/stores/uiStore";
 import { useThemeStore } from "@/stores/themeStore";
 import type { PaymentMethod } from "@/types";
 import { ChevronDown, AlertTriangle } from "lucide-react";
+import NumberStepper from "@/components/ui/NumberStepper";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 
@@ -28,12 +29,9 @@ export default function RecordPurchasePage() {
   const products = useProductsStore((s) => s.products);
 
   const [searchParams] = useSearchParams();
+  // The supplier is chosen on its own screen, which comes back here naming it in the address —
+  // the same way a new customer returns to the sale it was created for.
   const presetCompanyId = searchParams.get("companyId") || "";
-  // Creating the missing supplier from this form must come back to this form.
-  const supplierHint = dependencyHint("supplier", t, {
-    base,
-    returnTo: `${base}/purchases/new`,
-  });
   const [companyId, setCompanyId] = useState("");
   const [productId, setProductId] = useState("");
   const [variantId, setVariantId] = useState("");
@@ -52,7 +50,7 @@ export default function RecordPurchasePage() {
   const [loading, setLoading] = useState(false);
   const savingRef = useRef(false);
   const submissionKeyRef = useRef<string | null>(null);
-  const [sheet, setSheet] = useState<null | "company" | "product">(null);
+  const [sheet, setSheet] = useState<null | "product">(null);
 
   // Pre-select company when coming from Company Detail (Order Stock)
   useEffect(() => {
@@ -197,23 +195,24 @@ export default function RecordPurchasePage() {
           {/* Supplier */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("supplier.selectLabel")}</p>
-            {presetCompanyId ? (
-              <div className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm flex items-center" style={{ ...fieldStyle, opacity: 0.8 }}>
-                <span style={{ color: "var(--text-primary)" }}>{company?.name || t("common.loading")}</span>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setSheet("company")}
-                className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none flex items-center justify-between"
-                style={fieldStyle}
-              >
-                <span style={{ color: company ? "var(--text-primary)" : "var(--text-secondary)" }}>
-                  {company ? company.name : t("supplier.selectSupplier")}
-                </span>
-                <ChevronDown size={16} style={{ color: "var(--text-secondary)" }} />
-              </button>
-            )}
+            {/* The chosen supplier's own mark, read from the record every render — so a logo
+                added or replaced in Companies shows up here without this form knowing about it
+                (owner, 2026-11-17). */}
+            <button
+              type="button"
+              onClick={() => navigate(`${base}/purchases/party`)}
+              className="w-full h-14 rounded-[var(--radius-input)] px-3 text-sm outline-none flex items-center gap-3 text-start"
+              style={fieldStyle}
+              data-testid="purchase-party"
+            >
+              {company ? (
+                <LogoTile name={company.name} src={company.logoUrl} size={36} />
+              ) : null}
+              <span className="flex-1 min-w-0 truncate" style={{ color: company ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                {company ? company.name : t("supplier.selectSupplier")}
+              </span>
+              <ChevronDown size={16} style={{ color: "var(--text-secondary)" }} />
+            </button>
           </div>
 
           {/* Low-stock alert for this supplier */}
@@ -287,8 +286,14 @@ export default function RecordPurchasePage() {
               <div className="flex gap-3">
                 <div className="flex-1">
                   <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.quantity")}</p>
-                  <input type="number" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)}
-                    placeholder="0" className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm outline-none" style={fieldStyle} />
+                  <NumberStepper
+                    value={Number(qty) || 0}
+                    min={1}
+                    width={132}
+                    ariaLabel={t("admin.quantity")}
+                    inputTestId="purchase-qty"
+                    onChange={(v) => setQty(String(v))}
+                  />
                 </div>
                 <div className="flex-1">
                   <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("admin.baseCostUnit")}</p>
@@ -370,30 +375,6 @@ export default function RecordPurchasePage() {
         </button>
       </div>
 
-      <SelectSheet
-        open={sheet === "company"}
-        title={t("supplier.selectSupplier")}
-        searchable
-        options={companies.map((c) => ({
-          value: c.id,
-          label: c.name,
-          sub: c.outstandingPayable > 0
-            ? t("common.payableAmount", { amount: formatCurrency(c.outstandingPayable) })
-            : undefined,
-        }))}
-        selected={companyId}
-        emptyLabel={supplierHint.title}
-        /* A purchase cannot be recorded without a supplier, so the empty picker gave
-           the user nowhere to go. Tertiary, because the purchase form is the main
-           task here; on return the new supplier is preselected from the URL. */
-        emptyAction={
-          supplierHint.action
-            ? { label: supplierHint.action.label, onClick: () => navigate(supplierHint.action!.to) }
-            : undefined
-        }
-        onSelect={(id) => { setCompanyId(id); setProductId(""); setVariantId(""); }}
-        onClose={() => setSheet(null)}
-      />
       <SelectSheet
         open={sheet === "product"}
         title={t("purchases.selectProduct")}

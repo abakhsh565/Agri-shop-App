@@ -261,15 +261,28 @@ export function stopSpeaking(): void {
 export interface UrduSpeechOptions {
   onEnd?: () => void;
   onError?: () => void;
+  /** Fires when sound actually starts, so the screen can swap "preparing" for pause. */
+  onStart?: () => void;
 }
 
 export interface UrduSpeechHandle {
   stop: () => void;
+  pause: () => void;
+  resume: () => void;
 }
 
-/** Built once per reply, so pressing the same speaker twice does not pay for speech twice. */
-const speechCache = new Map<string, { audio: string; mimeType: string }>();
-const MAX_CACHED_REPLIES = 12;
+interface CachedSpeechPart {
+  audio: string;
+  mimeType: string;
+  total: number;
+}
+
+/**
+ * Pieces already spoken, so pressing the same speaker again starts immediately and a reply that
+ * is read twice is paid for once.
+ */
+const partCache = new Map<string, CachedSpeechPart>();
+const MAX_CACHED_PARTS = 24;
 
 function speechUrl(audio: string, mimeType: string): string {
   const bytes = Uint8Array.from(atob(audio), (character) => character.charCodeAt(0));
@@ -284,6 +297,47 @@ function speechUrl(audio: string, mimeType: string): string {
  * caller gets a stop handle immediately); the audio starts as soon as the server has prepared it.
  * A stop during preparation prevents playback, and a stop during playback stops the element.
  */
+/**
+ * One sentence's audio, from memory when it is already there.
+ *
+ * Shared by the speaker and the warm-up below, so a prefetched sentence and a freshly requested
+ * one cannot end up in two different caches.
+ */
+function requestPart(value: string, index: number): Promise<CachedSpeechPart> {
+  const key = `${value}::${index}`;
+  const cached = partCache.get(key);
+  if (cached) return Promise.resolve(cached);
+  return post({ action: "speak", text: value, part: index }).then((data) => {
+    const audioData = String(data?.audio ?? "");
+    if (!audioData) throw new Error("No speech returned.");
+    const part: CachedSpeechPart = {
+      audio: audioData,
+      mimeType: String(data?.mimeType ?? "audio/wav"),
+      total: Number(data?.total) > 0 ? Number(data.total) : 1,
+    };
+    partCache.set(key, part);
+    if (partCache.size > MAX_CACHED_PARTS) {
+      const oldest = partCache.keys().next().value;
+      if (oldest) partCache.delete(oldest);
+    }
+    return part;
+  });
+}
+
+/**
+ * Prepare the first sentence while the person is still reading the answer.
+ *
+ * The speech model has a floor of roughly three seconds that no amount of splitting removes, so
+ * the wait is moved instead of shrunk: the first sentence is translated and spoken as soon as
+ * the reply lands. Only that sentence is prepared — the rest is fetched while it plays — and the
+ * caller decides which replies are worth warming.
+ */
+export function prefetchSpeech(text: string): void {
+  const value = text.trim();
+  if (!value || typeof window === "undefined") return;
+  void requestPart(value, 0).catch(() => {});
+}
+
 export function speakUrdu(
   text: string,
   options: UrduSpeechOptions = {},
@@ -294,7 +348,8 @@ export function speakUrdu(
 
   let stopped = false;
   let audio: HTMLAudioElement | null = null;
-  let objectUrl: string | null = null;
+  let total = 1;
+  const urls: string[] = [];
 
   const cleanup = () => {
     if (audio) {
@@ -302,10 +357,8 @@ export function speakUrdu(
       audio.onerror = null;
     }
     audio = null;
-    if (objectUrl) {
-      URL.revokeObjectURL(objectUrl);
-      objectUrl = null;
-    }
+    for (const url of urls) URL.revokeObjectURL(url);
+    urls.length = 0;
   };
   const settle = (failed: boolean) => {
     if (stopped) return;
@@ -315,39 +368,106 @@ export function speakUrdu(
     else options.onEnd?.();
   };
 
-  void (async () => {
-    try {
-      let speech = speechCache.get(value);
-      if (!speech) {
-        const data = await post({ action: "speak", text: value });
-        const audioData = String(data?.audio ?? "");
-        if (!audioData) throw new Error("No speech returned.");
-        speech = { audio: audioData, mimeType: String(data?.mimeType ?? "audio/wav") };
-        speechCache.set(value, speech);
-        if (speechCache.size > MAX_CACHED_REPLIES) {
-          const oldest = speechCache.keys().next().value;
-          if (oldest) speechCache.delete(oldest);
-        }
-      }
+  const loadPart = (index: number) => requestPart(value, index);
+
+  /**
+   * Speak one sentence and, while it plays, fetch the next.
+   *
+   * The first sentence is a small request — one short translation and one short piece of audio —
+   * so the voice starts in a fraction of the time the whole reply used to take. Everything after
+   * it is already waiting in memory by the time the previous sentence finishes.
+   */
+  const playFrom = async (index: number) => {
+    const part = await loadPart(index);
+    if (stopped) return;
+    total = part.total;
+    const url = speechUrl(part.audio, part.mimeType);
+    urls.push(url);
+    const element = new Audio(url);
+    audio = element;
+    element.onended = () => {
       if (stopped) return;
-      objectUrl = speechUrl(speech.audio, speech.mimeType);
-      audio = new Audio(objectUrl);
-      audio.onended = () => settle(false);
-      audio.onerror = () => settle(true);
-      await audio.play();
-    } catch {
-      settle(true);
+      if (index + 1 < total) void playFrom(index + 1).catch(() => settle(true));
+      else settle(false);
+    };
+    element.onerror = () => settle(true);
+    await element.play();
+    if (stopped) {
+      element.pause();
+      return;
     }
-  })();
+    if (index === 0) options.onStart?.();
+    if (index + 1 < total) void loadPart(index + 1).catch(() => {});
+  };
+
+  void playFrom(0).catch(() => {
+    // The shop's own voice could not be prepared (no speech key on this deployment, a spent
+    // quota, a dropped connection). Before telling the person it failed, read the answer with
+    // the voice already on the device: an English reply in a device voice is worth more than an
+    // error, and the speaker button then still does what it looks like it does.
+    if (stopped) return;
+    cleanup();
+    const fallback = speakOnDevice(value, () => settle(false));
+    if (!fallback) settle(true);
+    else options.onStart?.();
+  });
 
   return {
     stop: () => {
       if (stopped) return;
       stopped = true;
       if (audio) audio.pause();
+      if (typeof window !== "undefined") window.speechSynthesis?.cancel();
       cleanup();
     },
+    // Pause and resume act on whichever voice is actually reading: the assistant's audio, or the
+    // device voice used as the fallback. While the audio is still being prepared there is nothing
+    // to pause yet, and the caller's state machine knows that.
+    pause: () => {
+      if (stopped) return;
+      if (audio) audio.pause();
+      else if (typeof window !== "undefined") window.speechSynthesis?.pause();
+    },
+    resume: () => {
+      if (stopped) return;
+      if (audio) void audio.play().catch(() => settle(true));
+      else if (typeof window !== "undefined") window.speechSynthesis?.resume();
+    },
   };
+}
+
+/**
+ * The device's own voice, used only when the assistant's Urdu audio is unavailable.
+ *
+ * It prefers a voice that can actually read the answer (Urdu, then Hindi, then the device default)
+ * and returns false when the platform has no speech synthesis at all, so the caller can still show
+ * its error instead of pretending something was said.
+ */
+function speakOnDevice(text: string, onDone: () => void): boolean {
+  if (typeof window === "undefined") return false;
+  const synth = window.speechSynthesis;
+  if (!synth || typeof SpeechSynthesisUtterance === "undefined") return false;
+  try {
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = synth.getVoices();
+    const preferred =
+      voices.find((v) => /^ur/i.test(v.lang)) ??
+      voices.find((v) => /^hi/i.test(v.lang)) ??
+      voices.find((v) => /^en-(pk|in)/i.test(v.lang)) ??
+      null;
+    if (preferred) {
+      utterance.voice = preferred;
+      utterance.lang = preferred.lang;
+    }
+    utterance.rate = 0.98;
+    utterance.onend = onDone;
+    utterance.onerror = onDone;
+    synth.cancel();
+    synth.speak(utterance);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

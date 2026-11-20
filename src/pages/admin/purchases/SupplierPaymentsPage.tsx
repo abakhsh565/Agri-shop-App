@@ -5,6 +5,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import Sheet from "@/components/ui/Sheet";
 import ListRow from "@/components/ui/ListRow";
+import Photo from "@/components/ui/Photo";
 import BalanceDateSheet, { type BalancePeriod } from "@/components/ui/BalanceDateSheet";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { useCompaniesStore } from "@/stores/companiesStore";
@@ -70,6 +71,8 @@ export default function SupplierPaymentsPage() {
 
   const nameOf = (companyId: string) =>
     companies.find((c) => c.id === companyId)?.name ?? t("moves.unknownItem");
+  const logoOf = (companyId: string) =>
+    companies.find((c) => c.id === companyId)?.logoUrl ?? null;
 
   const shown = useMemo(() => {
     if (period === "all") return payments;
@@ -192,12 +195,20 @@ export default function SupplierPaymentsPage() {
               data-testid={`supplier-payment-${payment.id}`}
             >
               <div className="flex items-start gap-3">
-                <span
-                  className="size-10 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-                >
-                  <Building2 size={16} />
-                </span>
+                {/* The supplier's own logo, always the latest one saved on the company. */}
+                <Photo
+                  src={logoOf(payment.companyId)}
+                  alt={nameOf(payment.companyId)}
+                  className="size-10 rounded-full object-cover shrink-0"
+                  fallback={
+                    <span
+                      className="size-10 rounded-full flex items-center justify-center shrink-0"
+                      style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                    >
+                      <Building2 size={16} />
+                    </span>
+                  }
+                />
                 <div className="min-w-0 flex-1">
                   <p className="text-14 font-bold truncate">{nameOf(payment.companyId)}</p>
                   <p className="text-11 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>

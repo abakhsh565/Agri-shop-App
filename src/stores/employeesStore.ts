@@ -1,8 +1,10 @@
 import { create } from "zustand";
-import { captureDataContext, isDataContextCurrent } from "@/lib/localCache";
+import { captureDataContext, getCachedData, isDataContextCurrent, setCachedData } from "@/lib/localCache";
 import { supabase } from "@/lib/supabase";
 import type { User, UserRole, MembershipRole, MembershipStatus } from "@/types";
 import { resolveImageUrl } from "@/lib/storage";
+
+const CACHE_KEY = "employees";
 
 // Employees ARE rows in the `users` table (the same table auth resolves login
 // against). Admins manage them; RLS lets admins read/insert/update all users.
@@ -150,7 +152,8 @@ interface EmployeesState {
 let channel: ReturnType<typeof supabase.channel> | null = null;
 
 export const useEmployeesStore = create<EmployeesState>((set, get) => ({
-  employees: [],
+  // The directory paints from cache, then the membership read below refreshes it.
+  employees: getCachedData<User[]>(CACHE_KEY) ?? [],
   loading: false,
   ready: false,
   error: null,
@@ -161,6 +164,8 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
   load: async () => {
     const context = captureDataContext();
     if (!isDataContextCurrent(context)) return;
+    const cached = getCachedData<User[]>(CACHE_KEY);
+    if (cached) set({ employees: cached, ready: true });
     set({ loading: true, error: null });
     // Authorization, not RLS row visibility, decides this directory. A person whose home shop
     // is another shop still has a membership here, and get_shop_members() returns exactly this
@@ -209,6 +214,7 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
       loading: false,
       ready: true,
     });
+    setCachedData(CACHE_KEY, get().employees);
   },
 
   subscribe: () => {

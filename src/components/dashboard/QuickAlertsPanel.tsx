@@ -231,7 +231,7 @@ export default function QuickAlertsPanel({
   const deck = items.slice(0, 7);
 
   return (
-    <section className="px-4 pt-2" data-testid="quick-alerts">
+    <section className="px-4 pt-5" data-testid="quick-alerts">
       <div
         className="rounded-[28px] p-3"
         style={{ background: "var(--surface)" }}

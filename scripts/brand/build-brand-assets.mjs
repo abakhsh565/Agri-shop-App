@@ -27,7 +27,11 @@ const WHITE = "#ffffff";
 
 const readSvg = (name) => readFile(path.join(RES, name), "utf8");
 /** The mark with its fill swapped — the same geometry, drawn in the colour the context needs. */
-const markIn = (svg, colour) => svg.replaceAll("#84CC16", colour);
+const markIn = (svg, colour) =>
+  svg
+    .replaceAll("#84CC16", colour)
+    .replaceAll('fill="white"', `fill="${colour}"`)
+    .replaceAll('fill="#FFFFFF"', `fill="${colour}"`);
 
 async function png(svg, size, background) {
   let img = sharp(Buffer.from(svg), { density: 600 });

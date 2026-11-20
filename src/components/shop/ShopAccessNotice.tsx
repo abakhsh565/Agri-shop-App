@@ -27,11 +27,27 @@ export function useNoActiveShop(): boolean {
   const hasActive = useShopStore((s) => s.shops.some((s) => s.membershipStatus === "active"));
   const branchesLoaded = useShopStore((s) => s.branchesLoaded);
   const activeBranchId = useShopStore((s) => s.activeBranchId);
+  const activeShopId = useShopStore((s) => s.activeShopId);
+  const usingRemembered = useShopStore((s) => s.usingRememberedShop);
   const userId = useAuthStore((s) => s.user?.id);
   // The answer must belong to the account standing here. `loaded` outlives a sign-out, so
   // without this check the next person to sign in would see the previous account's answer for
   // as long as their own read took.
-  return !!userId && loaded && ownerId === userId && !loading && (!hasActive || (branchesLoaded && !activeBranchId));
+  //
+  // TWO ANSWERS, NOT ONE (offline cold start, measured 2026-11-20). "The shop list could not be
+  // read" is not "this account has no shop": offline the list is empty and the shell showed the
+  // access notice over cached rows that were already on the device. When the shop in use came
+  // from the remembered context, the only thing that makes it unusable is not having one at all.
+  // A server-confirmed empty list still reaches the notice, because then nothing is remembered.
+  return (
+    !!userId &&
+    loaded &&
+    ownerId === userId &&
+    !loading &&
+    (usingRemembered
+      ? !activeShopId
+      : !hasActive || (branchesLoaded && !activeBranchId))
+  );
 }
 
 export default function ShopAccessNotice() {

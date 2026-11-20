@@ -4,8 +4,9 @@ import { useDelayedDismiss } from "@/hooks/usePresence";
 /** Matches --dur-3, the sheet duration token. */
 const SHEET_MS = 280;
 import { X } from "lucide-react";
-import SelectorField from "./SelectorField";
+import InlineSelect from "./InlineSelect";
 import DateField from "./DateField";
+import NumberStepper from "./NumberStepper";
 import { useT } from "@/lib/i18n";
 import type { ReminderConfig, ReminderRepeat, ReminderEnds, ReminderAnchor } from "@/types";
 import { DEFAULT_ESCALATION, escalationIsOrdered } from "@/lib/reminderEngine";
@@ -96,12 +97,6 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
 
   const escalationInvalid = local.repeat === "escalate" && !escalationIsOrdered(local.escalation);
 
-  const fieldStyle = {
-    background: "var(--field-bg)",
-    color: "var(--text-primary)",
-    borderRadius: "24px",
-  };
-
   const labelCls = "ds-section-label mb-2 block";
 
   return (
@@ -135,24 +130,25 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="px-5 pb-6 flex flex-col gap-5 overflow-y-auto" style={{ flex: 1 }}>
+        {/* Scrollable body — minHeight 0 so it is the part that scrolls, never the footer. */}
+        <div className="px-5 pb-4 flex flex-col gap-5 overflow-y-auto" style={{ flex: 1, minHeight: 0 }}>
 
           {/* Start reminders */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("reminder.startReminders")}</p>
             <div className="flex items-center gap-2">
-              <input
-                type="number"
+              <NumberStepper
                 value={local.startDays}
                 min={0}
-                onChange={(e) => update("startDays", parseInt(e.target.value) || 0)}
-                className="h-12 px-4 text-sm w-[72px] outline-none font-medium"
-                style={fieldStyle}
+                width={104}
+                ariaLabel={t("reminder.startReminders")}
+                inputTestId="reminder-start-days"
+                onChange={(v) => update("startDays", v)}
               />
               <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("reminder.days")}</span>
               <div className="flex-1">
-                <SelectorField
+                {/* In place, not a second overlay: four short answers resolve under the field. */}
+                <InlineSelect
                   value={local.anchor}
                   options={[
                     { value: "after_credit", label: t("reminder.afterCreditGiven") },
@@ -161,9 +157,9 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                     { value: "before_harvest", label: t("reminder.beforeHarvestFull") },
                   ]}
                   placeholder={t("reminder.afterCreditGiven")}
-                  title={t("reminder.startReminders")}
+                  label={t("reminder.startReminders")}
+                  testId="reminder-anchor"
                   onChange={(v) => update("anchor", v as ReminderAnchor)}
-                  showTile={false}
                 />
               </div>
             </div>
@@ -172,7 +168,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {/* Repeat */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("reminder.repeat")}</p>
-            <SelectorField
+            <InlineSelect
               value={local.repeat}
               options={[
                 { value: "once", label: t("reminder.oneTimeReminder") },
@@ -180,9 +176,9 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 { value: "escalate", label: t("reminder.escalatingSeq") },
               ]}
               placeholder={t("reminder.oneTimeReminder")}
-              title={t("reminder.repeat")}
+              label={t("reminder.repeat")}
+              testId="reminder-repeat"
               onChange={(v) => setRepeat(v as ReminderRepeat)}
-              showTile={false}
             />
           </div>
 
@@ -191,25 +187,25 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
             <div className="ps-4">
               <div className="flex items-center gap-2">
                 <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("reminder.every")}</span>
-                <input
-                  type="number"
+                <NumberStepper
                   value={local.intervalN}
                   min={1}
-                  onChange={(e) => update("intervalN", parseInt(e.target.value) || 1)}
-                  className="h-12 px-3 text-sm w-[60px] outline-none font-medium"
-                  style={fieldStyle}
+                  width={92}
+                  ariaLabel={t("reminder.repeat")}
+                  inputTestId="reminder-interval"
+                  onChange={(v) => update("intervalN", v)}
                 />
                 <div className="w-[116px]">
-                  <SelectorField
+                  <InlineSelect
                     value={local.intervalUnit}
                     options={[
                       { value: "days", label: t("reminder.days") },
                       { value: "weeks", label: t("reminder.weeks") },
                     ]}
                     placeholder={t("reminder.days")}
-                    title={t("reminder.repeat")}
+                    label={t("reminder.repeat")}
+                    testId="reminder-interval-unit"
                     onChange={(v) => update("intervalUnit", v as "days" | "weeks")}
-                    showTile={false}
                   />
                 </div>
               </div>
@@ -223,13 +219,13 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 <div key={i} className="flex items-center gap-3">
                   <span className="text-13 w-[96px] shrink-0 font-medium" style={{ color: "var(--text-secondary)" }}>{step.label === "Gentle" ? t("reminder.gentle") : step.label === "Firmer" ? t("reminder.firmer") : t("reminder.finalNotice")}</span>
                   <span className="text-12" style={{ color: "var(--text-muted, var(--text-secondary))" }}>{t("reminder.day")}</span>
-                  <input
-                    type="number"
+                  <NumberStepper
                     value={step.day}
-                    min={1}
-                    onChange={(e) => updateEscDay(i, parseInt(e.target.value) || 0)}
-                    className="h-12 px-3 text-13 w-[64px] outline-none font-medium"
-                    style={fieldStyle}
+                    min={0}
+                    width={92}
+                    ariaLabel={`${t("reminder.day")} ${i + 1}`}
+                    inputTestId={`reminder-step-${i}`}
+                    onChange={(v) => updateEscDay(i, v)}
                   />
                 </div>
               ))}
@@ -244,7 +240,7 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {/* Ends */}
           <div>
             <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("reminder.ends")}</p>
-            <SelectorField
+            <InlineSelect
               value={local.ends}
               options={[
                 { value: "paid", label: t("reminder.untilPaid") },
@@ -252,9 +248,9 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
                 { value: "count", label: t("reminder.afterCount") },
               ]}
               placeholder={t("reminder.untilPaid")}
-              title={t("reminder.ends")}
+              label={t("reminder.ends")}
+              testId="reminder-ends"
               onChange={(v) => update("ends", v as ReminderEnds)}
-              showTile={false}
             />
           </div>
 
@@ -271,13 +267,13 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
           {/* Ends count */}
           {local.ends === "count" && (
             <div className="flex items-center gap-2">
-              <input
-                type="number"
+              <NumberStepper
                 value={local.endsCount}
                 min={1}
-                onChange={(e) => update("endsCount", parseInt(e.target.value) || 1)}
-                className="h-12 px-4 text-sm w-[80px] outline-none font-medium"
-                style={fieldStyle}
+                width={104}
+                ariaLabel={t("reminder.reminders")}
+                inputTestId="reminder-ends-count"
+                onChange={(v) => update("endsCount", v)}
               />
               <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("reminder.reminders")}</span>
             </div>
@@ -291,11 +287,21 @@ export default function ReminderConfigSheet({ config, onSave, onClose }: Props) 
             {buildSummary(local, t)}
           </div>
 
-          {/* Save button */}
+        </div>
+
+        {/*
+          Fixed footer. The action used to sit inside the scrolling flex body, so it was a flex item
+          that shrank as the escalation rows grew — the button was a different height depending on
+          how many steps were showing. Here it is outside the scroll area and its height is pinned.
+        */}
+        <div
+          className="px-5 pt-3 pb-4 shrink-0"
+          style={{ borderTop: "1px solid var(--divider)", background: "var(--tone-sheet)" }}
+        >
           <button
             onClick={() => onSave({ ...local, id: local.id || "new-" + Date.now(), enabled: true })}
             disabled={escalationInvalid}
-            className="w-full h-12 rounded-full text-14 font-bold transition-opacity active:opacity-80 disabled:opacity-50"
+            className="w-full h-12 min-h-12 rounded-full text-14 font-bold transition-opacity active:opacity-80 disabled:opacity-50"
             style={{ background: "var(--brand)", color: "#0a0a0a" }}
           >
             {t("reminder.saveSchedule")}

@@ -6,6 +6,7 @@ const SHEET_MS = 280;
 import { X, Users } from "lucide-react";
 import SelectorField from "./SelectorField";
 import DateField from "./DateField";
+import NumberStepper from "./NumberStepper";
 import { useT } from "@/lib/i18n";
 import CustomerSelector from "./CustomerSelector";
 import type { ReminderConfig, ReminderRepeat, ReminderEnds, ReminderAnchor } from "@/types";
@@ -201,9 +202,10 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
               <div>
                 <p className={labelCls} style={{ color: "var(--text-secondary)" }}>{t("reminder.startReminders")}</p>
                 <div className="flex items-center gap-2">
-                  <input type="number" value={config.startDays} min={0}
-                    onChange={(e) => updateConfig("startDays", parseInt(e.target.value) || 0)}
-                    className="h-12 px-4 text-sm w-[72px] outline-none font-medium" style={fieldStyle} />
+                  <NumberStepper value={config.startDays} min={0} width={104}
+                    ariaLabel={t("reminder.startReminders")}
+                    inputTestId="group-reminder-start-days"
+                    onChange={(v) => updateConfig("startDays", v)} />
                   <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("reminder.days")}</span>
                   <div className="flex-1">
                     <SelectorField
@@ -243,9 +245,10 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
                 <div className="ps-4">
                   <div className="flex items-center gap-2">
                     <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("reminder.every")}</span>
-                    <input type="number" value={config.intervalN} min={1}
-                      onChange={(e) => updateConfig("intervalN", parseInt(e.target.value) || 1)}
-                      className="h-12 px-3 text-sm w-[60px] outline-none font-medium" style={fieldStyle} />
+                    <NumberStepper value={config.intervalN} min={1} width={92}
+                      ariaLabel={t("reminder.repeat")}
+                      inputTestId="group-reminder-interval"
+                      onChange={(v) => updateConfig("intervalN", v)} />
                     <div className="w-[116px]">
                       <SelectorField
                         value={config.intervalUnit}
@@ -271,13 +274,14 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
                         {step.label === "Gentle" ? t("reminder.gentle") : step.label === "Firmer" ? t("reminder.firmer") : t("reminder.finalNotice")}
                       </span>
                       <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("reminder.day")}</span>
-                      <input type="number" value={step.day} min={1}
-                        onChange={(e) => {
+                      <NumberStepper value={step.day} min={0} width={92}
+                        ariaLabel={`${t("reminder.day")} ${i + 1}`}
+                        inputTestId={`group-reminder-step-${i}`}
+                        onChange={(v) => {
                           const esc = [...config.escalation];
-                          esc[i] = { ...esc[i], day: parseInt(e.target.value) || 0 };
+                          esc[i] = { ...esc[i], day: v };
                           updateConfig("escalation", esc);
-                        }}
-                        className="h-12 px-3 text-13 w-[64px] outline-none font-medium" style={fieldStyle} />
+                        }} />
                     </div>
                   ))}
                   {escalationInvalid && (
@@ -314,9 +318,10 @@ export default function GroupReminderSheet({ groupName: initGroupName, config: i
 
               {config.ends === "count" && (
                 <div className="flex items-center gap-2">
-                  <input type="number" value={config.endsCount} min={1}
-                    onChange={(e) => updateConfig("endsCount", parseInt(e.target.value) || 1)}
-                    className="h-12 px-4 text-sm w-[80px] outline-none font-medium" style={fieldStyle} />
+                  <NumberStepper value={config.endsCount} min={1} width={104}
+                    ariaLabel={t("reminder.reminders")}
+                    inputTestId="group-reminder-ends-count"
+                    onChange={(v) => updateConfig("endsCount", v)} />
                   <span className="text-13" style={{ color: "var(--text-secondary)" }}>{t("reminder.reminders")}</span>
                 </div>
               )}

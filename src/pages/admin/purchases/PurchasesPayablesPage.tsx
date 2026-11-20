@@ -5,7 +5,9 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
+import Photo from "@/components/ui/Photo";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import RollingNumber from "@/components/ui/RollingNumber";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { useCompaniesStore } from "@/stores/companiesStore";
@@ -157,12 +159,20 @@ export default function PurchasesPayablesPage() {
                   className="w-full text-start active:opacity-70"
                 >
                   <span className="flex items-start gap-3">
-                    <span
-                      className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0"
-                      style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
-                    >
-                      {company.name.charAt(0).toUpperCase()}
-                    </span>
+                    {/* The supplier's latest saved logo, falling back to its initial. */}
+                    <Photo
+                      src={company.logoUrl}
+                      alt={company.name}
+                      className="size-10 rounded-full object-cover shrink-0"
+                      fallback={
+                        <span
+                          className="size-10 rounded-full flex items-center justify-center font-bold text-14 shrink-0"
+                          style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                        >
+                          {company.name.charAt(0).toUpperCase()}
+                        </span>
+                      }
+                    />
                     <span className="min-w-0 flex-1 block">
                       <span className="block text-14 font-bold truncate">{company.name}</span>
                       <span
@@ -174,7 +184,7 @@ export default function PurchasesPayablesPage() {
                     </span>
                     <span className="shrink-0 text-end">
                       <span className="block text-14 font-bold tabular-nums">
-                        {formatCurrency(company.outstandingPayable)}
+                        <RollingNumber text={formatCurrency(company.outstandingPayable)} />
                       </span>
                       {overdue && (
                         <span
@@ -239,7 +249,7 @@ export default function PurchasesPayablesPage() {
                               trailing={
                                 <div className="text-end shrink-0">
                                   <p className="text-13 font-bold tabular-nums">
-                                    {formatCurrency(bill.outstandingPayable)}
+                                    <RollingNumber text={formatCurrency(bill.outstandingPayable)} />
                                   </p>
                                   <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>
                                     {t("supplierDetail.unpaidAtDelivery")}

@@ -453,8 +453,8 @@ export async function loginViaUi(
   // The field takes the local 03… form. A 92… constant is re-read by the field's own
   // paste rule as a country code and becomes a 10-digit number the validator refuses,
   // so the caller's constant is normalised here rather than in every spec.
-  await page.getByPlaceholder('e.g. 03001234567').fill(/^92\d{10}$/.test(phone) ? `0${phone.slice(2)}` : phone);
-  await page.getByRole('button', { name: 'Send Code' }).click();
+  await page.getByPlaceholder('Enter your mobile number').fill(/^92\d{10}$/.test(phone) ? `0${phone.slice(2)}` : phone);
+  await page.getByRole('button', { name: 'Continue' }).click();
   await page.waitForURL(/\/login\/otp/, { timeout: 20000 });
 
   // The digit boxes, addressed by role rather than position: the OTP field also

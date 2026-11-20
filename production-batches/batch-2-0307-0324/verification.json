@@ -1,0 +1,233 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-11-20T16:03:32.130Z",
+  "baseline": {
+    "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-15T00-11-55.sql",
+    "environment": "production",
+    "artifactSha256": "4e4668a6f4108f29f194900057c6a66cb139e7e91934c638be5d111ac41f9346",
+    "sha256Verified": true,
+    "capturedAt": "2026-11-15T00:11:55Z",
+    "statements": 1584,
+    "dataStatements": 125,
+    "dataStatementsSkipped": 123,
+    "referenceData": [
+      {
+        "table": "public.permissions",
+        "rows": 33
+      },
+      {
+        "table": "storage.buckets",
+        "rows": 6
+      }
+    ],
+    "loadFailures": [],
+    "skippedStatements": [
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA auth"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA storage"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" WITH SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('r"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('req"
+      },
+      {
+        "reason": "scaffold-publication",
+        "statement": "CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate')"
+      }
+    ]
+  },
+  "selection": {
+    "since": null,
+    "upto": null,
+    "files": "supabase/migrations/0307_the_notifications_table_is_readable_by_its_roles.sql,supabase/migrations/0308_the_daily_cash_count_keeps_its_write_path.sql,supabase/migrations/0309_the_acl_guard_names_the_retired_writes.sql,supabase/migrations/0311_granting_customers_edit_grants_the_credit_limit.sql,supabase/migrations/0312_the_owner_approves_a_shop_from_the_table_editor.sql,supabase/migrations/0314_a_decision_provisions_with_or_without_the_shop_writer.sql,supabase/migrations/0315_a_demo_login_gets_the_identity_an_sms_login_would.sql,supabase/migrations/0316_the_login_bridge_carries_row_level_security.sql,supabase/migrations/0317_granting_customers_edit_still_grants_the_credit_limit.sql,supabase/migrations/0318_the_pairing_function_is_named_server_only.sql,supabase/migrations/0319_an_invoice_is_the_shops_own_paperwork.sql,supabase/migrations/0320_an_invoice_can_be_for_anybody_and_can_be_rewritten.sql,supabase/migrations/0321_a_bill_says_what_it_is_for.sql,supabase/migrations/0322_a_sale_can_carry_a_discount.sql,supabase/migrations/0323_the_report_says_what_the_discount_cost.sql,supabase/migrations/0324_a_bill_can_choose_its_paper.sql",
+    "resolved": [
+      "0307_the_notifications_table_is_readable_by_its_roles.sql",
+      "0308_the_daily_cash_count_keeps_its_write_path.sql",
+      "0309_the_acl_guard_names_the_retired_writes.sql",
+      "0311_granting_customers_edit_grants_the_credit_limit.sql",
+      "0312_the_owner_approves_a_shop_from_the_table_editor.sql",
+      "0314_a_decision_provisions_with_or_without_the_shop_writer.sql",
+      "0315_a_demo_login_gets_the_identity_an_sms_login_would.sql",
+      "0316_the_login_bridge_carries_row_level_security.sql",
+      "0317_granting_customers_edit_still_grants_the_credit_limit.sql",
+      "0318_the_pairing_function_is_named_server_only.sql",
+      "0319_an_invoice_is_the_shops_own_paperwork.sql",
+      "0320_an_invoice_can_be_for_anybody_and_can_be_rewritten.sql",
+      "0321_a_bill_says_what_it_is_for.sql",
+      "0322_a_sale_can_carry_a_discount.sql",
+      "0323_the_report_says_what_the_discount_cost.sql",
+      "0324_a_bill_can_choose_its_paper.sql"
+    ]
+  },
+  "files": [
+    {
+      "filename": "0307_the_notifications_table_is_readable_by_its_roles.sql",
+      "version": "0307",
+      "statements": 2,
+      "sha256": "4907fc1aad97d1d78145f86e591c62157557149ea12a68a0d3051a26e06c39c1",
+      "failures": []
+    },
+    {
+      "filename": "0308_the_daily_cash_count_keeps_its_write_path.sql",
+      "version": "0308",
+      "statements": 4,
+      "sha256": "964f394ae0f0977add4c61f4fc102bd9b0b2c9d67b15e5bb5743509c4bd8bbe1",
+      "failures": []
+    },
+    {
+      "filename": "0309_the_acl_guard_names_the_retired_writes.sql",
+      "version": "0309",
+      "statements": 2,
+      "sha256": "b57cbbe2aab4cdc84501215dad239253f36cf4eab3d4636b6832787894f072b3",
+      "failures": []
+    },
+    {
+      "filename": "0311_granting_customers_edit_grants_the_credit_limit.sql",
+      "version": "0311",
+      "statements": 2,
+      "sha256": "decaba08457b3f08197c2e10aec538fab5f3ce851a45b2a5eb18a5a43bb2a817",
+      "failures": []
+    },
+    {
+      "filename": "0312_the_owner_approves_a_shop_from_the_table_editor.sql",
+      "version": "0312",
+      "statements": 11,
+      "sha256": "4939203d0623653158a9c1e986e0bd7d8e6a98615d761ebf04f1105d661be844",
+      "failures": []
+    },
+    {
+      "filename": "0314_a_decision_provisions_with_or_without_the_shop_writer.sql",
+      "version": "0314",
+      "statements": 9,
+      "sha256": "5d8651931570b96f10bffb7fbf10c9b1a832c17fc7a292cf71823f5a7f4dc745",
+      "failures": []
+    },
+    {
+      "filename": "0315_a_demo_login_gets_the_identity_an_sms_login_would.sql",
+      "version": "0315",
+      "statements": 14,
+      "sha256": "dc8a9a37ae0fa780b1e9227b2e0292c1286298bad4602a119c6fb72e1cedc58b",
+      "failures": []
+    },
+    {
+      "filename": "0316_the_login_bridge_carries_row_level_security.sql",
+      "version": "0316",
+      "statements": 4,
+      "sha256": "927edb9d955fd97106d88f41f05c9e4f92b7bb54320d160981ab6358844ce51c",
+      "failures": []
+    },
+    {
+      "filename": "0317_granting_customers_edit_still_grants_the_credit_limit.sql",
+      "version": "0317",
+      "statements": 7,
+      "sha256": "8e7cef318488b7a0d86d3b22d8ef3f79f8b1aaaca8597760dc7add771a344a55",
+      "failures": []
+    },
+    {
+      "filename": "0318_the_pairing_function_is_named_server_only.sql",
+      "version": "0318",
+      "statements": 1,
+      "sha256": "d2c4d3dd3a4116270765a46fec2fe57c165444cff5e7861942d19f0b1045e43d",
+      "failures": []
+    },
+    {
+      "filename": "0319_an_invoice_is_the_shops_own_paperwork.sql",
+      "version": "0319",
+      "statements": 30,
+      "sha256": "4203394c91906e0912484df629e3478e3162d96fd44ea6901f68c93e4749f366",
+      "failures": []
+    },
+    {
+      "filename": "0320_an_invoice_can_be_for_anybody_and_can_be_rewritten.sql",
+      "version": "0320",
+      "statements": 15,
+      "sha256": "42217efd84f81253a6e388eb69220f771fd4a49cb16fbc8f9a1e511ca0371923",
+      "failures": []
+    },
+    {
+      "filename": "0321_a_bill_says_what_it_is_for.sql",
+      "version": "0321",
+      "statements": 10,
+      "sha256": "d4a70770cba00e57af78c33eca867aabeb30202c2a89b771bb10ba3c84f0ff80",
+      "failures": []
+    },
+    {
+      "filename": "0322_a_sale_can_carry_a_discount.sql",
+      "version": "0322",
+      "statements": 2,
+      "sha256": "3769612b8aa20dd37ade5899ec455d2a15dad093b90b3bcf821fd393c00cced0",
+      "failures": []
+    },
+    {
+      "filename": "0323_the_report_says_what_the_discount_cost.sql",
+      "version": "0323",
+      "statements": 3,
+      "sha256": "46c997185518fc687038693562627d3e0b065b09baf26e37dc3c482a7032c38d",
+      "failures": []
+    },
+    {
+      "filename": "0324_a_bill_can_choose_its_paper.sql",
+      "version": "0324",
+      "statements": 2,
+      "sha256": "9a683bbafbe2b504163b49b72c908878fdcb2eb99233742e3b3a0976505beb09",
+      "failures": []
+    }
+  ],
+  "summary": {
+    "status": "PASS",
+    "files": 16,
+    "statements": 118,
+    "failedStatements": 0,
+    "envGapFailures": 0,
+    "sqlFailures": 0,
+    "expectedPhaseFailures": 0,
+    "baselineLoadFailures": 0,
+    "baselineSqlFailures": 0,
+    "baselineEnvGapFailures": 0,
+    "baselineExpectedPhaseFailures": 0,
+    "baselineSkippedStatements": 12,
+    "baselineSkippedByReason": {
+      "scaffold-schema": 3,
+      "extension-unavailable": 4,
+      "scaffold-function": 4,
+      "scaffold-publication": 1
+    }
+  },
+  "exitCode": 0
+}

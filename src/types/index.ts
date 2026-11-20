@@ -574,6 +574,11 @@ export interface SaleItem {
   baseUnit: string;
   lineTotal: number;
   /**
+   * Money taken off this line, as an amount (a percentage is a way of typing one).
+   * `lineTotal` is already net of it, so every report reads one number.
+   */
+  discount?: number;
+  /**
    * Line cost of goods recorded at the time of sale (cost x qty).
    * Undefined only for rows recorded before COGS snapshots existed; those fall
    * back to the current variant cost. Never treat a missing cost as zero.
@@ -595,6 +600,8 @@ export interface Sale {
   subtotal: number;
   taxAmount: number;
   totalAmount: number;
+  /** The bill's own discount, already taken off `totalAmount`. Absent on older rows. */
+  discount?: number;
   amountPaid: number;
   outstandingBalance: number;
   paymentType: PaymentType;
@@ -621,6 +628,8 @@ export interface CartItem {
   lineTotal: number;
   maxQty: number;
   qtyStep: number;
+  /** Money taken off this line, in rupees. `lineTotal` is already net of it. */
+  discount?: number;
 }
 
 // ─── Customer Payments ────────────────────────────────────────────────────────

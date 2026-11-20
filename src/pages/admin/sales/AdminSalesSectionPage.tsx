@@ -10,16 +10,19 @@ import {
   ReceiptText,
   RotateCw,
   Share2,
+  Store,
   Undo2,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import PeriodTabs from "@/components/ui/PeriodTabs";
+import BranchSwitchChip from "@/components/shop/BranchSwitchChip";
 import DateRangeSheet from "@/components/ui/DateRangeSheet";
 import ListRow from "@/components/ui/ListRow";
 import Sheet from "@/components/ui/Sheet";
 import { SectionActionsButton } from "@/components/ui/SectionActionsSheet";
 import { Skeleton } from "@/components/ui/Skeleton";
+import RollingNumber from "@/components/ui/RollingNumber";
 import SalesActivitySheet, { type SalesActivityKind } from "@/components/sales/SalesActivitySheet";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
@@ -258,6 +261,7 @@ export default function AdminSalesSectionPage() {
   const salesReady = useSalesStore((s) => s.ready);
   const loadSales = useSalesStore((s) => s.load);
   const branchName = useShopStore((s) => s.activeBranchName);
+  const openSwitcher = useShopStore((s) => s.openSwitcher);
   const { returns, refresh: refreshReturns } = useReturns();
 
   const [period, setPeriod] = useState<Period>("month");
@@ -408,7 +412,9 @@ export default function AdminSalesSectionPage() {
             : period === "year"
               ? t("period.year")
               : t("overall.custom");
-  const scopeLine = `${rangeLabel(rangeFrom, rangeTo)} · ${branchName ?? t("sales.thisBranch")} · ${t("overall.vsPrevious")}`;
+  /* The branch is the chip beside this heading, not a word in the scope line: the report is
+   * measured in whichever branch the switcher is standing in (owner, 2026-11-17). */
+  const scopeLine = `${rangeLabel(rangeFrom, rangeTo)} · ${t("overall.vsPrevious")}`;
 
   // ── Branch performance ──────────────────────────────────────────────────────────
   // The same window the report is showing, resolved per branch at the database (0253). The
@@ -717,17 +723,25 @@ export default function AdminSalesSectionPage() {
         }
       />
 
-      <div className="px-4 pt-1">
-        <h1 className="text-22 font-bold leading-tight" data-testid="sales-headline">
-          {periodTitle}
-        </h1>
-        <p
-          className="text-13 mt-1"
-          style={{ color: "var(--text-secondary)" }}
-          data-testid="sales-scope"
-        >
-          {scopeLine}
-        </p>
+      <div className="px-4 pt-1 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-22 font-bold leading-tight" data-testid="sales-headline">
+            {periodTitle}
+          </h1>
+          <p
+            className="text-13 mt-1"
+            style={{ color: "var(--text-secondary)" }}
+            data-testid="sales-scope"
+          >
+            {scopeLine}
+          </p>
+        </div>
+        <BranchSwitchChip
+          branchName={branchName}
+          onClick={() => openSwitcher()}
+          testId="sales-branch-switch"
+          className="mt-0.5"
+        />
       </div>
 
       <div className="px-4 pt-4">
@@ -759,7 +773,7 @@ export default function AdminSalesSectionPage() {
               {row.map((tile) => (
                 <div key={tile.testId} className="min-w-0" data-testid={tile.testId}>
                   <p className="text-18 font-semibold leading-none tabular-nums break-words">
-                    {tile.value}
+                    <RollingNumber text={tile.value} />
                   </p>
                   <p className="text-13 mt-2" style={{ color: "var(--text-secondary)" }}>
                     {tile.label}
@@ -769,7 +783,7 @@ export default function AdminSalesSectionPage() {
                     style={{ color: tile.note.tone }}
                     data-testid={`${tile.testId}-note`}
                   >
-                    {tile.note.text}
+                    <RollingNumber text={tile.note.text} />
                   </p>
                 </div>
               ))}
@@ -785,7 +799,7 @@ export default function AdminSalesSectionPage() {
           <div className="min-w-0">
             <p className="text-13" style={{ color: "var(--text-secondary)" }}>{t("sales.today")}</p>
             <p className="text-18 font-semibold mt-1 tabular-nums break-words">
-              {compactMoney(daily.todayGross)}
+              <RollingNumber text={compactMoney(daily.todayGross)} />
             </p>
           </div>
           <div className="min-w-0">
@@ -793,7 +807,7 @@ export default function AdminSalesSectionPage() {
               {t("sales.sameDayLastWeek")}
             </p>
             <p className="text-18 font-semibold mt-1 tabular-nums break-words">
-              {compactMoney(daily.lastWeekGross)}
+              <RollingNumber text={compactMoney(daily.lastWeekGross)} />
             </p>
           </div>
         </div>
@@ -845,7 +859,7 @@ export default function AdminSalesSectionPage() {
           </div>
 
           <p className="text-18 font-semibold mt-3 tabular-nums break-words">
-            {compactMoney(metricTotal)}
+            <RollingNumber text={compactMoney(metricTotal)} />
           </p>
           <p className="text-11 mt-0.5 flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
             {change != null && (
@@ -943,85 +957,6 @@ export default function AdminSalesSectionPage() {
         </div>
       </div>
 
-      {/* ── 4. Which branch contributed what ───────────────────────────────────────── */}
-      {/* The branch comparison is its own panel, matching the trend above. */}
-      <div className="px-4 pt-4">
-        <div
-          data-testid="sales-hub-branches"
-          className="rounded-[var(--radius-card)] p-4"
-          style={{ background: "var(--tone-card)" }}
-        >
-          <p className="text-14 font-bold">{t("overall.branchPerformance")}</p>
-          <p className="text-11 mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            {t("sales.branchCompareHint")}
-          </p>
-
-          {branchFailed ? (
-            <p className="text-12 mt-3" style={{ color: "var(--text-secondary)" }} data-testid="sales-branches-failed">
-              {t("sales.branchReadFailed")}
-            </p>
-          ) : periodBranchRows === null ? (
-            <div className="flex flex-col gap-3 mt-3" aria-busy="true">
-              <Skeleton w="100%" h="34px" />
-              <Skeleton w="100%" h="34px" />
-            </div>
-          ) : branchRows.length === 0 ? (
-            <p className="text-12 mt-3" style={{ color: "var(--text-secondary)" }}>
-              {t("sales.noBranchInScope")}
-            </p>
-          ) : (
-            <div className="flex flex-col gap-3.5 mt-3">
-              {branchRows.map((branch) => (
-                <div key={branch.branchId} data-testid={`sales-branch-${branch.branchId}`}>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-13 font-semibold truncate min-w-0">
-                      {branch.branchName}
-                      {branch.isCurrent && (
-                        <span className="text-10 font-normal ms-1.5" style={{ color: "var(--text-secondary)" }}>
-                          {t("shop.current")}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-13 font-bold tabular-nums shrink-0">
-                      {branch.grossSales != null ? formatCurrency(branch.grossSales) : "—"}
-                    </p>
-                  </div>
-                  {/* `flex` so the fill grows from the row's inline start: in Urdu the bar has
-                      to begin under the name, which sits on the right. */}
-                  <div
-                    className="mt-1.5 h-1.5 rounded-full overflow-hidden flex"
-                    style={{ background: "var(--tone-sunken)" }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.max(0, Math.min(100, ((branch.grossSales ?? 0) / maxBranchSales) * 100))}%`,
-                        background: "var(--brand)",
-                      }}
-                    />
-                  </div>
-                  {/* The two figures behind that gross, for the same window: refunds are stated
-                      rather than netted into the bar, so a branch with heavy returns is visible. */}
-                  <div className="flex items-baseline justify-between gap-3 mt-1">
-                    <p className="text-10" style={{ color: "var(--text-tertiary)" }}>
-                      {t("hub.sales.salesReturns")}{" "}
-                      <span className="tabular-nums" style={{ color: "var(--text-secondary)" }}>
-                        {branch.returns == null ? "—" : formatCurrency(branch.returns)}
-                      </span>
-                    </p>
-                    <p className="text-10" style={{ color: "var(--text-tertiary)" }}>
-                      {t("sales.netSales")}{" "}
-                      <span className="tabular-nums" style={{ color: "var(--text-secondary)" }}>
-                        {branch.netSales == null ? "—" : formatCurrency(branch.netSales)}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* ── 5. Where the ledgers live ──────────────────────────────────────────────── */}
       {/* The "Returns analysis" card that used to sit here is gone (owner, 2026-10-30): its two
@@ -1034,7 +969,7 @@ export default function AdminSalesSectionPage() {
           icon={ReceiptText}
           title={t("hub.sales.viewAllSales")}
           trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}
-          onClick={() => navigate(`${base}/sales`)}
+          onClick={() => navigate(`${base}/history/sales`)}
         />
         <ListRow
           testId="hub-row-returns"

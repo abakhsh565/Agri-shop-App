@@ -22,10 +22,10 @@ import {
   Sparkles,
   Square,
   Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
+import BrandLogo from "@/components/brand/BrandLogo";
 import Sheet from "@/components/ui/Sheet";
 import AssistantWidget from "@/components/assistant/AssistantWidget";
 import AssistantFinanceCard from "@/components/assistant/AssistantFinanceCard";
@@ -33,6 +33,7 @@ import {
   askAssistant,
   assistantAbilities,
   listen,
+  prefetchSpeech,
   speakUrdu,
   stopSpeaking,
   toolTitleKey,
@@ -40,6 +41,7 @@ import {
   type AssistantAbilities,
   type AssistantReply,
   type AssistantTurn,
+  type UrduSpeechHandle,
 } from "@/lib/assistant";
 import { financeDraftFromText, type AssistantFinanceDraft } from "@/lib/assistantFinance";
 import { translations, useT } from "@/lib/i18n";
@@ -79,6 +81,9 @@ const MAX_ASSISTANT_PHOTO_BYTES = HARD_MAX_IMAGE_BYTES;
 const SPEECH_LANG_EN = "en-US";
 const SPEECH_LANG_UR = "ur-PK";
 
+/** Whether this device has ever used the speaker, so a reply's first sentence can be warmed. */
+const VOICE_WARMED_KEY = "agrishop.assistant.voiceWarmed";
+
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -96,18 +101,72 @@ function toolName(t: (key: string) => string, tool: { name: string; title: strin
 
 /** The reference's talking mark, drawn from the app's own green rather than its orange. */
 function AssistantOrb({ compact = false }: { compact?: boolean }) {
-  const bars = compact ? 5 : 7;
   return (
     <span
       className={`ds-assistant-orb${compact ? " ds-assistant-orb--compact" : ""}`}
       aria-hidden="true"
     >
-      <span className="ds-assistant-orb-bars">
-        {Array.from({ length: bars }, (_, index) => (
-          <span key={index} style={{ animationDelay: `${index * 0.11}s` }} />
-        ))}
-      </span>
+      {/* The shop's own mark, not a second invented identity: the same chrome-mesh glyph the
+          launcher wears, at the top of a conversation and beside every reply. */}
+      <BrandLogo
+        variant="mark"
+        tone="mesh"
+        size={compact ? 30 : 80}
+        animated={!compact}
+        className={compact ? "ds-assistant-orb-mark" : "ds-assistant-orb-mark ds-assistant-orb-mark--lg"}
+      />
     </span>
+  );
+}
+
+/**
+ * The speaker that is reading, with a pause beneath its waves — tap it and the voice stops.
+ *
+ * Drawn here rather than assembled from two icons because the pair has to read as one control: a
+ * speaker, and the thing the next tap does. Same 16px mark as the plain speaker, so the button
+ * does not change size between the idle, reading and paused states.
+ */
+function SpeakerPauseIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={17}
+      height={17}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {/* One wave, not two: at 17px a second wave turns the mark into a smudge and the pause
+          mark stops being readable, which is the one thing the button has to say. */}
+      <path d="M3.4 9.2h3.1L11 5.4v13.2l-4.5-3.8H3.4Z" fill="currentColor" stroke="none" />
+      <path d="M13.6 9.4a4.2 4.2 0 0 1 0 5.2" />
+      <path d="M17.6 15.2v4.4" strokeWidth={2.1} />
+      <path d="M21.2 15.2v4.4" strokeWidth={2.1} />
+    </svg>
+  );
+}
+
+/** The same speaker with a play mark: the voice is paused, and this resumes it. */
+function SpeakerPlayIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={17}
+      height={17}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3.4 9.2h3.1L11 5.4v13.2l-4.5-3.8H3.4Z" fill="currentColor" stroke="none" />
+      <path d="M13.6 9.4a4.2 4.2 0 0 1 0 5.2" />
+      <path d="M17.2 15.2 21.4 17.6 17.2 20Z" fill="currentColor" stroke="none" />
+    </svg>
   );
 }
 
@@ -133,7 +192,12 @@ export default function AssistantPage() {
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [micError, setMicError] = useState("");
-  const [speaking, setSpeaking] = useState<{ index: number; text: string } | null>(null);
+  // A spoken reply is preparing, playing or paused; the speaker button shows each of the three.
+  const [speaking, setSpeaking] = useState<{
+    index: number;
+    text: string;
+    status: "loading" | "playing" | "paused";
+  } | null>(null);
   const [speechError, setSpeechError] = useState("");
   const [abilities, setAbilities] = useState<AssistantAbilities | null>(null);
   const [showAbilities, setShowAbilities] = useState(false);
@@ -142,11 +206,23 @@ export default function AssistantPage() {
 
   const stopListeningRef = useRef<(() => void) | null>(null);
   const stopAudioRef = useRef<(() => void) | null>(null);
+  const speechHandleRef = useRef<UrduSpeechHandle | null>(null);
   const listeningRef = useRef(false);
   const sendingRef = useRef(false);
   // A new spoken reply or a manual stop increments this. Late callbacks from a cancelled
   // utterance cannot then update the speaking state or start a second utterance.
   const speakRun = useRef(0);
+  // Only a person who has actually used the speaker gets replies warmed in advance: preparing a
+  // voice nobody asks for would spend the shop's speech quota on silence. Remembered across
+  // reloads, because otherwise the first tap of every session is the slow one again.
+  const voiceWarmed = useRef(false);
+  useEffect(() => {
+    try {
+      voiceWarmed.current = window.localStorage.getItem(VOICE_WARMED_KEY) === "1";
+    } catch {
+      voiceWarmed.current = false;
+    }
+  }, []);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const galleryInput = useRef<HTMLInputElement | null>(null);
@@ -263,12 +339,33 @@ export default function AssistantPage() {
       if (error.code === "timeout") return t("assistant.timeout");
     }
     return t("assistant.failed");
-  }  function stopVoice() {
+  }
+
+  function stopVoice() {
     speakRun.current += 1;
     stopAudioRef.current?.();
     stopAudioRef.current = null;
+    speechHandleRef.current = null;
     setSpeaking(null);
     stopSpeaking();
+  }
+
+  /** The speaker doubles as the pause button once the voice has actually started. */
+  function toggleSpeech() {
+    const handle = speechHandleRef.current;
+    if (!handle) return;
+    setSpeaking((current) => {
+      if (!current) return current;
+      if (current.status === "playing") {
+        handle.pause();
+        return { ...current, status: "paused" };
+      }
+      if (current.status === "paused") {
+        handle.resume();
+        return { ...current, status: "playing" };
+      }
+      return current;
+    });
   }
 
   /**
@@ -281,6 +378,12 @@ export default function AssistantPage() {
   function readAloud(text: string, index: number) {
     const value = text.trim();
     if (!value) return;
+    voiceWarmed.current = true;
+    try {
+      window.localStorage.setItem(VOICE_WARMED_KEY, "1");
+    } catch {
+      // Private mode or a full store: warming is a convenience, never a requirement.
+    }
     speakRun.current += 1;
     const run = speakRun.current;
     stopAudioRef.current?.();
@@ -288,16 +391,24 @@ export default function AssistantPage() {
     stopSpeaking();
     setSpeechError("");
 
-    setSpeaking({ index, text: value });
+    setSpeaking({ index, text: value, status: "loading" });
     const handle = speakUrdu(value, {
+      onStart: () => {
+        if (run !== speakRun.current) return;
+        setSpeaking((current) =>
+          current && current.index === index ? { ...current, status: "playing" } : current,
+        );
+      },
       onEnd: () => {
         if (run !== speakRun.current) return;
         stopAudioRef.current = null;
+        speechHandleRef.current = null;
         setSpeaking(null);
       },
       onError: () => {
         if (run !== speakRun.current) return;
         stopAudioRef.current = null;
+        speechHandleRef.current = null;
         setSpeaking(null);
         setSpeechError(t("assistant.speakFailed"));
       },
@@ -308,6 +419,7 @@ export default function AssistantPage() {
       return;
     }
     stopAudioRef.current = handle.stop;
+    speechHandleRef.current = handle;
   }
 
   function stopMic() {
@@ -439,6 +551,9 @@ export default function AssistantPage() {
         history,
       });
       setEntries((prev) => [...prev, { kind: "reply", reply }]);
+      // The reply is already on screen; the first sentence of its voice is prepared in the
+      // background so pressing the speaker is not another wait.
+      if (voiceWarmed.current) prefetchSpeech(reply.answer);
       const turns: AssistantTurn[] = [
         { role: "user", text: question },
         { role: "assistant", text: reply.answer },
@@ -490,12 +605,6 @@ export default function AssistantPage() {
         </button>
 
         <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
-          <span
-            className="flex size-7 shrink-0 items-center justify-center rounded-[9px]"
-            style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}
-          >
-            <Sparkles size={14} strokeWidth={1.6} />
-          </span>
           <p className="truncate text-15 font-semibold" style={{ color: "var(--text-primary)" }}>
             {t("assistant.title")}
           </p>
@@ -592,7 +701,7 @@ export default function AssistantPage() {
             {entries.map((entry, index) => {
               if (entry.kind === "user") {
                 return (
-                  <div key={index} className="flex flex-col items-end gap-2">
+                  <div key={index} className="flex flex-col items-end gap-2 animate-fade-in-up">
                     {entry.photo && (
                       <img
                         src={entry.photo.data}
@@ -614,7 +723,7 @@ export default function AssistantPage() {
 
               if (entry.kind === "finance") {
                 return (
-                  <div key={index} className="max-w-[92%]">
+                  <div key={index} className="max-w-[92%] animate-fade-in-up">
                     <AssistantFinanceCard draft={entry.draft} />
                   </div>
                 );
@@ -624,7 +733,7 @@ export default function AssistantPage() {
                 return (
                   <div
                     key={index}
-                    className="flex items-start gap-3 rounded-[var(--radius-card)] p-3 text-12"
+                    className="flex items-start gap-3 rounded-[var(--radius-card)] p-3 text-12 animate-fade-in-up"
                     style={{
                       background: "var(--error-bg)",
                       border: "1px solid var(--error-border)",
@@ -644,7 +753,7 @@ export default function AssistantPage() {
               const answerNotes = reply.notes.filter((note) => !shownInWidgets.has(note));
               const isSpeaking = speaking?.index === index;
               return (
-                <div key={index} className="flex flex-col gap-2">
+                <div key={index} className="flex flex-col gap-2 animate-fade-in-up">
                   <div className="flex items-start gap-3">
                     <AssistantOrb compact />
                     <div className="min-w-0 flex-1 pt-0.5">
@@ -654,36 +763,87 @@ export default function AssistantPage() {
                       >
                         {reply.answer}
                       </p>
-                      <div className="mt-1.5 flex items-center">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            isSpeaking ? stopVoice() : readAloud(reply.answer, index)
-                          }
-                          aria-label={
-                            isSpeaking ? t("assistant.stopSpeaking") : t("assistant.readAloud")
-                          }
-                          title={
-                            isSpeaking ? t("assistant.stopSpeaking") : t("assistant.readAloud")
-                          }
-                          aria-pressed={isSpeaking}
-                          className="ds-pressable flex size-8 items-center justify-center rounded-full"
-                          style={{
-                            background: isSpeaking
-                              ? "var(--brand-light)"
-                              : "var(--surface-2)",
-                            color: isSpeaking
-                              ? "var(--brand-dark)"
-                              : "var(--text-secondary)",
-                          }}
-                          data-testid={`assistant-speak-${index}`}
-                        >
-                          {isSpeaking ? (
-                            <VolumeX size={15} strokeWidth={1.6} />
-                          ) : (
-                            <Volume2 size={15} strokeWidth={1.6} />
-                          )}
-                        </button>
+                      <div className="mt-1.5 flex min-h-8 items-center">
+                        {/* Preparing the voice uses the same waiting line the answer itself shows, so
+                            a tap on the speaker never looks like nothing happened. Tapping it stops. */}
+                        {isSpeaking && speaking?.status === "loading" ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={stopVoice}
+                              aria-label={t("assistant.stopSpeaking")}
+                              title={t("assistant.stopSpeaking")}
+                              className="ds-pressable flex size-8 items-center justify-center rounded-full"
+                              style={{
+                                background: "var(--brand-light)",
+                                color: "var(--brand-dark)",
+                              }}
+                              data-testid={`assistant-speak-${index}`}
+                              data-state="loading"
+                            >
+                              <span className="ds-voice-bars" aria-hidden="true">
+                                <span />
+                                <span />
+                                <span />
+                              </span>
+                            </button>
+                            {/* Said in words as well as bars: translation then voice is the wait a
+                                person is actually sitting through, and naming it is kinder than a
+                                silent spinner. Tap the disc to give up. */}
+                            <span
+                              className="text-11"
+                              style={{ color: "var(--text-secondary)" }}
+                              role="status"
+                            >
+                              {t("assistant.preparingVoice")}
+                            </span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              isSpeaking ? toggleSpeech() : readAloud(reply.answer, index)
+                            }
+                            aria-label={
+                              isSpeaking
+                                ? speaking?.status === "paused"
+                                  ? t("assistant.resumeSpeaking")
+                                  : t("assistant.pauseSpeaking")
+                                : t("assistant.readAloud")
+                            }
+                            title={
+                              isSpeaking
+                                ? speaking?.status === "paused"
+                                  ? t("assistant.resumeSpeaking")
+                                  : t("assistant.pauseSpeaking")
+                                : t("assistant.readAloud")
+                            }
+                            aria-pressed={isSpeaking}
+                            className="ds-pressable flex size-8 items-center justify-center rounded-full"
+                            style={{
+                              background: isSpeaking
+                                ? "var(--brand-light)"
+                                : "var(--surface-2)",
+                              color: isSpeaking
+                                ? "var(--brand-dark)"
+                                : "var(--text-secondary)",
+                            }}
+                            data-testid={`assistant-speak-${index}`}
+                            data-state={
+                              isSpeaking ? speaking?.status ?? "playing" : "idle"
+                            }
+                          >
+                            {isSpeaking ? (
+                              speaking?.status === "paused" ? (
+                                <SpeakerPlayIcon />
+                              ) : (
+                                <SpeakerPauseIcon />
+                              )
+                            ) : (
+                              <Volume2 size={16} strokeWidth={1.7} />
+                            )}
+                          </button>
+                        )}
                       </div>
                       {answerNotes.map((text, noteIndex) => (
                         <p
@@ -716,11 +876,15 @@ export default function AssistantPage() {
                 className="flex items-center gap-2 text-11"
                 style={{ color: "var(--text-secondary)" }}
               >
-                <span className="ds-assistant-thinking" aria-hidden="true">
-                  <span />
-                  <span />
-                  <span />
-                </span>
+                {/* The waiting state is the bot itself, working: the same mesh mark turning while
+                    the answer is fetched, instead of three anonymous dots. */}
+                <BrandLogo
+                  variant="mark"
+                  tone="mesh"
+                  size={18}
+                  animated={false}
+                  className="ds-assistant-busy-mark"
+                />
                 {t("assistant.thinking")}
               </div>
             )}

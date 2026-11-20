@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import RollingNumber from "@/components/ui/RollingNumber";
+import BranchSwitchChip from "@/components/shop/BranchSwitchChip";
 import {
   ArrowDownUp,
   Banknote,
@@ -7,7 +9,6 @@ import {
   BellRing,
   Building2,
   CalendarRange,
-  ChevronDown,
   ChevronRight,
   Download,
   HandCoins,
@@ -45,9 +46,10 @@ import {
   useFinanceTotals,
 } from "@/lib/financeEntries";
 import { useMoneyTotals } from "@/lib/financeMoney";
+import { loadCreditPayments, summariseMoneyIn, type CreditPaymentRow } from "@/lib/money";
 import { formatCompactCurrency, formatCurrency } from "@/lib/formatters";
 import { computeOverdueCreditTotal } from "@/lib/signalEngine";
-import { pkMonthStart, pkMonthStartOf, pkToday, pkWeekStart } from "@/lib/pkDate";
+import { pkDateFromISO, pkMonthStart, pkMonthStartOf, pkToday, pkWeekStart } from "@/lib/pkDate";
 
 /**
  * Financial overview — one screen, one appearance of each figure.
@@ -179,14 +181,17 @@ function PlateRow({ cells, divided }: { cells: Cell[]; divided: boolean }) {
     >
       {cells.map((cell) => (
         <div key={cell.id} className="min-w-0" data-testid={`finance-figure-${cell.id}`}>
-          <p className="text-18 font-semibold leading-none tabular-nums break-words">{cell.value}</p>
+          {/* Money on this plate moves when the window does, so it counts rather than swaps. */}
+          <p className="text-18 font-semibold leading-none tabular-nums break-words">
+            <RollingNumber text={cell.value} />
+          </p>
           <p className="text-13 mt-2" style={{ color: "var(--text-secondary)" }}>{cell.label}</p>
           <p
             className="text-12 mt-1 font-semibold tabular-nums break-words"
             style={{ color: cell.tone }}
             data-testid={`finance-figure-note-${cell.id}`}
           >
-            {cell.note}
+            <RollingNumber text={cell.note} />
           </p>
         </div>
       ))}
@@ -249,7 +254,9 @@ function FlatRow({
         )}
       </span>
       {value != null && (
-        <span className="text-14 shrink-0 tabular-nums" style={{ color: "var(--text-secondary)" }}>{value}</span>
+        <span className="text-14 shrink-0 tabular-nums" style={{ color: "var(--text-secondary)" }}>
+          {typeof value === "string" ? <RollingNumber text={value} /> : value}
+        </span>
       )}
       <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
     </button>
@@ -309,6 +316,25 @@ export default function AdminFinanceSectionPage() {
   const activeBranchId = useShopStore((s) => s.activeBranchId);
   const activeBranchName = useShopStore((s) => s.activeBranchName);
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
+
+  /**
+   * Credit collect — the udhaar that came back in the window, and the overdue standing balance.
+   *
+   * BOTH ARE HOME'S FIGURES, from Home's reads (owner, 2026-11-16): the same
+   * `customer_payments` rows through `summariseMoneyIn` for the collect figure, and
+   * `computeOverdueCreditTotal` for the overdue one. Neither screen does its own addition, so
+   * the hero and this plate cannot print two different numbers for the same week.
+   */
+  const [creditPayments, setCreditPayments] = useState<CreditPaymentRow[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    setCreditPayments([]);
+    if (!activeBranchId) return;
+    loadCreditPayments()
+      .then((rows) => { if (!cancelled) setCreditPayments(rows); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeBranchId]);
   const openSwitcher = useShopStore((s) => s.openSwitcher);
 
   const role = useAuthStore((s) => s.user?.membershipRole);
@@ -357,6 +383,18 @@ export default function AdminFinanceSectionPage() {
 
   const moneyIn = movement.totals?.moneyIn ?? null;
   const moneyOut = movement.totals?.moneyOut ?? null;
+
+  const creditCollected = useMemo(() => {
+    if (!activeBranchId) return null;
+    return summariseMoneyIn({
+      sales: [],
+      payments: creditPayments,
+      inPeriod: (iso) => {
+        const day = pkDateFromISO(iso);
+        return day >= rangeFrom && day <= rangeTo;
+      },
+    }).udhaar;
+  }, [activeBranchId, creditPayments, rangeFrom, rangeTo]);
 
   /** A figure in the short form the report's plate uses (Rs. 139.5K). */
   const money = (value: number | null | undefined) =>
@@ -687,16 +725,12 @@ export default function AdminFinanceSectionPage() {
             {scopeLine}
           </p>
         </div>
-        <button
-          type="button"
+        <BranchSwitchChip
+          branchName={activeBranchName ?? t("sales.thisBranch")}
           onClick={() => openSwitcher()}
-          data-testid="finance-branch-switch"
-          className="shrink-0 flex items-center gap-1 h-8 mt-0.5 ps-2.5 pe-2 rounded-full text-13 font-semibold active:opacity-70"
-          style={{ background: "var(--tone-card)", color: "var(--text-primary)" }}
-        >
-          <span className="max-w-[7.5rem] truncate">{activeBranchName ?? t("sales.thisBranch")}</span>
-          <ChevronDown size={14} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
-        </button>
+          testId="finance-branch-switch"
+          className="mt-0.5"
+        />
       </div>
 
       <div className="px-4 pt-4">
@@ -747,6 +781,30 @@ export default function AdminFinanceSectionPage() {
         <p className="text-11" style={{ color: "var(--text-tertiary)" }} data-testid="finance-cash-note">
           {t("finance.plateNote")}
         </p>
+        {/* Credit collect + overdue, as plate figures rather than a line or a screen of their own
+            (owner, 2026-11-16). Both are read exactly as Home reads them, so the hero's
+            "Credit collect Rs. 1,000 · Rs. 22,000 overdue" and this row always agree. */}
+        <div className="mt-1">
+          <PlateRow
+            cells={[
+              {
+                id: "credit-collect",
+                label: t("inline.credit_collect"),
+                value: money(creditCollected),
+                note: t("finance.creditCollectNote"),
+                tone: "var(--text-tertiary)",
+              },
+              {
+                id: "credit-overdue",
+                label: t("overall.overdueCredit"),
+                value: money(overdueCredit),
+                note: t("finance.overdueNote"),
+                tone: "var(--text-tertiary)",
+              },
+            ]}
+            divided
+          />
+        </div>
       </div>
 
       {/* The standing cost that leaves the till whether or not anything sells. It sits in a box of
@@ -774,7 +832,7 @@ export default function AdminFinanceSectionPage() {
           <FlatRow
             icon={HandCoins}
             title={t("overall.customerReceivable")}
-            meta={overdueCredit > 0 ? t("overall.overdue", { amount: formatCurrency(overdueCredit) }) : t("overall.oweYou")}
+            meta={t("overall.oweYou")}
             value={formatCurrency(receivableDue)}
             onClick={() => navigate(`${base}/settings/overview/customers`)}
             testId="finance-receivables"

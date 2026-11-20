@@ -71,30 +71,22 @@ test.describe('education — help, tutorials, questions', () => {
       await loginViaUi(page, OWNER_PHONE);
       await setPrefs(page, lang, theme);
 
-      // ── help on the screen you are on ─────────────────────────────────────────────────
-      await page.goto('/admin/dashboard');
+      // ── the walkthrough, opened from the guide ────────────────────────────────────────
+      // The floating per-screen help button was removed from the shell (owner's instruction,
+      // 2026-11-15), so the tutorial is reached from the App guide instead. What is still worth
+      // proving is unchanged: the shipped file decodes in a real browser.
+      await page.goto('/admin/guide');
       await page.waitForLoadState('networkidle');
-      const help = page.getByTestId('context-help');
-      await expect(help).toBeVisible();
-      await help.click();
-      await expect(page.getByTestId('context-help-sheet')).toBeVisible();
-      // It describes *this* screen, in this language — not a generic page of filler.
-      const what = await page.getByTestId('context-help-what').innerText();
-      expect(what.trim().length).toBeGreaterThan(20);
-      await assertNoOverflow(page, `${lang} help sheet`);
-      await page.screenshot({ path: `${SHOTS}/edu-help-${lang}-${theme}.png` });
-
-      // ── the walkthrough that belongs to a screen that has one ─────────────────────────
-      await page.keyboard.press('Escape');
-      await page.goto('/admin/reports');
-      await page.waitForLoadState('networkidle');
-      await page.getByTestId('context-help').click();
-      await page.getByTestId('context-help-watch').click();
+      await page.getByTestId('guide-watch-sale').click();
+      // Every walkthrough opens its own explanation page first (owner's request, 2026-11-15):
+      // the video, the same steps in words, and one button on to the real screen.
+      await expect(page).toHaveURL(/\/guide\/tutorial\/sale/);
+      await expect(page.getByTestId('guide-detail')).toBeVisible();
 
       const video = page.locator('video').first();
       await expect(video).toBeVisible();
       const src = await video.getAttribute('src');
-      expect(src, 'the reports tutorial is wired up').toContain('/tutorials/reports.webm');
+      expect(src, 'the tutorial is wired up').toContain('.webm');
 
       // A player that never receives a frame is a black rectangle, not a tutorial: wait for
       // the browser to actually decode the file that shipped.
@@ -105,14 +97,14 @@ test.describe('education — help, tutorials, questions', () => {
       }).toBeGreaterThanOrEqual(3);
       const seconds = await video.evaluate((v) => (v as HTMLVideoElement).duration);
       expect(seconds, 'the tutorial has real duration').toBeGreaterThan(5);
-      await assertNoOverflow(page, `${lang} tutorial sheet`);
+      await assertNoOverflow(page, `${lang} tutorial page`);
       await page.screenshot({ path: `${SHOTS}/edu-video-${lang}-${theme}.png` });
 
-      // ── closing it leaves nothing behind ──────────────────────────────────────────────
-      await page.keyboard.press('Escape');
+      // ── leaving it leaves no player behind ────────────────────────────────────────────
+      await page.goBack();
+      await expect(page.getByTestId('guide-page')).toBeVisible();
       await expect(page.locator('video')).toHaveCount(0);
       await expect(page.locator('[data-tut-caption]')).toHaveCount(0);
-      await expect(page.getByTestId('context-help')).toBeVisible();
 
       // ── the guide: FAQ answered, and somewhere to ask ─────────────────────────────────
       await page.goto('/admin/guide');
@@ -155,45 +147,13 @@ test.describe('education — help, tutorials, questions', () => {
     await expect(page.getByTestId('intro-title')).toBeVisible();
   });
 
-  test('a customer account offers the collection walkthrough that belongs to it', async ({ page }) => {
-    await loginViaUi(page, OWNER_PHONE);
-    await setPrefs(page, 'en', 'light');
-
-    await page.goto(`/admin/customers/${QA_IDS.customerA}`);
-    await page.waitForLoadState('networkidle');
-    // The detail route sits behind a PermissionGuard: if the login's
-    // permissions load failed or was slow, the guard redirects to the
-    // dashboard, where the help sheet opens but has no watch button
-    // (round-5: the click at the watch button timed out after the sheet
-    // opened fine). Assert the route first so a redirect fails loudly
-    // naming the actual URL instead of timing out on the button.
-    await expect(page).toHaveURL(new RegExp(`/admin/customers/${QA_IDS.customerA}`));
-    await page.getByTestId('context-help').click();
-    await expect(page.getByTestId('context-help-sheet')).toBeVisible();
-    await expect(page.getByTestId('context-help-watch')).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId('context-help-watch').click();
-    const video = page.locator('video').first();
-    await expect(video).toHaveAttribute('src', /collect-payment\.webm/);
-    await page.screenshot({ path: `${SHOTS}/edu-video-customer-detail.png` });
-  });
-
   test('education writes nothing to the business database', async ({ page }) => {
     await loginViaUi(page, OWNER_PHONE);
     await setPrefs(page, 'en', 'light');
 
     // Every education interaction, in one pass, then the database is counted by the gate's
     // own independent checker — a promise that closing writes nothing is only worth what
-    // that count says.
-    for (const route of ['/admin/dashboard', '/admin/reports', '/admin/products', '/admin/purchases']) {
-      await page.goto(route);
-      await page.waitForLoadState('networkidle');
-      const help = page.getByTestId('context-help');
-      if (await help.count()) {
-        await help.click();
-        await expect(page.getByTestId('context-help-sheet')).toBeVisible();
-        await page.keyboard.press('Escape');
-      }
-    }
+    // that count says. The per-screen help button is gone, so this starts from the guide.
     await page.goto('/admin/guide');
     await page.waitForLoadState('networkidle');
     await page.getByTestId('guide-ask').click();

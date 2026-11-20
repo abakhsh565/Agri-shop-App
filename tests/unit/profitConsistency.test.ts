@@ -29,6 +29,7 @@ describe('profit has one calculation', () => {
     'src/pages/admin/dashboard/AdminDashboardPage.tsx',
     'src/pages/admin/sales/AdminSalesListPage.tsx',
     'src/pages/admin/reports/AdminReportsPage.tsx',
+    'src/pages/admin/reports/AdminProfitReportPage.tsx',
     'src/components/sales/SaleDetailView.tsx',
   ];
 
@@ -47,11 +48,34 @@ describe('profit has one calculation', () => {
   });
 
   it('every profit on a screen comes from the shared calculation', () => {
+    // Home shows NET profit (2026-11-15) — net sales less cost of goods less recorded
+    // expenses — so its arithmetic is the Finance screen's `netProfitOf`, not gross profit.
+    // Both live in one shared module each; a screen may not do either sum itself.
+    const shared = /from "@\/lib\/(profit|financeEntries)"/;
     for (const file of screens) {
       const src = fs.readFileSync(path.resolve(root, file), 'utf8');
       expect(
-        /from "@\/lib\/profit"/.test(src),
-        `${file} computes a profit without importing src/lib/profit.ts`,
+        shared.test(src),
+        `${file} computes a profit without importing src/lib/profit.ts or src/lib/financeEntries.ts`,
+      ).toBe(true);
+    }
+  });
+
+  it('a figure called "Net profit" is net sales − COGS − expenses, on every screen', () => {
+    // The bug this exists for: `/reports/profit` printed its headline — gross sales less cost of
+    // goods — under the words "Net profit", while Home and the Finance hub used the same words
+    // for a smaller number (expenses taken off). One label, two quantities, and an owner who
+    // checked one screen against the other was told the app disagreed with itself.
+    const netProfitScreens = [
+      'src/pages/admin/dashboard/AdminDashboardPage.tsx',
+      'src/pages/admin/reports/AdminProfitReportPage.tsx',
+      'src/pages/admin/finance/AdminFinanceSectionPage.tsx',
+    ];
+    for (const file of netProfitScreens) {
+      const src = fs.readFileSync(path.resolve(root, file), 'utf8');
+      expect(
+        /netProfitOf/.test(src),
+        `${file} shows a "Net profit" figure that does not come from netProfitOf`,
       ).toBe(true);
     }
   });

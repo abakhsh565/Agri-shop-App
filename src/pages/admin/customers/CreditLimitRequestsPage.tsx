@@ -3,11 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
+import Photo from "@/components/ui/Photo";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { useCustomersStore } from "@/stores/customersStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { formatCurrency } from "@/lib/formatters";
 import { getCreditRequestsDB, type LocalCreditRequest } from "@/lib/localGroupRegistry";
+import { supabase } from "@/lib/supabase";
+import { resolveImageUrl } from "@/lib/storage";
 
 type RequestFilter = "all" | "pending" | "approved" | "rejected";
 
@@ -35,6 +39,24 @@ export default function CreditLimitRequestsPage() {
   const navigate = useNavigate();
   const [requests, setRequests] = useState<LocalCreditRequest[] | null>(null);
   const [filter, setFilter] = useState<RequestFilter>("all");
+  // The request rows carry a name and an id, not a picture; the picture lives on the customer.
+  const customers = useCustomersStore((s) => s.customers);
+  /**
+   * Photos for requests whose customer the store cannot see, keyed by customer id.
+   *
+   * THE STORE ONLY HOLDS ACTIVE CUSTOMERS (`is_archived = false`), while a decided request stays
+   * in this list after its customer is archived. Those rows had no picture at all — a decided
+   * request for an archived account kept showing an initial even when the photo was saved. This
+   * read is by id, archived or not, and only for the ids on screen; the store's copy still wins
+   * when it has one, so an edit made a second ago is never overwritten by a slower fetch.
+   */
+  const [archivedImages, setArchivedImages] = useState<Record<string, string | undefined>>({});
+  const customersReady = useCustomersStore((s) => s.ready);
+  const loadCustomers = useCustomersStore((s) => s.load);
+
+  useEffect(() => {
+    if (!customersReady) void loadCustomers();
+  }, [customersReady, loadCustomers]);
 
   useEffect(() => {
     let live = true;
@@ -43,6 +65,25 @@ export default function CreditLimitRequestsPage() {
     });
     return () => { live = false; };
   }, []);
+
+  useEffect(() => {
+    const ids = Array.from(new Set((requests ?? []).map((r) => r.customerId)));
+    if (ids.length === 0) return;
+    let live = true;
+    supabase
+      .from("customers")
+      .select("id, image_url")
+      .in("id", ids)
+      .then(({ data }) => {
+        if (!live || !data) return;
+        const map: Record<string, string | undefined> = {};
+        for (const row of data as { id: string; image_url: string | null }[]) {
+          map[row.id] = resolveImageUrl(row.image_url);
+        }
+        setArchivedImages(map);
+      });
+    return () => { live = false; };
+  }, [requests]);
 
   const sorted = useMemo(() => {
     if (!requests) return [];
@@ -128,17 +169,37 @@ export default function CreditLimitRequestsPage() {
                 data-testid={`credit-request-row-${request.id}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <button
-                      type="button"
-                      onClick={() => navigate(customerSalesLink)}
-                      className="text-15 font-semibold truncate text-start active:opacity-70"
-                    >
-                      {request.customerName}
-                    </button>
-                    <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
-                      {t("creditRequests.requestedBy", { name: request.requestedBy })}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-3">
+                    {/* The customer's latest saved picture, so the owner can recognise the
+                        account asking for a higher limit before reading the numbers. */}
+                    <Photo
+                      src={
+                        customers.find((c) => c.id === request.customerId)?.imageUrl ??
+                        archivedImages[request.customerId]
+                      }
+                      alt={request.customerName}
+                      className="size-10 rounded-full object-cover shrink-0"
+                      fallback={
+                        <span
+                          className="size-10 rounded-full flex items-center justify-center text-13 font-bold shrink-0"
+                          style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}
+                        >
+                          {request.customerName.charAt(0).toUpperCase()}
+                        </span>
+                      }
+                    />
+                    <div className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => navigate(customerSalesLink)}
+                        className="block max-w-full text-15 font-semibold truncate text-start active:opacity-70"
+                      >
+                        {request.customerName}
+                      </button>
+                      <p className="text-12 mt-0.5 truncate" style={{ color: "var(--text-secondary)" }}>
+                        {t("creditRequests.requestedBy", { name: request.requestedBy })}
+                      </p>
+                    </div>
                   </div>
                   <span
                     className="shrink-0 text-10 font-bold px-2 py-0.5 rounded-full"

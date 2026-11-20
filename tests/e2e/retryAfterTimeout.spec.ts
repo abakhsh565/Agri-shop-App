@@ -109,7 +109,10 @@ test.describe('Browser retry after a timed-out write', () => {
     await page.waitForURL(/\/sale\/products/, { timeout: 15000 });
     await page.getByText('QA Product A').first().click();
     await page.waitForURL(/\/sale\/products\//, { timeout: 15000 });
-    await page.getByText('1kg').first().click();
+    // Per-pack counters (2026-11-17): Add to Cart is disabled until a pack carries a number, so the
+    // lane increments the fixture variant's counter instead of tapping the pack's name.
+    await expect(page.getByTestId(`pack-counter-${QA_IDS.variantA}`)).toBeVisible({ timeout: 15000 });
+    await page.getByTestId(`pack-counter-${QA_IDS.variantA}`).getByRole('button', { name: /increase/i }).click();
     await page.getByRole('button', { name: /add to cart/i }).click();
     await page.waitForURL(/\/sale\/cart/, { timeout: 15000 });
     await expect(page.getByRole('button', { name: /complete sale/i })).toBeVisible({ timeout: 15000 });

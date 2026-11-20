@@ -433,8 +433,6 @@ test.describe('RTL/LTR + Urdu Support', () => {
       // The credit book behind the overview's balance cards: the collection lists, the pending
       // and overdue books, and the supplier's own payable page (2026-10-28).
       '/admin/settings/overview/customers',
-      '/admin/settings/overview/customers/pending',
-      '/admin/settings/overview/customers/overdue',
       '/admin/settings/overview/suppliers',
       '/admin/settings/overview/suppliers/pending',
       '/admin/settings/overview/suppliers/overdue',

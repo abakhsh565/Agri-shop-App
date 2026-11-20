@@ -185,7 +185,8 @@ export function moneySourcePath(base: string, source: MoneySource): string {
   switch (source) {
     case "sale":
     case "refund":
-      return `${base}/sales`;
+      // The complete sales ledger, not the 20-row preview on the sales screen.
+      return `${base}/history/sales`;
     case "customer_payment":
       return `${base}/customers/payments`;
     case "supplier_payment":

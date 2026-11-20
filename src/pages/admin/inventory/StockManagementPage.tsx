@@ -38,7 +38,6 @@ export default function StockManagementPage() {
   const navigate = useNavigate();
   const products = useProductsStore((s) => s.products);
   const ready = useProductsStore((s) => s.ready);
-  const branch = useShopStore((s) => s.activeBranchName);
   // The branch's own figures, read the way the branch card reads them: the value is the server's
   // `inventoryValue`, and `inventoryCostIncomplete` says whether every pack had a cost to value
   // it at — which is the difference between a figure and a floor.
@@ -106,7 +105,6 @@ export default function StockManagementPage() {
                 icon={Boxes}
                 title={item.productName}
                 line={`${item.variantName} · ${item.qty} ${unitWord(item.baseUnit, t)}`}
-                note={branch ?? undefined}
                 statusLabel={getStockStatusLabel(item.status, t)}
                 statusColor={getStockStatusColor(item.status)}
                 onClick={() => navigate(`${base}/products/${item.productId}`)}

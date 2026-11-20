@@ -10,6 +10,7 @@ import {
   Wallet,
 } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
+import Switch from "@/components/ui/Switch";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
 import ListRow from "@/components/ui/ListRow";
@@ -18,46 +19,6 @@ import { useShellBase } from "@/lib/useShellBase";
 import { useThemeStore } from "@/stores/themeStore";
 import { useUIStore } from "@/stores/uiStore";
 
-function PreviewSwitch({
-  on,
-  label,
-  onToggle,
-}: {
-  on: boolean;
-  label: string;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={(event) => {
-        event.stopPropagation();
-        onToggle();
-      }}
-      className="relative shrink-0 rounded-full transition-colors"
-      style={{
-        width: 42,
-        height: 24,
-        background: on ? "var(--roles-accent, var(--text-primary))" : "var(--tone-sunken)",
-        border: "1px solid var(--border-control)",
-      }}
-    >
-      <span
-        className="absolute rounded-full transition-transform"
-        style={{
-          width: 18,
-          height: 18,
-          top: 2,
-          left: on ? 20 : 2,
-          background: on ? "var(--tone-page)" : "var(--text-tertiary)",
-        }}
-      />
-    </button>
-  );
-}
 
 /**
  * Preferences preview.
@@ -115,10 +76,10 @@ export default function PreferencesPage() {
             title={t("preferencesDemo.theme")}
             meta={t("preferencesDemo.themeHint")}
             trailing={
-              <PreviewSwitch
-                on={theme === "dark"}
+              <Switch
+                checked={theme === "dark"}
                 label={t("preferencesDemo.theme")}
-                onToggle={toggleTheme}
+                onChange={toggleTheme}
               />
             }
           />
@@ -131,10 +92,10 @@ export default function PreferencesPage() {
               title={t("preferencesDemo.sales")}
               meta={t("preferencesDemo.salesHint")}
               trailing={
-                <PreviewSwitch
-                  on={notifications.sales}
+                <Switch
+                  checked={notifications.sales}
                   label={t("preferencesDemo.sales")}
-                  onToggle={() => toggleNotification("sales")}
+                  onChange={() => toggleNotification("sales")}
                 />
               }
             />
@@ -143,10 +104,10 @@ export default function PreferencesPage() {
               title={t("preferencesDemo.lowStock")}
               meta={t("preferencesDemo.lowStockHint")}
               trailing={
-                <PreviewSwitch
-                  on={notifications.lowStock}
+                <Switch
+                  checked={notifications.lowStock}
                   label={t("preferencesDemo.lowStock")}
-                  onToggle={() => toggleNotification("lowStock")}
+                  onChange={() => toggleNotification("lowStock")}
                 />
               }
             />
@@ -155,10 +116,10 @@ export default function PreferencesPage() {
               title={t("preferencesDemo.reminders")}
               meta={t("preferencesDemo.remindersHint")}
               trailing={
-                <PreviewSwitch
-                  on={notifications.reminders}
+                <Switch
+                  checked={notifications.reminders}
                   label={t("preferencesDemo.reminders")}
-                  onToggle={() => toggleNotification("reminders")}
+                  onChange={() => toggleNotification("reminders")}
                 />
               }
             />
@@ -167,10 +128,10 @@ export default function PreferencesPage() {
               title={t("preferencesDemo.summary")}
               meta={t("preferencesDemo.summaryHint")}
               trailing={
-                <PreviewSwitch
-                  on={notifications.summary}
+                <Switch
+                  checked={notifications.summary}
                   label={t("preferencesDemo.summary")}
-                  onToggle={() => toggleNotification("summary")}
+                  onChange={() => toggleNotification("summary")}
                 />
               }
             />
