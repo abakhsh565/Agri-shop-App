@@ -16,6 +16,7 @@ import { useReturnTo } from "@/lib/useReturnTo";
 import { formatCurrency } from "@/lib/formatters";
 import { pkDateFromISO, pkMonthStart, pkMonthStartOf, pkToday } from "@/lib/pkDate";
 import { lineCogs, profitDisplay, summariseSales, type LiveCostLookup } from "@/lib/profit";
+import { netProfitOf, useFinanceTotals } from "@/lib/financeEntries";
 import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useBranchPeriodReport } from "@/lib/branchReports";
@@ -155,10 +156,25 @@ export default function AdminProfitReportPage() {
   const netSales = activeRow?.netSales ?? null;
   const returns = activeRow?.returns ?? null;
   const cogs = activeRow?.cogs ?? null;
-  const profitFigure = activeRow?.profit ?? (display.kind === "exact" ? display.amount : null);
+  /*
+   * GROSS AND NET ARE TWO DIFFERENT FIGURES, AND THE SCREEN NOW SAYS WHICH IS WHICH
+   * (owner, 2026-11-20).
+   *
+   * The headline used to print `gross − COGS` under the words "Net profit", while Home and the
+   * Finance hub used the same words for the smaller number that also has recorded expenses taken
+   * off. One label, two quantities: an owner checking this screen against Finance was told the app
+   * disagreed with itself. The headline is now the app's net profit — `netProfitOf`, the one
+   * function Home and Finance call (net sales − COGS − expenses) — and gross profit is stated
+   * beside the figures it is built from, so the two cannot be mistaken for each other.
+   */
+  const grossProfitFigure = activeRow?.profit ?? (display.kind === "exact" ? display.amount : null);
+  const expenseTotals = useFinanceTotals(rangeFrom, rangeTo);
+  const expenses = expenseTotals.totals?.expense ?? null;
+  const netProfitFigure = netProfitOf(netSales, cogs, expenses);
+  // A net margin is measured against net sales — the revenue the expenses were paid out of.
   const marginPct =
-    charged != null && charged > 0 && profitFigure != null
-      ? Math.round((profitFigure / charged) * 100)
+    netSales != null && netSales > 0 && netProfitFigure != null
+      ? Math.round((netProfitFigure / netSales) * 100)
       : null;
   const saleCount = periodSales.length;
   const averageSale = charged != null && saleCount > 0 ? charged / saleCount : null;
@@ -261,11 +277,11 @@ export default function AdminProfitReportPage() {
             style={{ color: "var(--brand-dark)" }}
             data-testid="profit-net"
           >
-            {profitFigure == null ? (
+            {netProfitFigure == null ? (
               "—"
             ) : (
               <RollingNumber
-                text={`${(activeRow?.unknownLines ?? 0) > 0 ? "≥ " : ""}${money(profitFigure)}`}
+                text={`${(activeRow?.unknownLines ?? 0) > 0 ? "≥ " : ""}${money(netProfitFigure)}`}
                 animateOnMount
               />
             )}
@@ -327,7 +343,26 @@ export default function AdminProfitReportPage() {
             label={t("reports.costOfGoods")}
             value={cogs == null ? "—" : money(cogs)}
           />
+          <StatTile
+            testId="profit-expenses"
+            label={t("finance.operatingExpenses")}
+            value={expenses == null ? "—" : `−${money(expenses)}`}
+            tone="warn"
+          />
+          <StatTile
+            testId="profit-gross-profit"
+            label={t("admin.grossProfit")}
+            value={
+              grossProfitFigure == null
+                ? "—"
+                : `${(activeRow?.unknownLines ?? 0) > 0 ? "≥ " : ""}${money(grossProfitFigure)}`
+            }
+          />
         </div>
+        {/* The same sentence the Finance hub prints, because it is the same sum. */}
+        <p className="text-11 mt-2" style={{ color: "var(--text-tertiary)" }} data-testid="profit-rule">
+          {t("finance.netProfitRule")}
+        </p>
         {branchFailed && (
           <p className="text-11 mt-2" style={{ color: "var(--text-secondary)" }}>
             {t("profit.branchReadFailed")}
