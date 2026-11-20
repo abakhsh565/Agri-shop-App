@@ -16,7 +16,7 @@ import { useReturnTo } from "@/lib/useReturnTo";
 import { formatCurrency } from "@/lib/formatters";
 import { pkDateFromISO, pkMonthStart, pkMonthStartOf, pkToday } from "@/lib/pkDate";
 import { lineCogs, profitDisplay, summariseSales, type LiveCostLookup } from "@/lib/profit";
-import { netProfitOf, useFinanceTotals } from "@/lib/financeEntries";
+import { grossProfitOf, netProfitOf, useFinanceTotals } from "@/lib/financeEntries";
 import { useSalesStore } from "@/stores/salesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { useBranchPeriodReport } from "@/lib/branchReports";
@@ -167,7 +167,16 @@ export default function AdminProfitReportPage() {
    * function Home and Finance call (net sales − COGS − expenses) — and gross profit is stated
    * beside the figures it is built from, so the two cannot be mistaken for each other.
    */
-  const grossProfitFigure = activeRow?.profit ?? (display.kind === "exact" ? display.amount : null);
+  /*
+   * Gross profit is measured on NET sales, so the plate adds up: net sales − cost of goods is the
+   * gross profit, and gross profit − operating expenses is the net profit in the headline. Reading
+   * it off gross sales (what `activeRow.profit` does) left the tiles short by exactly the returns
+   * the moment a period carried a refund (owner, 2026-11-20).
+   */
+  const grossProfitFigure =
+    grossProfitOf(netSales, cogs) ??
+    activeRow?.profit ??
+    (display.kind === "exact" ? display.amount : null);
   const expenseTotals = useFinanceTotals(rangeFrom, rangeTo);
   const expenses = expenseTotals.totals?.expense ?? null;
   const netProfitFigure = netProfitOf(netSales, cogs, expenses);
