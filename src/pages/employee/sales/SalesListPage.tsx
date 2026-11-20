@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import ListCard from "@/components/ui/ListCard";
@@ -19,6 +19,7 @@ import type { Sale } from "@/types";
 import { Calendar, SlidersHorizontal, Check, ClipboardList } from "lucide-react";
 import SearchBar from "@/components/ui/SearchBar";
 import { groupSalesByDateSections } from "@/lib/salesGrouping";
+import { customerNamesById, saleCustomerName } from "@/lib/saleCustomerName";
 import { SkeletonList } from "@/components/ui/Skeleton";
 
 type Tab = "all" | "credit" | "paid";
@@ -57,6 +58,9 @@ export default function SalesListPage() {
 
   const { user } = useAuthStore();
   const customers = useCustomersStore((s) => s.customers);
+  // The bill keeps the name it was written with; the list shows the customer's name today.
+  const namesById = useMemo(() => customerNamesById(customers), [customers]);
+  const nameOf = (sale: Sale) => saleCustomerName(sale, namesById);
   const ready = useSalesStore((s) => s.ready);
   const allSales: Sale[] = useSalesStore((s) => s.sales).filter((s) => s.employeeId === user?.id || s.employeeName === user?.name);
 
@@ -70,7 +74,7 @@ export default function SalesListPage() {
     if (!query.trim()) return true;
     const q = query.trim().toLowerCase();
     return (
-      sale.customerName.toLowerCase().includes(q) ||
+      nameOf(sale).toLowerCase().includes(q) ||
       sale.saleNumber.toLowerCase().includes(q) ||
       formatCurrency(sale.totalAmount).toLowerCase().includes(q)
     );
@@ -361,7 +365,7 @@ export default function SalesListPage() {
               <ListCard className="mx-4">
                 {section.sales.map((sale) => {
                   const cImg = getCustomerImg(sale.customerId);
-                  const cBg = initBgColor(sale.customerName);
+                  const cBg = initBgColor(nameOf(sale));
                   return (
                   <ListRow
                     key={sale.id}
@@ -369,11 +373,11 @@ export default function SalesListPage() {
                     tile={
                       <Photo
                         src={cImg}
-                        alt={sale.customerName}
+                        alt={nameOf(sale)}
                         className="size-10 rounded-full object-cover shrink-0"
                         fallback={
                           <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
-                            {sale.customerName.charAt(0).toUpperCase()}
+                            {nameOf(sale).charAt(0).toUpperCase()}
                           </div>
                         }
                       />
@@ -396,7 +400,7 @@ export default function SalesListPage() {
                     }
                   >
                     <div className="min-w-0">
-                      <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                      <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{nameOf(sale)}</p>
                       <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now, t)}</p>
                     </div>
                   </ListRow>

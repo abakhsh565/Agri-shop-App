@@ -9,7 +9,7 @@ import { useThemeStore } from "@/stores/themeStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useRolesStore } from "@/stores/rolesStore";
 import { useShellBase } from "@/lib/useShellBase";
-import { branchKind } from "@/lib/branchKind";
+import { branchKind, branchNameOnly } from "@/lib/branchKind";
 import { supabase } from "@/lib/supabase";
 
 interface BranchRow {
@@ -144,7 +144,7 @@ export default function EmployeeBranchesPage() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
-                    <span className="text-13 font-semibold truncate">{branch.name}</span>
+                    <span className="text-13 font-semibold truncate">{branchNameOnly(branch.name)}</span>
                     <span
                       className="text-9 font-semibold px-1.5 py-0.5 rounded-full shrink-0"
                       style={{ background: "var(--tone-sunken)", color: "var(--text-secondary)" }}

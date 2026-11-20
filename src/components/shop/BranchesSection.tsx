@@ -9,7 +9,7 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import { useAuthStore } from "@/stores/authStore";
 import { useT } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
-import { branchKind } from "@/lib/branchKind";
+import { branchKind, branchNameOnly } from "@/lib/branchKind";
 import { useShellBase } from "@/lib/useShellBase";
 import { useDir } from "@/lib/dirContext";
 import { useShopStore, type BranchSummary } from "@/stores/shopStore";
@@ -106,7 +106,7 @@ export default function BranchesSection({ variant = "card" }: { variant?: "card"
                   <Store size={16} />
                 </div>
               }
-              title={branch.name}
+              title={branchNameOnly(branch.name)}
               // The KIND is the row's badge — the same chip the branch's own header draws — and
               // the session's branch is a word beside it, not a second tag. Joining them into
               // "Main · Current" made two different facts read as one kind of branch.

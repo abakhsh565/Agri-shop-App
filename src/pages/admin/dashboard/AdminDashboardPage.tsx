@@ -23,7 +23,7 @@ import { summariseMoneyIn, loadCreditPayments, type CreditPaymentRow } from "@/l
 import { useT } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
 import { canSeeDashboard } from "@/lib/tenantContext";
-import { branchKind } from "@/lib/branchKind";
+import { branchIdentity } from "@/lib/branchKind";
 import { AlertTriangle, CalendarDays, ChevronRight, ChevronDown, PackageX, ShoppingCart, Search, Bell, Truck, Wallet, CheckCircle2, HandCoins, PackagePlus, Store, Mic, RefreshCw } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import RollingNumber from "@/components/ui/RollingNumber";
@@ -157,6 +157,10 @@ export default function AdminDashboardPage() {
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
   const inAddedBranch = branchesLoaded && !!activeBranch && !activeBranch.isMain;
   const mainBranch = branches.find((b) => b.isMain) ?? null;
+  // Production's branches are named after the business AND its kind ("Kamran Traders - Main"),
+  // so the header said "Kamran Traders - Main · Main". `branchIdentity` prints the name once and
+  // only adds the kind when the name does not already carry it (owner, 2026-11-20).
+  const headerBranch = activeBranch ? branchIdentity(t, activeBranch.name, activeBranch.isMain) : null;
   // The same sentence the Branches screen puts on a row, from the same derivation.
   const branchContext = activeBranch ? branchContextLabel(t, activeBranch) : null;
 
@@ -608,7 +612,7 @@ export default function AdminDashboardPage() {
                 the figures below are the parent shop or a branch added later, and the two
                 never share a ledger. */}
             {activeBranch?.name
-              ? `${activeBranch.name} · ${branchKind(t, activeBranch.isMain)} · ${todayLabel}`
+              ? [headerBranch?.name, headerBranch?.kind, todayLabel].filter(Boolean).join(" · ")
               : todayLabel}
           </span>
         </button>

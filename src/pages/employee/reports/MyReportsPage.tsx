@@ -14,7 +14,7 @@ import { useSalesStore } from "@/stores/salesStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useT } from "@/lib/i18n";
-import { branchKind } from "@/lib/branchKind";
+import { branchIdentity } from "@/lib/branchKind";
 import { supabase } from "@/lib/supabase";
 import {
   formatCurrency,
@@ -159,7 +159,8 @@ export default function MyReportsPage() {
   const canActivity = can("activity.view");
 
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
-  const branchKindLabel = branchKind(t, activeBranch?.isMain);
+  // The branch's stored name may already end in its kind; the context line says it once.
+  const branchLine = branchIdentity(t, activeBranchName, activeBranch?.isMain);
   const branchPlace = activeBranch?.place ?? null;
   const branchLocation = branchPlace
     ? (branchPlace.label && branchPlace.label !== activeBranchName ? branchPlace.label : branchPlace.address)
@@ -438,17 +439,17 @@ export default function MyReportsPage() {
         >
           <MapPin size={12} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
           <span className="text-13 font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-            {activeBranchName ?? t("audit.noBranch")}
+            {branchLine.name || t("audit.noBranch")}
           </span>
           {/* Main or Sub, said on every screen a branch is named: the figures under this line
               belong to one ledger, never to both kinds together. */}
-          {branchKindLabel && (
+          {branchLine.kind && (
             <span
               className="text-10 font-bold h-5 px-1.5 rounded-full flex items-center shrink-0"
               data-testid="reports-branch-kind"
               style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}
             >
-              {branchKindLabel}
+              {branchLine.kind}
             </span>
           )}
           {branchLocation && (
@@ -803,11 +804,11 @@ export default function MyReportsPage() {
                       className="text-12 font-semibold truncate"
                       style={{ color: "var(--text-primary)" }}
                     >
-                      {activeBranchName ?? t("audit.noBranch")}
+                      {branchLine.name || t("audit.noBranch")}
                     </p>
-                    {branchKindLabel && (
+                    {branchLine.kind && (
                       <span className="text-10 shrink-0" style={{ color: "var(--text-tertiary)" }}>
-                        {branchKindLabel}
+                        {branchLine.kind}
                       </span>
                     )}
                     <span className="ms-auto text-10 shrink-0" style={{ color: "var(--text-tertiary)" }}>

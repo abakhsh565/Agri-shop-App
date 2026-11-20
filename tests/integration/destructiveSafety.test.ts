@@ -23,6 +23,7 @@ import { describe, it, beforeAll, afterAll } from 'vitest';
 import { execSqlAsAdmin, execRpcAsUser, qaServiceClient } from '../setup/qa-client';
 import { QA_IDS } from '../setup/fixtures';
 import { runCleanupStatements } from '../setup/ownedCleanup';
+import { ensureActiveFixtureMemberships } from '../setup/fixtureMemberships';
 
 
 const T = {
@@ -110,6 +111,12 @@ beforeAll(async () => {
   // Create fixtures using execSqlAsAdmin (bypasses RLS)
   await admin(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.adminUser}', 'Destruct Test Admin', '92300DST0000', 'admin', false, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'admin', is_original_owner = false`);
   await admin(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.employeeA}', 'Destruct Test Employee', '92300DST0001', 'employee', false, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, role = 'employee'`);
+
+  // These two users are this file's own identities and never sign in (they are impersonated through
+  // JWT claims), so a membership left 'pending' by a reactivation is never repaired by the AFTER
+  // INSERT trigger and `deactivate_employee_v1` then finds no membership for the target at all
+  // (`expected null to be truthy`). Own the membership explicitly.
+  await admin(ensureActiveFixtureMemberships(T.adminUser, T.employeeA));
   await admin(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${T.companyA}', 'Destruct Test Supplier', 0, 0, '${T.shop}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`);
   await admin(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by, is_archived) VALUES ('${T.customerA}', 'Destruct Customer A', '92300DST1001', 50000, 0, 0, 0, '${T.shop}', 'QA', false), ('${T.customerB}', 'Destruct Customer B', '92300DST1002', 50000, 0, 0, 0, '${T.shop}', 'QA', false) ON CONFLICT (id) DO UPDATE SET is_archived = false, name = EXCLUDED.name`);
   await admin(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${T.productA}', 'Destruct Test Product', '${T.companyA}', 'seed', 100, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, stock_qty = EXCLUDED.stock_qty`);

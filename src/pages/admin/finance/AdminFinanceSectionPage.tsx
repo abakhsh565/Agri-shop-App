@@ -40,6 +40,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { hasPermission } from "@/lib/tenantContext";
 import { useBranchPeriodReport } from "@/lib/branchReports";
 import {
+  grossProfitOf,
   netProfitOf,
   postDueFinanceEntries,
   useFinanceRecurrences,
@@ -375,11 +376,10 @@ export default function AdminFinanceSectionPage() {
     prevTotals.totals?.expense ?? null,
   );
 
-  /** Gross profit is gross sales less cost of goods — before expenses, before returns' cost. */
-  const grossProfitOf = (gross: number | null, cost: number | null) =>
-    gross == null || cost == null ? null : Math.round((gross - cost) * 100) / 100;
-  const grossProfit = grossProfitOf(current?.grossSales ?? null, cogs);
-  const previousGrossProfit = grossProfitOf(previous?.grossSales ?? null, previous?.cogs ?? null);
+  /* Gross profit is NET sales less cost of goods — the same middle term the profit screen shows,
+   * so `net sales − COGS = gross profit` and `gross profit − expenses = net profit` on both. */
+  const grossProfit = grossProfitOf(netSales, cogs);
+  const previousGrossProfit = grossProfitOf(previous?.netSales ?? null, previous?.cogs ?? null);
 
   const moneyIn = movement.totals?.moneyIn ?? null;
   const moneyOut = movement.totals?.moneyOut ?? null;
