@@ -329,6 +329,13 @@ interface ShopState {
   /** Which shop every read and write in the app is scoped to. */
   /** Business identity only; never a value for branch_scope. */
   activeShopId: string | null;
+  /**
+   * True when the shop in use came from this device's remembered context because the read
+   * failed (offline), rather than from a server answer. Without it the shells cannot tell
+   * "the server says this account has no shop" from "the server could not be reached", and the
+   * offline cold start showed the access notice over rows that were sitting on the device.
+   */
+  usingRememberedShop: boolean;
   activeShopName: string | null;
   activeBranchId: string | null;
   activeBranchName: string | null;
@@ -510,6 +517,7 @@ export const useShopStore = create<ShopState>((set, get) => ({
   // The branch read below replaces it the moment the server answers.
   activeBranchId: rememberedShop()?.branchId ?? null,
   activeBranchName: rememberedShop()?.branchName ?? null,
+  usingRememberedShop: false,
   loading: false,
   loaded: false,
   ownerId: null,
@@ -769,6 +777,7 @@ export const useShopStore = create<ShopState>((set, get) => ({
           loading: false,
           error: null,
           loaded: true,
+          usingRememberedShop: true,
           ownerId: actor.id,
           activeShopId: remembered.shopId,
           activeShopName: remembered.shopName,
@@ -803,6 +812,7 @@ export const useShopStore = create<ShopState>((set, get) => ({
       shops,
       loading: false,
       loaded: true,
+      usingRememberedShop: false,
       ownerId: useAuthStore.getState().user?.id ?? null,
       error: null,
       activeShopId: current?.id ?? null,

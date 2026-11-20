@@ -7,6 +7,13 @@ interface SearchBarProps extends InputHTMLAttributes<HTMLInputElement> {
   containerClass?: string;
   /** Tapping the clear mark empties the field. Omit it and no mark is shown. */
   onClear?: () => void;
+  /**
+   * Start listening as soon as the field appears. The home screen's microphone opens this screen
+   * for a spoken query, and a screen that arrives with the microphone already open is what makes
+   * that tap worth something — otherwise the person taps a second microphone to say the same
+   * sentence.
+   */
+  autoStartVoice?: boolean;
 }
 
 /** The slice of the Web Speech API this field uses. Kept local: the DOM lib omits it. */
@@ -58,7 +65,7 @@ function speechConstructor(): SpeechConstructor | null {
  * its own (owner, 2026-11-19): it is a glyph at the end of the field, and it only
  * colours while it is actually listening.
  */
-export default function SearchBar({ containerClass = "", onClear, ...props }: SearchBarProps) {
+export default function SearchBar({ containerClass = "", onClear, autoStartVoice = false, ...props }: SearchBarProps) {
   const t = useT();
   const { language } = useThemeStore();
   const [supported, setSupported] = useState(false);
@@ -67,8 +74,18 @@ export default function SearchBar({ containerClass = "", onClear, ...props }: Se
 
   // A field unmounting mid-sentence must not leave a microphone open.
   useEffect(() => {
-    setSupported(speechConstructor() !== null);
+    const Constructor = speechConstructor();
+    setSupported(Constructor !== null);
+    /*
+      Opened for a spoken query (the home screen's microphone), the session starts itself once the
+      field is mounted. The short delay lets autofocus settle first: starting recognition while the
+      keyboard is still opening made the first word land in the field twice.
+    */
+    const auto = autoStartVoice && Constructor
+      ? window.setTimeout(() => { if (!recognition.current) toggleVoice(); }, 150)
+      : 0;
     return () => {
+      if (auto) window.clearTimeout(auto);
       const session = recognition.current;
       recognition.current = null;
       if (session) {

@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useOfflineStore } from "@/stores/offlineStore";
-import { getPendingCount } from "@/lib/offlineQueue";
+import { useConnectivityToasts } from "@/hooks/useConnectivityToasts";
 import PINInput from "@/components/ui/PINInput";
 import { Suspense, useState, useEffect, useRef } from "react";
 import useOverlayScrollLock from "@/hooks/useOverlayScrollLock";
@@ -112,7 +112,7 @@ export default function EmployeeLayout() {
   const refreshPermissions = useAuthStore((s) => s.refreshPermissions);
   const activeBranchId = useShopStore((s) => s.activeBranchId);
   const { addToast } = useUIStore();
-  const { isOnline, setOnline, syncQueue, isSyncing, pendingOpsCount } = useOfflineStore();
+  const { isOnline, isSyncing, pendingOpsCount } = useOfflineStore();
   const navigate = useNavigate();
   const location = useLocation();
   useBootstrapData();
@@ -141,28 +141,9 @@ export default function EmployeeLayout() {
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [pinShake, setPinShake] = useState(false);
-  const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);  // Online/offline detection + auto-sync
-  useEffect(() => {
-    const handleOnline = () => {
-      setOnline(true);
-      addToast("Back online — syncing data", "success");
-      syncQueue();
-    };
-    const handleOffline = () => {
-      setOnline(false);
-      addToast("You are offline. Sales will queue locally.", "warning");
-    };
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    const pending = getPendingCount();
-    if (pending > 0) {
-      setOnline(navigator.onLine);
-    }
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Online/offline detection, auto-sync, and the toast that reports how many changes it sent.
+  useConnectivityToasts();
 
   // Session lock timer
   function resetLockTimer() {
@@ -304,6 +285,9 @@ export default function EmployeeLayout() {
         background: "var(--background)",
         // Keep the conversation shell on the visible viewport; only its transcript may scroll.
         ...(isAssistant ? { height: "var(--assistant-viewport-height, 100dvh)" } : {}),
+        // The tab bar's reserve is taken off the screen's minimum height, not added on top of it
+        // (see AdminLayout): a screen whose content fits must not scroll at all.
+        ...(!isAssistant && showTabBar ? { minHeight: "calc(100% - var(--tabbar-height))" } : {}),
       }}
     >
       <NavTracker />
@@ -343,7 +327,10 @@ export default function EmployeeLayout() {
       {/* ── Session lock overlay ── */}
       {isLocked && (
         <div
-          className="absolute inset-0 z-50 flex flex-col"
+          // Fixed for the same reason as the admin shell's lock screen: the page behind it can be
+          // taller than the phone, and an absolute overlay was centred in that page rather than
+          // on the screen. Being `.fixed.inset-0` also makes the scroll-lock hook hold the shell.
+          className="fixed inset-0 z-50 mx-auto flex w-full max-w-[480px] flex-col"
           style={{ background: "var(--background)" }}
         >
           <div className="safe-top" />

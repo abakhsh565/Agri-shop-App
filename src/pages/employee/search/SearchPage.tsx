@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import { useCustomersStore } from "@/stores/customersStore";
 import { useProductsStore } from "@/stores/productsStore";
@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import {
   countActiveFilters,
-  periodStart,
+  periodWindow,
   useSearchFilters,
 } from "@/stores/searchFiltersStore";
 import SearchBar from "@/components/ui/SearchBar";
@@ -90,6 +90,9 @@ const ADMIN_EXTRA_FILTERS_BASE = [
 
 export default function SearchPage() {
   const navigate = useNavigate();
+  // `?voice=1` is how the home screen's microphone hands the field a spoken query to listen for.
+  const [searchParams] = useSearchParams();
+  const voice = searchParams.get("voice");
   const back = useAppBack();
   const base = useShellBase();
   // Co-Owners get the wider catalogue too; every route they open has its own permission gate.
@@ -184,9 +187,16 @@ export default function SearchPage() {
     // today", which is the reason the filter screen exists.
     if (!q && activeFilterCount === 0) return [];
 
-    const startsAt = periodStart(filters.period);
-    const inPeriod = (iso: string | null | undefined) =>
-      !startsAt || (!!iso && new Date(iso) >= startsAt);
+    const { from: startsAt, to: endsAt } = periodWindow(
+      filters.period,
+      filters.customFrom,
+      filters.customTo,
+    );
+    const inPeriod = (iso: string | null | undefined) => {
+      if (startsAt && !(iso && new Date(iso) >= startsAt)) return false;
+      if (endsAt && !(iso && new Date(iso) <= endsAt)) return false;
+      return true;
+    };
 
     const items: SearchResult[] = [];
 
@@ -375,11 +385,15 @@ export default function SearchPage() {
     >
       <StatusBar />
 
-      {/* Search bar */}
+      {/* Search bar
+          The back control is a 44px target, the same floor the header arrow uses, and the same
+          height as the field beside it: at 36px the circle sat a size below the pill and the
+          chevron read as too large for the mark around it (owner, 2026-11-19). */}
       <div className="flex items-center gap-3 px-4 pt-3 pb-3">
         <button
           onClick={back}
-          className="size-9 rounded-full flex items-center justify-center shrink-0 active:opacity-70"
+          aria-label={t("common.back")}
+          className="size-11 rounded-full flex items-center justify-center shrink-0 active:opacity-70 ds-pressable"
           style={{ background: "var(--surface-2)" }}
         >
           <ChevronLeft size={18} style={{ color: "var(--text-primary)" }} />
@@ -387,6 +401,7 @@ export default function SearchPage() {
         <SearchBar
           containerClass="flex-1 min-w-0"
           autoFocus
+          autoStartVoice={voice === "1"}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onClear={() => setQuery("")}

@@ -159,13 +159,16 @@ async function loadTransactions(
   const when = formatDateTime;
 
   if (kind === "sales") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("sales")
       .select("id,sale_number,customer_name_snapshot,total_amount,amount_paid,amount_due,status,created_at,employee_name,is_voided")
       .eq("is_voided", false)
       .gte("created_at", start)
       .lte("created_at", end)
       .order("created_at", { ascending: false });
+    // A failed read must reach the caller as a failure: `(data ?? [])` alone turns "the server
+    // could not be reached" into "this range is empty".
+    if (error) throw error;
     return ((data ?? []) as Record<string, unknown>[]).map((row) => {
       const title = text(row.customer_name_snapshot) || t("history.walkIn");
       const total = money(row.total_amount);
@@ -192,12 +195,15 @@ async function loadTransactions(
   }
 
   if (kind === "invoices") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("invoices")
       .select("id,invoice_number,customer_name,total,amount_paid,status,created_at")
       .gte("created_at", start)
       .lte("created_at", end)
       .order("created_at", { ascending: false });
+    // A failed read must reach the caller as a failure: `(data ?? [])` alone turns "the server
+    // could not be reached" into "this range is empty".
+    if (error) throw error;
     return ((data ?? []) as Record<string, unknown>[]).map((row) => {
       const total = money(row.total);
       const paid = money(row.amount_paid);
@@ -219,12 +225,15 @@ async function loadTransactions(
   }
 
   if (kind === "purchases") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("purchases")
       .select("id,purchase_number,company_name,total_amount,amount_paid,amount_due,status,created_at")
       .gte("created_at", start)
       .lte("created_at", end)
       .order("created_at", { ascending: false });
+    // A failed read must reach the caller as a failure: `(data ?? [])` alone turns "the server
+    // could not be reached" into "this range is empty".
+    if (error) throw error;
     return ((data ?? []) as Record<string, unknown>[]).map((row) => {
       const total = money(row.total_amount);
       const paid = money(row.amount_paid);
@@ -247,12 +256,15 @@ async function loadTransactions(
   }
 
   if (kind === "returns") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("returns")
       .select("id,return_number,customer_name,total_refund,refund_amount,created_at,sale_id,status")
       .gte("created_at", start)
       .lte("created_at", end)
       .order("created_at", { ascending: false });
+    // A failed read must reach the caller as a failure: `(data ?? [])` alone turns "the server
+    // could not be reached" into "this range is empty".
+    if (error) throw error;
     return ((data ?? []) as Record<string, unknown>[]).map((row) => {
       const refund = money(row.total_refund) || money(row.refund_amount);
       const saleId = text(row.sale_id);
@@ -274,12 +286,15 @@ async function loadTransactions(
   }
 
   if (kind === "customer-payments") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("customer_payments")
       .select("id,customer_id,amount,method,notes,created_at,recorded_by_name,customers(name)")
       .gte("created_at", start)
       .lte("created_at", end)
       .order("created_at", { ascending: false });
+    // A failed read must reach the caller as a failure: `(data ?? [])` alone turns "the server
+    // could not be reached" into "this range is empty".
+    if (error) throw error;
     return ((data ?? []) as Record<string, unknown>[]).map((row) => {
       const customer = related(row, "customers");
       const title = text(customer?.name) || t("history.customer");
@@ -303,12 +318,15 @@ async function loadTransactions(
   }
 
   if (kind === "supplier-payments") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("supplier_payments")
       .select("id,company_id,amount,method,notes,created_at,recorded_by_name,companies(name)")
       .gte("created_at", start)
       .lte("created_at", end)
       .order("created_at", { ascending: false });
+    // A failed read must reach the caller as a failure: `(data ?? [])` alone turns "the server
+    // could not be reached" into "this range is empty".
+    if (error) throw error;
     return ((data ?? []) as Record<string, unknown>[]).map((row) => {
       const company = related(row, "companies");
       const title = text(company?.name) || t("history.supplier");
@@ -330,12 +348,15 @@ async function loadTransactions(
   }
 
   if (kind === "money") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("payments")
       .select("id,customer_id,amount,method,notes,created_at,recorded_by_name,customers(name)")
       .gte("created_at", start)
       .lte("created_at", end)
       .order("created_at", { ascending: false });
+    // A failed read must reach the caller as a failure: `(data ?? [])` alone turns "the server
+    // could not be reached" into "this range is empty".
+    if (error) throw error;
     return ((data ?? []) as Record<string, unknown>[]).map((row) => {
       const customer = related(row, "customers");
       const amount = money(row.amount);
@@ -358,12 +379,15 @@ async function loadTransactions(
     });
   }
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("stock_adjustments")
     .select("id,product_name,variant_name,adjustment_type,qty_change,qty_before,qty_after,reason,adjusted_by,created_at")
     .gte("created_at", start)
     .lte("created_at", end)
     .order("created_at", { ascending: false });
+  // A failed read must reach the caller as a failure: `(data ?? [])` alone turns "the server
+  // could not be reached" into "this range is empty".
+  if (error) throw error;
   return ((data ?? []) as Record<string, unknown>[]).map((row) => {
     const change = money(row.qty_change);
     const product = text(row.product_name) || text(row.variant_name) || t("history.stock");
@@ -412,6 +436,8 @@ export default function AdminHistoryListPage() {
   const [customTo, setCustomTo] = useState(today);
   const [rangeOpen, setRangeOpen] = useState(false);
   const [transactions, setTransactions] = useState<Tx[] | null>(null);
+  /** The range has no copy on this device AND the read failed — see the empty state below. */
+  const [readFailed, setReadFailed] = useState(false);
   const [nonce, setNonce] = useState(0);
   const [selected, setSelected] = useState<Tx | null>(null);
   const [query, setQuery] = useState("");
@@ -460,14 +486,21 @@ export default function AdminHistoryListPage() {
     const cacheKey = `history-${kind}-${from}-${to}`;
     const cached = getCachedData<Tx[]>(cacheKey);
     setTransactions(cached ?? null);
+    setReadFailed(false);
     try {
       const rows = await loadTransactions(kind, from, to, base, translate.current);
       setTransactions(rows);
       setCachedData(cacheKey, rows);
     } catch {
       // A failed read falls back to the cached ledger; with no cache it is empty, not a spinner
-      // that never resolves.
-      if (!cached) setTransactions([]);
+      // that never resolves. It is NOT the same emptiness as "this range has nothing in it"
+      // (measured offline 2026-11-20): 1W was unreachable-but-not-empty and the screen said
+      // "Nothing in this range" over a week that plainly had sales. The flag lets the empty
+      // state say which of the two it is.
+      if (!cached) {
+        setTransactions([]);
+        setReadFailed(true);
+      }
     }
   }, [allowed, kind, from, to, base]);
 
@@ -652,8 +685,8 @@ export default function AdminHistoryListPage() {
       ) : transactions.length === 0 ? (
         <EmptyState
           icon={HistoryIcon}
-          title={t("history.nothing")}
-          subtitle={t("history.emptyBody")}
+          title={t(readFailed ? "history.offlineTitle" : "history.nothing")}
+          subtitle={t(readFailed ? "history.offlineBody" : "history.emptyBody")}
         />
       ) : visible.length === 0 ? (
         <EmptyState

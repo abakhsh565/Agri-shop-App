@@ -1,8 +1,10 @@
-import { useMemo, type CSSProperties, type ReactNode } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import ListCard from "@/components/ui/ListCard";
+import DateRangeSheet from "@/components/ui/DateRangeSheet";
+import { pkToday } from "@/lib/pkDate";
 import { useAppBack } from "@/hooks/useAppBack";
 import { useShellBase } from "@/lib/useShellBase";
 import { useT } from "@/lib/i18n";
@@ -68,6 +70,7 @@ export default function SearchFiltersPage() {
   const isAdmin = base !== "/employee";
 
   const filters = useSearchFilters();
+  const [rangeOpen, setRangeOpen] = useState(false);
   const customers = useCustomersStore((s) => s.customers);
   const companies = useCompaniesStore((s) => s.companies);
   const employees = useEmployeesStore((s) => s.employees);
@@ -84,11 +87,19 @@ export default function SearchFiltersPage() {
     return { kind: null as "customer" | "supplier" | null, name: filters.personName ?? "" };
   }, [filters.personId, filters.personName, customers, companies]);
 
+  /**
+   * The ledgers' own six windows, in the ledgers' own words (owner, 2026-11-19). Copying the
+   * labels rather than writing a second set is the point: "3M" on the sales history and "3M" here
+   * have to mean the same ninety days, and a filter screen that called it "Last quarter" would be
+   * a second definition to keep in step.
+   */
   const PERIODS: { key: SearchPeriod; label: string }[] = [
-    { key: "any", label: t("search.periodAny") },
-    { key: "today", label: t("search.periodToday") },
-    { key: "week", label: t("search.periodWeek") },
-    { key: "month", label: t("search.periodMonth") },
+    { key: "today", label: t("history.period1d") },
+    { key: "week", label: t("history.period1w") },
+    { key: "month", label: t("history.period1m") },
+    { key: "quarter", label: t("history.period3m") },
+    { key: "year", label: t("history.period1y") },
+    { key: "custom", label: t("history.custom") },
   ];
 
   const PAYS: { key: SearchPayFilter; label: string }[] = [
@@ -172,35 +183,52 @@ export default function SearchFiltersPage() {
       <StatusBar />
       <NavHeader title={t("search.filtersTitle")} />
 
-      {/* When — one contiguous track, because the four answers are positions on a timeline. */}
-      <Section title={t("search.filterPeriod")}>
-        <div
-          className="flex p-1 rounded-full"
-          style={{ background: "var(--surface-2)" }}
-          role="group"
-          aria-label={t("search.filterPeriod")}
-        >
+      {/* When — the ledgers' tab strip, to the pixel (owner, 2026-11-19: "add this date same
+          filter on that screen"): one row, the chosen window underlined. It is the same six
+          choices, in the same order, as `/history/sales`, so a window looks identical wherever it
+          is chosen.
+
+          Tapping the chosen window again clears it back to any time — the strip has no seventh
+          slot for "Any time" at phone width, and a window that cannot be undone would be a filter
+          you have to reset the whole form to escape. */}
+      <div className="px-4 pt-4" data-testid="filter-periods" role="group" aria-label={t("search.filterPeriod")}>
+        <div className="flex items-stretch justify-between" style={{ borderBottom: "1px solid var(--divider)" }}>
           {PERIODS.map(({ key, label }) => {
             const active = filters.period === key;
             return (
               <button
                 key={key}
                 type="button"
-                onClick={() => filters.set({ period: key })}
+                onClick={() => {
+                  if (key === "custom") {
+                    setRangeOpen(true);
+                    return;
+                  }
+                  filters.set({ period: active ? "any" : key });
+                }}
                 aria-pressed={active}
-                className="flex-1 h-9 rounded-full text-12 font-semibold transition-colors"
-                style={
-                  active
-                    ? { background: "var(--surface)", color: "var(--text-primary)", boxShadow: "var(--shadow-1)" }
-                    : { background: "transparent", color: "var(--text-secondary)" }
-                }
+                data-testid={`filter-period-${key}`}
+                className="relative flex-1 h-11 text-13 font-semibold"
+                style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}
               >
                 {label}
+                {active && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-2 bottom-0 h-[2px] rounded-full"
+                    style={{ background: "var(--text-primary)" }}
+                  />
+                )}
               </button>
             );
           })}
         </div>
-      </Section>
+        {filters.period === "custom" && filters.customFrom && filters.customTo && (
+          <p className="pt-2 text-11" style={{ color: "var(--text-secondary)" }} data-testid="filter-period-custom-value">
+            {filters.customFrom} – {filters.customTo}
+          </p>
+        )}
+      </div>
 
       {/* Who — two doors, each opening the whole book of that kind. */}
       <Section title={t("search.filterPerson")}>
@@ -334,6 +362,24 @@ export default function SearchFiltersPage() {
           })}
         </ListCard>
       </Section>
+
+      {/* The hand-picked window asks in the sheet the ledgers already use, so a range is entered
+          the same way on both screens and a half-typed one is discarded on close. */}
+      <DateRangeSheet
+        open={rangeOpen}
+        from={filters.customFrom ?? ""}
+        to={filters.customTo ?? ""}
+        max={pkToday()}
+        onClose={() => setRangeOpen(false)}
+        onApply={(from, to) => {
+          filters.set({ period: "custom", customFrom: from, customTo: to });
+          setRangeOpen(false);
+        }}
+        onClear={() => {
+          filters.set({ period: "any", customFrom: null, customTo: null });
+          setRangeOpen(false);
+        }}
+      />
 
       <div
         className="fixed start-0 end-0 bottom-0 max-w-[480px] mx-auto p-4 flex gap-2"
