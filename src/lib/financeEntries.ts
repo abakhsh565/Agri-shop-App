@@ -140,6 +140,21 @@ export function monthWindow(day: string): MonthWindow {
  * the drift this function prevents: the hero and the performance rows both call it, so the
  * number at the top and the arithmetic under it cannot disagree.
  */
+/**
+ * Gross profit, measured on **net sales** so a plate adds up.
+ *
+ * `gross sales − COGS` is not the figure a screen can stack expenses on top of: net sales has the
+ * returns taken off it, and the plate's chain (net sales − COGS − expenses = net profit) only adds
+ * up when gross profit is the middle term. With no returns the two readings are identical, which is
+ * why the difference stayed invisible until a period carried a refund (owner, 2026-11-20).
+ *
+ * `null` in, `null` out: a screen prints "—" for an unread figure rather than inventing a zero.
+ */
+export function grossProfitOf(netSales: number | null, cogs: number | null): number | null {
+  if (netSales == null || cogs == null) return null;
+  return Math.round((netSales - cogs) * 100) / 100;
+}
+
 export function netProfitOf(
   netSales: number | null,
   cogs: number | null,

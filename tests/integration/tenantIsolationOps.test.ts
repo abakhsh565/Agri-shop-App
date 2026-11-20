@@ -16,6 +16,7 @@
 
 import { describe, it, beforeAll, afterAll, expect } from 'vitest';
 import { execRpcAsUser, execSqlAsAdmin, insertAsUser, selectAsUser, setMembershipBranchScope } from '../setup/qa-client';
+import { ensureActiveFixtureMemberships } from '../setup/fixtureMemberships';
 
 const TENANT_A = '00000000-0000-0000-0000-000000000001';
 const TENANT_B = '00000000-0000-0000-0000-00000000c0c0';
@@ -82,6 +83,11 @@ beforeAll(async () => {
       ('${EMP_A}',   '${RUN} Employee A', '923009780003', 'employee', false, true, '${TENANT_A}')
     ON CONFLICT (id) DO NOTHING
   `);
+
+  // The users upsert above does not create or repair memberships for rows that already exist, and a
+  // membership left 'pending' by a reactivation (never-signed-in, non-owner) is refused by every
+  // authorization path. Own the membership first; the role override below then applies on top.
+  await sql(ensureActiveFixtureMemberships(OWNER_A, OWNER_B, EMP_A));
 
   // Employee membership carries the role that lacks alerts.manage.
   await sql(`

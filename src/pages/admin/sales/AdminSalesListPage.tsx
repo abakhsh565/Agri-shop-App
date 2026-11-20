@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import StatusBar from "@/components/ui/StatusBar";
 import Photo from "@/components/ui/Photo";
@@ -10,6 +10,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useProductsStore } from "@/stores/productsStore";
 import { summariseSales, profitDisplay } from "@/lib/profit";
+import { customerNamesById, saleCustomerName } from "@/lib/saleCustomerName";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import type { Sale } from "@/types";
 import {
@@ -123,6 +124,10 @@ export default function AdminSalesListPage() {
   const allSales: Sale[] = useSalesStore((s) => s.sales);
   const ready = useSalesStore((s) => s.ready);
   const customers = useCustomersStore((s) => s.customers);
+  // A sale keeps the name it was billed with; the screen shows the customer's name today, so a
+  // rename shows on every bill of theirs at once instead of only on the customer record.
+  const namesById = useMemo(() => customerNamesById(customers), [customers]);
+  const nameOf = (sale: Sale) => saleCustomerName(sale, namesById);
   const mockEmployees = useEmployeesStore((s) => s.employees);
   const products = useProductsStore((s) => s.products);
   // Only a fallback for lines whose cost was never snapshotted; the products store holds
@@ -169,7 +174,7 @@ export default function AdminSalesListPage() {
     if (!query.trim()) return true;
     const q = query.trim().toLowerCase();
     return (
-      sale.customerName.toLowerCase().includes(q) ||
+      nameOf(sale).toLowerCase().includes(q) ||
       sale.employeeName.toLowerCase().includes(q) ||
       sale.saleNumber.toLowerCase().includes(q)
     );
@@ -217,7 +222,7 @@ export default function AdminSalesListPage() {
   const creditSalesTotal = creditPeriodSales.reduce((sum, sale) => sum + money(sale.totalAmount), 0);
   const cashCollected = periodSales.reduce((sum, sale) => sum + (sale.paymentMethod === "cash" ? money(sale.amountPaid) : 0), 0);
   const onlineCollected = Math.max(0, totalCollected - cashCollected);
-  const creditCustomerCount = new Set(creditPeriodSales.map((sale) => sale.customerId || sale.customerName)).size;
+  const creditCustomerCount = new Set(creditPeriodSales.map((sale) => sale.customerId || nameOf(sale))).size;
   const collectedPct = percentOf(totalCollected, netSales);
   const creditRecoveredPct = percentOf(creditRecovered, creditSalesTotal);
 
@@ -256,7 +261,7 @@ export default function AdminSalesListPage() {
         [
           { label: t("receipt.date"), value: (s) => formatSmartDateTime(s.createdAt) },
           { label: t("sales.saleNumber"), value: (s) => s.saleNumber },
-          { label: t("common.customer"), value: (s) => s.customerName },
+          { label: t("common.customer"), value: (s) => nameOf(s) },
           { label: t("sales.soldBy"), value: (s) => s.employeeName },
           { label: t("common.total"), value: (s) => s.totalAmount },
           { label: t("common.paid"), value: (s) => s.amountPaid },
@@ -723,7 +728,7 @@ export default function AdminSalesListPage() {
               <ListCard className="mx-4">
                 {section.sales.map((sale) => {
                   const cImg = getCustomerImg(sale.customerId);
-                  const cBg = initBgColor(sale.customerName);
+                  const cBg = initBgColor(nameOf(sale));
                   return (
                   <ListRow
                     key={sale.id}
@@ -731,11 +736,11 @@ export default function AdminSalesListPage() {
                     tile={
                       <Photo
                         src={cImg}
-                        alt={sale.customerName}
+                        alt={nameOf(sale)}
                         className="size-10 rounded-full object-cover shrink-0"
                         fallback={
                           <div className="size-10 rounded-full shrink-0 flex items-center justify-center text-sm font-bold" style={{ background: cBg, color: "#fff" }}>
-                            {(sale.customerName || '?').charAt(0).toUpperCase()}
+                            {(nameOf(sale) || '?').charAt(0).toUpperCase()}
                           </div>
                         }
                       />
@@ -758,7 +763,7 @@ export default function AdminSalesListPage() {
                     }
                   >
                     <div className="min-w-0">
-                      <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{sale.customerName}</p>
+                      <p className="text-13 font-bold truncate" style={{ color: "var(--text-primary)" }}>{nameOf(sale)}</p>
                       <p className="text-10 mt-0.5" style={{ color: "var(--text-secondary)" }}>{formatSmartDateTime(sale.createdAt, now, t)}</p>
                       <p className="text-11 font-medium mt-0.5" style={{ color: "var(--text-secondary)" }}>{t("saleDetail.soldBy")}: {sale.employeeName}</p>
                     </div>

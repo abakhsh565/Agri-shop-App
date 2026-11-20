@@ -15,7 +15,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useUIStore } from "@/stores/uiStore";
 import { hasPermission } from "@/lib/tenantContext";
 import { useShellBase } from "@/lib/useShellBase";
-import { branchKind } from "@/lib/branchKind";
+import { branchKind, branchNameOnly } from "@/lib/branchKind";
 import { applyOverrides, diffOverrides, overrideCount, overridesToStore } from "@/lib/accessModel";
 import { supabase } from "@/lib/supabase";
 import type { MembershipRole } from "@/types";
@@ -355,7 +355,7 @@ export default function EmployeeRolePage() {
                           border: `1px solid ${selected ? "var(--brand)" : "var(--divider)"}`,
                         }}
                       >
-                        {branch.name} · {branchKind(t, branch.is_default)}
+                        {branchNameOnly(branch.name)} · {branchKind(t, branch.is_default)}
                       </button>
                     );
                   })}
@@ -376,7 +376,7 @@ export default function EmployeeRolePage() {
                       style={{ background: "var(--surface)", border: "1px solid var(--divider)" }}
                     >
                       <span className="text-11 font-semibold truncate">
-                        {branch.name} · <span style={{ color: "var(--text-tertiary)" }}>{branchKind(t, branch.is_default)}</span>
+                        {branchNameOnly(branch.name)} · <span style={{ color: "var(--text-tertiary)" }}>{branchKind(t, branch.is_default)}</span>
                       </span>
                       <span className="text-11 font-semibold flex items-center gap-1 shrink-0" style={{ color: "var(--text-secondary)" }}>
                         {roleNameFor(branch.id)} <ChevronRight size={12} />

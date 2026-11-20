@@ -21,7 +21,11 @@ import { askDeterministic, guardMoneyTopic, verifyFigures } from "../../supabase
 // employee. Nothing assistant-specific — the lane proves the assistant on the same two people the
 // rest of the app is tested with.
 const OWNER_PHONE = "923001234567";
-const EMPLOYEE_PHONE = "923001122334";
+// The declared fixture employee (`QA_FIXTURE_USERS`, tests/setup/qa-fixtures.ts): `…-0002`,
+// 923008888888, active, on the built-in "Sales Employee" role. 923001122334 was used here before
+// and belongs to a legacy seeded account (`…-0004`) that nothing reseeds, so when it was deactivated
+// this lane signed in to a suspended membership and `myPermissions()` answered `[]`.
+const EMPLOYEE_PHONE = "923008888888";
 
 function qaEnv() {
   const env: Record<string, string> = {};

@@ -9,7 +9,7 @@ import PullToRefresh from "@/components/ui/PullToRefresh";
 import { useCustomersStore } from "@/stores/customersStore";
 import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
-import { branchKind } from "@/lib/branchKind";
+import { branchIdentity } from "@/lib/branchKind";
 import { canSeeDashboard, hasPermission } from "@/lib/tenantContext";
 import { generateReminders } from "@/lib/reminderEngine";
 import { useThemeStore } from "@/stores/themeStore";
@@ -99,6 +99,8 @@ export default function DashboardPage() {
   // The header states where this person is working, not who they are or what time it is:
   // the branch is the one fact that changes what every number below means.
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
+  // A branch's name may already end in its kind ("Kamran Traders - Main"); the header says it once.
+  const branchLine = branchIdentity(t, activeBranchName, activeBranch?.isMain);
   const branchPlace = activeBranch?.place ?? null;
   // A branch with coordinates but no map label falls back to its own name in `place`. Showing
   // that would print the branch twice, so in that case the address is the useful second line.
@@ -225,23 +227,23 @@ export default function DashboardPage() {
               className="flex items-center gap-1.5 self-start max-w-full active:opacity-60"
             >
               <span className="font-bold text-17 truncate" style={{ color: "var(--text-primary)" }}>
-                {activeBranchName ?? t("audit.noBranch")}
+                {branchLine.name || t("audit.noBranch")}
               </span>
-              {branchKind(t, activeBranch?.isMain) && (
+              {branchLine.kind && (
                 <span className="text-10 font-bold h-5 px-1.5 rounded-full flex items-center shrink-0"
                   style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>
-                  {branchKind(t, activeBranch?.isMain)}
+                  {branchLine.kind}
                 </span>
               )}
               <ChevronDown size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />
             </button>
           ) : (
             <p className="font-bold text-17 truncate flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
-              <span className="truncate">{activeBranchName ?? t("audit.noBranch")}</span>
-              {branchKind(t, activeBranch?.isMain) && (
+              <span className="truncate">{branchLine.name || t("audit.noBranch")}</span>
+              {branchLine.kind && (
                 <span className="text-10 font-bold h-5 px-1.5 rounded-full flex items-center shrink-0"
                   style={{ background: "var(--brand-light)", color: "var(--brand-dark)" }}>
-                  {branchKind(t, activeBranch?.isMain)}
+                  {branchLine.kind}
                 </span>
               )}
             </p>

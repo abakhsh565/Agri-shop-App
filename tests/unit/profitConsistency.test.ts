@@ -8,6 +8,7 @@ import {
   summariseSales,
   profitDisplay,
 } from '../../src/lib/profit';
+import { grossProfitOf, netProfitOf } from '../../src/lib/financeEntries';
 import type { SaleItem } from '../../src/types';
 
 /**
@@ -138,6 +139,28 @@ describe('profit has one calculation', () => {
     expect(refundedCogs(sale, { 'Lambda-5-KG': 99 })).toBe(280);
     // An unknown cost cannot be given back, and must not be invented as zero either.
     expect(refundedCogs({ items: [line({ cogsAmount: 0 })] }, returnedQty)).toBe(0);
+  });
+
+  it('the plate adds up when the period has returns', () => {
+    // The bug this exists for: gross profit was read off GROSS sales while the plate around it
+    // showed net sales, so a refunded period left the tiles short by exactly the returns.
+    const netSales = 19_750; // gross 20,000 less 250 of returns
+    const cogs = 16_000;
+    const expenses = 1_200;
+
+    const gross = grossProfitOf(netSales, cogs);
+    expect(gross).toBe(3_750);
+    // Gross sales would have said 4,000 — 250 too much, the exact size of the returns.
+    expect(gross).not.toBe(4_000);
+
+    const net = netProfitOf(netSales, cogs, expenses);
+    expect(net).toBe(2_550);
+    // The chain the screen draws: net sales − COGS = gross profit; gross profit − expenses = net.
+    expect(Math.round(((gross as number) - expenses) * 100) / 100).toBe(net);
+
+    // An unread figure stays null; it is never a zero.
+    expect(grossProfitOf(null, cogs)).toBeNull();
+    expect(grossProfitOf(netSales, null)).toBeNull();
   });
 
   it('a period is its sales, so a sale page cannot disagree with the list', () => {

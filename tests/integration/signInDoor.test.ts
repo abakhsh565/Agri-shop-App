@@ -27,7 +27,10 @@ import { qaAnonClient } from '../setup/qa-client';
 
 /** The repository's own QA identities (tests/setup/fixtures.ts). */
 const OWNER_PHONE = '923001234567';
-const EMPLOYEE_PHONE = '923001122334';
+// The declared fixture employee: `QA_FIXTURE_USERS` → `…-0002`, 923008888888. The previous number,
+// 923001122334, is a legacy seeded account (`…-0004`) that no seeder restores; once it was
+// deactivated this lane read `is_active = false` and reported a product failure that was fixture rot.
+const EMPLOYEE_PHONE = '923008888888';
 
 /** A number that has never registered. Reserved pattern: no suite uses 9230096999xx. */
 const STRANGER_PHONE = '923009699999';
