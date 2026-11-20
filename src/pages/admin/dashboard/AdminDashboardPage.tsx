@@ -867,12 +867,13 @@ export default function AdminDashboardPage() {
           }}
           data-testid="dashboard-overview-card"
         >
-          {/* The figure on the left, its refresh arrow in the right corner, each owning its side
-              (owner, 2026-11-19, twice). The row is pinned to LTR on purpose: this is the one
-              place the owner wants a fixed physical arrangement rather than a mirrored one, so
-              the number stays left and the arrow stays right in Urdu exactly as in English. The
-              Urdu label still shapes and reads right to left inside its own run. */}
-          <div dir="ltr" className="flex items-center justify-between gap-3">
+          {/* The row follows the language, which is what the owner asked for on 2026-11-20 after
+              seeing it in Urdu: the figure starts on the right and the refresh control moves to
+              the LEFT in RTL, mirroring the English arrangement instead of being pinned to it.
+              Only the row is mirrored. The figure itself stays left-to-right because
+              `RollingNumber` isolates its own run (`dir="ltr"` on the number span), so
+              "Rs. 159,250" keeps its digits and currency mark in the right order either way. */}
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="ds-section-label mb-1" style={{ color: "var(--brand-dark)" }}>
                 {t("admin.totalSales")}
