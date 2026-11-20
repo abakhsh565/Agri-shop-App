@@ -18,6 +18,7 @@
 import { describe, it, beforeAll, afterAll } from 'vitest';
 import { getDbClient, execSqlAsAdmin, execRpcAsUser, checkAuthAsUser, asPostgres } from '../setup/qa-client';
 import { QA_IDS } from '../setup/fixtures';
+import { ensureActiveFixtureMemberships } from '../setup/fixtureMemberships';
 
 let client: any;
 
@@ -45,6 +46,13 @@ beforeAll(async () => {
 
   // Create test users — use DO UPDATE to reset state from any previous run
   await client.query(`INSERT INTO users (id, name, phone, role, is_original_owner, is_active, shop_id) VALUES ('${T.adminUser}', 'Perm Test Admin', '92300PERM0001', 'admin', false, true, '${T.shop}'), ('${T.employeeUser}', 'Perm Test Employee', '92300PERM0002', 'employee', false, true, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = EXCLUDED.is_active, role = EXCLUDED.role, is_original_owner = EXCLUDED.is_original_owner`);
+
+  // THE USER ROW IS NOT THE MEMBERSHIP. `ensure_user_membership()` is AFTER INSERT with
+  // `ON CONFLICT DO NOTHING`, so an upsert of an existing user repairs nothing, and
+  // `sync_membership_status()` returns a reactivated never-signed-in account to 'pending' — which
+  // `membership_in_active_shop()` refuses, answering `NOT_AUTHORIZED: tenant access denied` on every
+  // RPC. Owning the membership here makes the file independent of what a previous run left behind.
+  await client.query(ensureActiveFixtureMemberships(T.adminUser, T.employeeUser));
   await client.query(`INSERT INTO companies (id, name, outstanding_payable, total_purchases, shop_id) VALUES ('${T.companyA}', 'Perm Test Supplier', 0, 0, '${T.shop}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`);
   await client.query(`INSERT INTO customers (id, name, phone, credit_limit, outstanding_balance, total_purchases, total_paid, shop_id, created_by) VALUES ('${T.customerA}', 'Perm Customer A', '92300PERM1001', 50000, 0, 0, 0, '${T.shop}', 'QA') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_archived = false`);
   await client.query(`INSERT INTO products (id, name, company_id, category, stock_qty, shop_id) VALUES ('${T.productA}', 'Perm Test Product', '${T.companyA}', 'seed', 100, '${T.shop}') ON CONFLICT (id) DO UPDATE SET is_active = true, stock_qty = EXCLUDED.stock_qty`);
