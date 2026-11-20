@@ -349,7 +349,9 @@ async function loadTransactions(
 
   if (kind === "money") {
     const { data, error } = await supabase
-      .from("payments")
+      // `customer_payments` is the ledger every screen reads; `payments` was a dev-only duplicate
+      // that production never had, so this screen answered "no money recorded" there.
+      .from("customer_payments")
       .select("id,customer_id,amount,method,notes,created_at,recorded_by_name,customers(name)")
       .gte("created_at", start)
       .lte("created_at", end)

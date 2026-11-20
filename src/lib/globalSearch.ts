@@ -49,7 +49,7 @@ export async function searchDocuments(
   const { base, isAdmin, t } = opts;
   const hits: GlobalHit[] = [];
 
-  const [invoices, purchases, returns, customerPayments, supplierPayments, moneyEntries, stockMoves] =
+  const [invoices, purchases, returns, customerPayments, supplierPayments, stockMoves] =
     await Promise.all([
       supabase
         .from("invoices")
@@ -82,13 +82,6 @@ export async function searchDocuments(
       supabase
         .from("supplier_payments")
         .select("id,company_id,amount,notes,recorded_by_name,created_at,companies(name)")
-        .or(`notes.ilike.${like},recorded_by_name.ilike.${like}`)
-        .order("created_at", { ascending: false })
-        .limit(6)
-        .then((result) => result.data ?? [], () => []),
-      supabase
-        .from("payments")
-        .select("id,customer_id,amount,notes,recorded_by_name,created_at,customers(name)")
         .or(`notes.ilike.${like},recorded_by_name.ilike.${like}`)
         .order("created_at", { ascending: false })
         .limit(6)
@@ -167,20 +160,6 @@ export async function searchDocuments(
       subtitle: text(raw.notes) || text(raw.recorded_by_name) || t("search.supplierPayment"),
       badge: formatCurrency(numberValue(raw.amount)),
       path: `${base}/purchases/payments/${id}`,
-    });
-  }
-
-  for (const raw of moneyEntries as Record<string, unknown>[]) {
-    const id = text(raw.id);
-    const customer = related(raw, "customers");
-    const customerId = text(raw.customer_id);
-    hits.push({
-      id: `money-${id}`,
-      group: "payment",
-      title: text(raw.notes) || text(customer?.name) || t("search.money"),
-      subtitle: text(customer?.name) || text(raw.recorded_by_name) || t("search.money"),
-      badge: formatCurrency(numberValue(raw.amount)),
-      path: customerId ? `${base}/customers/${customerId}` : isAdmin ? `${base}/payments` : `${base}/finance`,
     });
   }
 
