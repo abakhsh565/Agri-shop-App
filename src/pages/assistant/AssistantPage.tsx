@@ -28,6 +28,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import BrandLogo from "@/components/brand/BrandLogo";
 import Sheet from "@/components/ui/Sheet";
 import AssistantWidget from "@/components/assistant/AssistantWidget";
+import { widgetWorthShowing } from "@/lib/assistantWidget";
 import AssistantFinanceCard from "@/components/assistant/AssistantFinanceCard";
 import {
   askAssistant,
@@ -856,9 +857,9 @@ export default function AssistantPage() {
                       ))}
                     </div>
                   </div>
-                  {reply.widgets.length > 0 && (
+                  {reply.widgets.some(widgetWorthShowing) && (
                     <div className="flex flex-col gap-3">
-                      {reply.widgets.map((widget) => (
+                      {reply.widgets.filter(widgetWorthShowing).map((widget) => (
                         <AssistantWidget
                           key={widget.tool + widget.title}
                           widget={widget}

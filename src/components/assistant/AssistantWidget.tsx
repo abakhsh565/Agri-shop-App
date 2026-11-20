@@ -9,6 +9,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { formatCurrency } from "@/lib/formatters";
 import { useT } from "@/lib/i18n";
 import { toolTitleKey, type AssistantWidget as Widget } from "@/lib/assistant";
+import { widgetWorthShowing } from "@/lib/assistantWidget";
 
 /**
  * The detail, drawn in the conversation.
@@ -50,7 +51,7 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 
 function Stats({ items }: { items: React.ReactNode[] }) {
   return (
-    <div className="p-4 grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))" }}>
+    <div className="p-3 grid gap-1.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))" }}>
       {items}
     </div>
   );
@@ -76,9 +77,9 @@ function Pill({ text, tone = "muted" }: { text: string; tone?: "muted" | "ok" | 
 
 function Note({ text }: { text: string }) {
   return (
-    <div className="p-4">
+    <div className="p-2.5">
       <div
-        className="flex items-start gap-3 p-3 rounded-[14px] ds-meta"
+        className="flex items-start gap-2.5 p-2.5 rounded-[12px] ds-meta"
         style={{ background: "var(--surface-2)", border: "1px solid var(--divider)" }}
       >
         <Info size={16} className="shrink-0 mt-0.5" />
@@ -104,7 +105,8 @@ function titleCase(value: unknown): string {
   return clean.charAt(0).toUpperCase() + clean.slice(1);
 }
 
-type Card = { meta: string | null; body: React.ReactNode[] };
+/** A card, or `null` when the tool had no detail to lay out — see `helpTopic`. */
+type Card = { meta: string | null; body: React.ReactNode[] } | null;
 
 // ─── one renderer per tool ───────────────────────────────────────────────────
 
@@ -711,12 +713,10 @@ function myAbilities(f: any, { t }: WidgetHelpers): Card {
 }
 
 function helpTopic(f: any, { t }: WidgetHelpers): Card {
-  if (!f.topicsMatched) {
-    return {
-      meta: null,
-      body: [<EmptyState key="e" icon={BookOpen} title={t("assistant.empty.help")} subtitle={String(f.query)} />],
-    };
-  }
+  // A guide question the app has no entry for has nothing to lay out. The sentence above already
+  // says there is no saved explanation, so the card that used to sit here contradicted the answer
+  // and printed "undefined" under a large empty block. No entry, no card.
+  if (!f.topicsMatched) return null;
   const body: React.ReactNode[] = [];
   if (f.explanation) {
     body.push(
@@ -772,9 +772,11 @@ export default function AssistantWidget({
   const t = useT() as unknown as T;
   const navigate = useNavigate();
   const render = RENDERERS[widget.tool];
-  const { meta, body } = render
-    ? render(widget.facts ?? {}, { t, onAsk })
-    : { meta: null, body: [<EmptyState key="e" icon={Info} title={t("assistant.empty.card")} />] };
+  const card = render ? render(widget.facts ?? {}, { t, onAsk }) : null;
+  // No detail, no block: an empty card under a complete answer is noise, and it used to be the
+  // tallest thing on the screen.
+  if (!widgetWorthShowing(widget) || !card || !card.body.length) return null;
+  const { meta, body } = card;
   // The server's title is English; the heading is read in the language this screen is in.
   const titleKey = toolTitleKey(widget.tool);
   // Where the same thing can be acted on. The server names that screen in English, so it is not
@@ -783,8 +785,8 @@ export default function AssistantWidget({
   const screen = (widget.sources ?? [])[0];
 
   return (
-    <div className="mt-2">
-      <div className="flex items-center gap-2 px-4 mb-2">
+    <div className="mt-1.5">
+      <div className="flex items-center gap-2 px-3 mb-1.5">
         <p className="ds-section flex-1 min-w-0">
           {titleKey ? t(titleKey) : widget.title}
           {meta ? ` · ${meta}` : ""}

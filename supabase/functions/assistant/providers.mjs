@@ -44,9 +44,16 @@ THE RULES, IN ORDER OF IMPORTANCE
 6. When a tool result carries a screen, offer it at the end in plain words: "You can open it
    from Sales." Never invent a screen.
 7. If they ask how to do something, use help_topic and pass on the app's own words. If they
-   say they do not understand, explain gently and offer the guide.
+   say they do not understand, explain gently and offer the guide. If the guide has no entry for
+   what they asked, answer from WHAT THIS APP DOES below instead — do not call the tool again for
+   the same wording, and do not put a card under it.
 8. If you are not sure which customer, product or sale they mean, ask. Reading out the wrong
    person's balance is worse than one extra question.
+
+9. A card is the detail of an answer, never decoration. Attach one only when a tool returned the
+   figures or rows the person actually asked about, and never call a tool for the purpose of
+   producing a card. If a tool has nothing to show, say the sentence and stop — an empty card is
+   worse than no card.
 
 WHAT THIS APP DOES, IN ITS OWN TERMS
 
@@ -114,11 +121,34 @@ function scopeInstruction(ctx) {
   return "This person owns the shop. Do not claim a permission restriction for them.";
 }
 
-function widgetFor(result) {
+/**
+ * The card for a tool result — or nothing at all.
+ *
+ * WHY IT CAN RETURN NOTHING. A card is the detail of an answer, not the answer: when a tool has no
+ * detail to lay out, drawing one produces the block the owner reported — "Nothing saved for that"
+ * with "undefined" under it, taller than the sentence above it. Asked "how to calculate profit?",
+ * the model answered correctly and then called `help_topic`, which has no guide entry for that
+ * wording; the card was pure noise and contradicted the answer.
+ *
+ * So a tool result earns a card only when it carries facts the person asked for. An informative
+ * emptiness still counts (`low_stock` with nothing running out has facts, and that emptiness is
+ * the answer); an absent payload does not.
+ *
+ * Exported because the unit suite pins exactly this rule, and a rule that only the model can go
+ * wrong about is a rule nobody tests.
+ */
+export function widgetFor(result) {
+  if (!result) return null;
+  if (result.widget === false) return null;
+  const facts = result.facts ?? {};
+  if (!Object.keys(facts).length) return null;
+  // A guide answer with no matching entry has nothing to lay out; the spoken sentence already says
+  // there is no saved explanation, and a card here printed "undefined" beneath it.
+  if (result.tool === "help_topic" && !Number(facts.topicsMatched)) return null;
   return {
     tool: result.tool,
     title: result.title ?? "Result",
-    facts: result.facts ?? {},
+    facts,
     notes: result.notes ?? [],
     sources: result.sources ?? [],
   };
@@ -444,7 +474,7 @@ export async function askDeterministic(text, ctx) {
       sources: result.sources ?? [],
       notes: result.notes ?? [],
       facts: result.facts,
-      widgets: [widgetFor(result)],
+      widgets: [widgetFor(result)].filter(Boolean),
     };
   } catch (error) {
     calls.push(traceEntry(plan.tool, plan.args, { ok: false, refused: !!error.refused, permission: error.permission }));
@@ -603,7 +633,9 @@ export async function askGemini({ apiKey, model, text, ctx, photo, history = [],
         calls.push(traceEntry(name, args ?? {}, { ok: true, ms: result.ms, permission: result.permission }));
         for (const s of result.sources ?? []) sources.push(s);
         toolResults.push(forModel(result));
-        widgets.push(widgetFor(result));
+        // A card is added only when the tool produced detail; see `widgetFor`.
+        const card = widgetFor(result);
+        if (card) widgets.push(card);
         if (result.spoken) lastGood = result;
         responses.push({
           functionResponse: { name, response: { ok: true, result: forModel(result), sources: result.sources ?? [] } },
@@ -777,7 +809,9 @@ export async function askGroq({ apiKey, model, text, ctx, photo, history = [], m
         calls.push(traceEntry(name, args ?? {}, { ok: true, ms: result.ms, permission: result.permission }));
         for (const s of result.sources ?? []) sources.push(s);
         toolResults.push(forModel(result));
-        widgets.push(widgetFor(result));
+        // A card is added only when the tool produced detail; see `widgetFor`.
+        const card = widgetFor(result);
+        if (card) widgets.push(card);
         if (result.spoken) lastGood = result;
         messages.push({
           role: "tool",
