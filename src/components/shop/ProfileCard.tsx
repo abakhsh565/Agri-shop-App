@@ -4,7 +4,7 @@ import Photo from "@/components/ui/Photo";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useT } from "@/lib/i18n";
-import { branchKind } from "@/lib/branchKind";
+import { branchIdentity } from "@/lib/branchKind";
 
 /**
  * The account, as one card: who this person is and the branch they are working in.
@@ -41,7 +41,8 @@ export default function ProfileCard({ onOpen, onEdit, editTestId, testId }: {
   const branches = useShopStore((s) => s.branches);
   const openSwitcher = useShopStore((s) => s.openSwitcher);
   const activeBranch = branches.find((b) => b.id === activeBranchId) ?? null;
-  const kind = branchKind(t, activeBranch?.isMain);
+  // The name may already end in the kind ("Kamran Traders - Main"); say it once.
+  const identity = branchIdentity(t, branchName, activeBranch?.isMain);
   const isOwner = user?.membershipRole === "owner";
   const role = user?.membershipRole === "owner" ? t("settings.owner")
     : user?.membershipRole === "admin" ? t("emp.admin") : t("search.employee");
@@ -69,11 +70,11 @@ export default function ProfileCard({ onOpen, onEdit, editTestId, testId }: {
           data-testid="profile-working-branch"
           style={{ color: "var(--text-secondary)" }}
         >
-          {branchName ?? t("audit.noBranch")}
+          {identity.name || t("audit.noBranch")}
         </span>
-        {kind && (
+        {identity.kind && (
           <span data-testid="profile-branch-kind" className="shrink-0 flex items-center">
-            <BranchKindChip isMain={Boolean(activeBranch?.isMain)} label={kind} />
+            <BranchKindChip isMain={Boolean(activeBranch?.isMain)} label={identity.kind} />
           </span>
         )}
       </span>

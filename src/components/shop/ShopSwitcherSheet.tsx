@@ -14,7 +14,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useUIStore } from "@/stores/uiStore";
-import { branchKind } from "@/lib/branchKind";
+import { branchKind, branchNameOnly } from "@/lib/branchKind";
 import { loadBusinessProfile } from "@/lib/businessProfile";
 import { resolveImageUrl } from "@/lib/storage";
 import Photo from "@/components/ui/Photo";
@@ -184,7 +184,7 @@ export default function ShopSwitcherSheet() {
               // The main branch IS the business — it is the one the owner signed up into, and its
               // row is the business's name rather than a branch label. An added branch keeps the
               // name the owner gave it, because that is the only thing that tells two of them apart.
-              const label = branch.isMain ? activeShopName ?? branch.name : branch.name;
+              const label = branch.isMain ? activeShopName ?? branchNameOnly(branch.name) : branchNameOnly(branch.name);
               const unread = unreadByBranch.get(branch.id) ?? 0;
               return (
                 <ListRow

@@ -1,7 +1,7 @@
 import BranchKindChip from "@/components/ui/BranchKindChip";
 import Photo from "@/components/ui/Photo";
 import { useT } from "@/lib/i18n";
-import { branchKind } from "@/lib/branchKind";
+import { branchIdentity } from "@/lib/branchKind";
 import { branchPlaceLine } from "@/lib/branchContext";
 import type { BranchSummary } from "@/stores/shopStore";
 
@@ -31,7 +31,8 @@ export default function BranchIdentity({
   imageUrl?: string | null;
 }) {
   const t = useT();
-  const kind = branchKind(t, branch.isMain);
+  // "Kamran Traders - Main" already carries its kind; the chip must not say it a second time.
+  const identity = branchIdentity(t, branch.name, branch.isMain);
   const place = branchPlaceLine(branch);
   const initial = branch.name.trim().charAt(0).toUpperCase() || "•";
 
@@ -58,9 +59,9 @@ export default function BranchIdentity({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 min-w-0">
           <p className="text-16 font-semibold truncate" data-testid={`branch-name-${branch.id}`}>
-            {branch.name}
+            {identity.name}
           </p>
-          {kind && <BranchKindChip isMain={branch.isMain} label={kind} />}
+          {identity.kind && <BranchKindChip isMain={branch.isMain} label={identity.kind} />}
         </div>
 
         {/* The place, where the business header carries the number that reaches it: one quiet

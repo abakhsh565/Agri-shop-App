@@ -12,7 +12,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { useThemeStore } from "@/stores/themeStore";
 import { useCurrentTime } from "@/lib/useCurrentTime";
 import { useT } from "@/lib/i18n";
-import { branchKind } from "@/lib/branchKind";
+import { branchIdentity, branchKind, branchNameOnly } from "@/lib/branchKind";
 import { formatSmartDateTime, translateNotification } from "@/lib/formatters";
 import { pkDate, pkDateFromISO, pkToday, pkYesterday } from "@/lib/pkDate";
 import { useShellBase } from "@/lib/useShellBase";
@@ -205,7 +205,7 @@ export default function AdminNotificationsPage() {
       {inSubBranch && activeBranch && (
         <div className="flex items-center gap-2 px-4 pt-2 pb-1" data-testid="notifications-current-branch">
           <span className="text-13 font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-            {activeBranch.name}
+            {branchIdentity(t, activeBranch.name, activeBranch.isMain).name}
           </span>
           {branchKind(t, activeBranch.isMain) && (
             <BranchKindChip isMain={activeBranch.isMain} label={branchKind(t, activeBranch.isMain)!} />
@@ -235,7 +235,7 @@ export default function AdminNotificationsPage() {
             },
             ...branches
               .filter((b) => b.id !== mainBranch?.id)
-              .map((b) => ({ id: b.id, name: b.name, kind: branchKind(t, b.isMain) })),
+              .map((b) => ({ id: b.id, name: branchNameOnly(b.name), kind: branchKind(t, b.isMain) })),
           ]
             .map((entry) => {
               const selected = entry.id === activeTab;
