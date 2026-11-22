@@ -38,6 +38,17 @@ const INTERNAL_TABLES = [
   // 0316: the demo-login switch is server-side state — RLS on, no policy on purpose, every client
   // grant revoked — so it is policy-free like the internal tables above, not app-facing.
   'login_bridge',
+  // 0325–0329: the farmer conversation and the push pipeline. RLS is on and every client grant is
+  // revoked (`0329`, `0330`), so these are policy-free on purpose: the shop app reads them only
+  // through SECURITY DEFINER RPCs, the farmer app only with its credential, and the sender only
+  // with the service role. Two of them must never be client-readable at all — `push_devices` holds
+  // every install's address and `marketplace_farmer_tokens` holds the credentials themselves — so
+  // the correct shape here is "no policy", not "a policy that happens to return nothing".
+  'farmer_credit_requests', 'farmer_messages', 'farmer_notifications',
+  'farmer_visit_events', 'farmer_visit_requests',
+  'marketplace_farmer_links', 'marketplace_farmer_tokens', 'marketplace_farmers',
+  'marketplace_shop_join_codes',
+  'push_deliveries', 'push_devices',
 ];
 
 /** Genuinely pre-auth or platform-internal RPCs. */
