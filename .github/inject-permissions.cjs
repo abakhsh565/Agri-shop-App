@@ -122,6 +122,21 @@ if (xml.includes('android.permission.MODIFY_AUDIO_SETTINGS')) {
   console.log('Audio settings permission injected');
 }
 
+// ── 1b3. Notifications ─────────────────────────────────────────────────────────
+//
+// Android 13+ shows no notification unless the app asks at runtime AND declares this. The
+// Capacitor plugin requests it; without the declaration the request is refused before any
+// dialog appears, and every push is dropped silently.
+if (xml.includes('android.permission.POST_NOTIFICATIONS')) {
+  console.log('Notification permission already present');
+} else {
+  xml = xml.replace(
+    /(<manifest[^>]*>)/,
+    '$1\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+  );
+  console.log('Notification permission injected');
+}
+
 // ── 1c. Location ───────────────────────────────────────────────────────────────
 //
 // The map picker calls navigator.geolocation. In a Capacitor WebView that request is only

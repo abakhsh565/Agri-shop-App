@@ -252,6 +252,26 @@ jobs:
           rm -rf android/
           npx cap add android
 
+      # `android/` is regenerated on every run and the whole folder is gitignored, so the Firebase
+      # Android config cannot be committed — it is written from a repository secret here. The file
+      # is client configuration, not a credential; the credential that SENDS notifications is the
+      # service account key, which lives only in the edge function's secrets.
+      #
+      # Missing secret is a warning, not a failure: a build without push is still a usable app,
+      # and failing here would block every release until the secret is added. The package name is
+      # checked when the secret IS present, so a config for another app fails loudly instead of
+      # producing an APK that silently cannot register for notifications.
+      - name: Add Firebase Android config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "GOOGLE_SERVICES_JSON is not set — building without push configuration." >&2
+            exit 0
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+          node -e "const j=require('./android/app/google-services.json');const p=j.client[0].client_info.android_client_info.package_name;if(p!=='com.agrishop.app'){console.error('google-services.json is for '+p+', not com.agrishop.app');process.exit(1)}console.log('Firebase app configured: '+j.project_info.project_id)"
+
       # `android/` was just regenerated, so the launcher icon and the native splash are
       # Capacitor's defaults unless they are generated from the tracked brand sources in
       # `resources/`. Without this step the release APK ships the wrong logo and name.
