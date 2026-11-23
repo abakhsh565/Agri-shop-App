@@ -101,7 +101,7 @@ as $fn$
     when coalesce((l.m)[4], '') > coalesce((r.m)[4], '') then 1
     when coalesce((l.m)[4], '') < coalesce((r.m)[4], '') then -1
     else 0
-  end
+  end as comparison
   from l, r
 $fn$;
 
