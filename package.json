@@ -1,7 +1,8 @@
 {
   "name": "figma-make-app",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "nativeVersion": 2,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -39,6 +40,7 @@
     "migrate:verify": "node scripts/migrate.mjs verify --env staging",
     "prod:gap": "node scripts/dev/production-gap.mjs --env production",
     "release:prepare": "node scripts/dev/release-prepare.mjs",
+    "ota:publish": "node scripts/ota/publish.mjs",
     "backup": "node scripts/backup-database.mjs",
     "backup:verify": "node scripts/restore-verify.mjs",
     "audit:production-data": "node scripts/audit-production-data.mjs",
@@ -70,6 +72,7 @@
     "@capacitor/share": "^7.0.4",
     "@capacitor/splash-screen": "^7.0.5",
     "@capacitor/status-bar": "^7.0.6",
+    "@capgo/capacitor-updater": "^7.53.0",
     "@sentry/react": "^11.8.0",
     "@supabase/supabase-js": "^2.112.3",
     "html5-qrcode": "^2.3.8",
@@ -98,6 +101,7 @@
     "@vitejs/plugin-react": "^6.0.0",
     "@vitest/coverage-v8": "^5.0.0",
     "agentation": "^3.0.2",
+    "archiver": "^8.0.0",
     "esbuild": "^0.28.2",
     "exceljs": "^4.4.0",
     "oxfmt": "^0.2.0",

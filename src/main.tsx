@@ -3,9 +3,15 @@ import ReactDOM from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import App from './App'
 import { captureError, initErrorReporting, resolveReleaseId } from './lib/errorReporting'
+import { bootstrapOta } from './lib/ota'
 import './index.css'
 
 const isNative = Capacitor.isNativePlatform();
+
+// OTA, before anything else can fail. `bootstrapOta` tells the shell this bundle booted (that call
+// is what makes a bad bundle roll itself back) and only then, once the screens are up, looks for a
+// newer one. It never throws and never blocks the first paint — see src/lib/ota.ts.
+void bootstrapOta();
 
 // PWA install support only in a real (production) *web* build. On native
 // (Capacitor APK/iOS) the app is bundled locally, so a caching service worker

@@ -1,0 +1,160 @@
+name: Publish an OTA bundle — one channel, one environment
+
+# WHAT THIS WORKFLOW IS FOR. Ship the web half of the app to already-installed APKs.
+#
+# It builds `dist/` with the *target environment's* configuration (the same VITE_SUPABASE_* values the
+# APK carries), publishes it as a zip with its sha256 and native floor, and — when asked — activates it
+# so installed apps pick it up on their next launch. It cannot cross environments: `--env` decides the
+# channel, and the publisher refuses a channel that disagrees with it.
+#
+# WHAT IT WILL NOT DO. It does not build an APK (that is `build-apk.yml`), it does not touch the
+# database schema, and it never publishes to production without `confirm` naming production. A publish
+# is a user-visible act, so it is manual only — no push, no schedule.
+#
+# CREDENTIALS (repository secrets, never in the repo)
+#   staging    QA_SUPABASE_URL, QA_SUPABASE_SERVICE_ROLE, QA_SUPABASE_ANON_KEY   (already present)
+#   production PROD_SUPABASE_URL, PROD_SUPABASE_SERVICE_ROLE, PROD_SUPABASE_ANON_KEY
+#
+# Until the production app credentials exist, a production publish fails in the preflight with the
+# names it needs — it never falls back to the staging project.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment whose channel receives this bundle'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Bundle version (default: package.json)'
+        required: false
+        type: string
+      native_min:
+        description: 'Minimum APK versionCode (default: package.json nativeVersion)'
+        required: false
+        type: string
+      notes:
+        description: 'One line recorded in the bundle ledger'
+        required: false
+        type: string
+      activate:
+        description: 'Offer it to installs now (false = record it as a candidate only)'
+        required: false
+        type: boolean
+        default: true
+      rollback_to:
+        description: 'Roll the channel back to this published version instead of publishing'
+        required: false
+        type: string
+      confirm:
+        description: 'Type the environment name to confirm'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # One publish per channel. Two publishers on one channel would race the active row.
+  group: ota-publish-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Confirm the environment
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.confirm }}" != "${{ inputs.environment }}" ]; then
+            echo "::error::confirm must equal '${{ inputs.environment }}' (received '${{ inputs.confirm }}')"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Resolve the target environment
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            url="${{ secrets.PROD_SUPABASE_URL }}"
+            key="${{ secrets.PROD_SUPABASE_SERVICE_ROLE }}"
+            anon="${{ secrets.PROD_SUPABASE_ANON_KEY }}"
+            project="gkswcfljxlutkfdvvqng"
+            channel="production"
+          else
+            url="${{ secrets.QA_SUPABASE_URL }}"
+            key="${{ secrets.QA_SUPABASE_SERVICE_ROLE }}"
+            anon="${{ secrets.QA_SUPABASE_ANON_KEY }}"
+            project="bpybjrjenwccowvtrevu"
+            channel="staging"
+          fi
+
+          missing=""
+          [ -n "$url" ] || missing="$missing ${project}_URL"
+          [ -n "$key" ] || missing="$missing service-role-key"
+          [ -n "$anon" ] || missing="$missing anon-key"
+          if [ -n "$missing" ]; then
+            echo "::error::the ${{ inputs.environment }} project credentials are not configured:$missing"
+            exit 1
+          fi
+
+          {
+            echo "OTA_SUPABASE_URL=$url"
+            echo "OTA_SERVICE_ROLE_KEY=$key"
+            echo "OTA_ANON_KEY=$anon"
+            echo "VITE_SUPABASE_URL=$url"
+            echo "VITE_SUPABASE_ANON_KEY=$anon"
+            echo "VITE_SUPABASE_PROJECT_ID=$project"
+            echo "VITE_APP_ENV=${{ inputs.environment }}"
+            echo "VITE_OTA_CHANNEL=$channel"
+            echo "VITE_OTA_MANIFEST_URL=$url/functions/v1/ota-manifest"
+          } >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build the web bundle
+        if: ${{ inputs.rollback_to == '' }}
+        run: npm run build
+
+      - name: Publish
+        if: ${{ inputs.rollback_to == '' }}
+        run: |
+          set -euo pipefail
+          args=(--env "${{ inputs.environment }}")
+          if [ -n "${{ inputs.version }}" ]; then args+=(--version "${{ inputs.version }}"); fi
+          if [ -n "${{ inputs.native_min }}" ]; then args+=(--native-min "${{ inputs.native_min }}"); fi
+          if [ -n "${{ inputs.notes }}" ]; then args+=(--notes "${{ inputs.notes }}"); fi
+          if [ "${{ inputs.activate }}" = "true" ]; then args+=(--activate); fi
+          if [ "${{ inputs.environment }}" = "production" ]; then args+=(--confirm-production); fi
+          node scripts/ota/publish.mjs "${args[@]}" --manifest-url "$VITE_OTA_MANIFEST_URL"
+
+      - name: Roll back
+        if: ${{ inputs.rollback_to != '' }}
+        run: |
+          set -euo pipefail
+          args=(--env "${{ inputs.environment }}" --rollback "${{ inputs.rollback_to }}")
+          if [ "${{ inputs.environment }}" = "production" ]; then args+=(--confirm-production); fi
+          node scripts/ota/publish.mjs "${args[@]}"
+
+      - name: Report the channel's state
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -z "${OTA_SUPABASE_URL:-}" ]; then exit 0; fi
+          curl -fsS "$OTA_SUPABASE_URL/rest/v1/ota_bundles?select=channel,version,status,native_min,checksum,activated_at&order=created_at.desc&limit=5" \
+            -H "apikey: $OTA_SERVICE_ROLE_KEY" -H "Authorization: Bearer $OTA_SERVICE_ROLE_KEY" \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const r of JSON.parse(s))console.log(`${r.channel} ${r.version} ${r.status} native_min=${r.native_min} ${String(r.checksum).slice(0,12)}…`)})'
