@@ -10,6 +10,7 @@ import { parseInviteLink, inviteSearchParams } from "@/lib/deepLink";
 import { logEnvironmentInfo } from "@/lib/envGuard";
 import { useAuthStore } from "@/stores/authStore";
 import { useCartStore } from "@/stores/cartStore";
+import { startPushNotifications } from "@/lib/push";
 
 const isNative = Capacitor.isNativePlatform();
 
@@ -70,6 +71,21 @@ export default function App() {
       ) {
         apply(state.user);
       }
+    });
+  }, []);
+
+  /**
+   * Push notifications belong to the account signed in on this phone, so registration waits for
+   * a session and repeats when a different account signs in. A shop phone that changes hands in
+   * the middle of a day must not keep receiving the previous owner's orders.
+   */
+  useEffect(() => {
+    const start = (userId?: string) => {
+      if (userId) void startPushNotifications((path) => void router.navigate(path));
+    };
+    start(useAuthStore.getState().user?.id);
+    return useAuthStore.subscribe((state, previous) => {
+      if (state.user?.id && state.user.id !== previous.user?.id) start(state.user.id);
     });
   }, []);
 

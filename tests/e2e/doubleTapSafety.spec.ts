@@ -216,6 +216,14 @@ test.describe('Double tap safety', () => {
     await execSql(
       `UPDATE customers SET outstanding_balance = 30000, total_purchases = 80000, total_paid = 50000 WHERE id = '${DT_CUST_ID}'`
     );
+    // The picker lists customers, and an archived one is not in it. A lane on 2026-11-20 archived
+    // the three QA fixture customers and left them archived (archived_at 01:28Z, archived_by the QA
+    // owner), so from that day every smoke run waited ten seconds for a name the screen filtered
+    // out — a failure that named a selector but was a fixture-state problem. This lane needs an
+    // active customer to sell to, so it states that premise instead of assuming it.
+    await execSql(
+      `UPDATE customers SET is_archived = false, archived_at = NULL, archived_by = NULL WHERE id = '${DT_CUST_ID}'`
+    );
     // Same premise, asserted rather than enforced: the count below must be THIS run's sale alone.
     const [salesBefore] = await execSql(
       `SELECT count(*)::int AS n FROM sales WHERE customer_id = '${DT_CUST_ID}'`,
