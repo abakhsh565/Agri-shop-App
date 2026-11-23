@@ -63,3 +63,11 @@ Statuses (reusing the evidence vocabulary in `FEATURE-MAP.md` §D):
 - **Regression**: `tests/unit/otpPolicy.test.ts` > `the runbook and the app agree on the code expiry` — PASS
 - **Verified 2026-10-27**: cleared on the production project — the configuration now reads `sms_test_otp: null`, and a live probe against the app's own target and key answers `923001234567` + `123456` with **403 `otp_expired`** and no session, as it does for `923001122334` + `123456` and for the `000000` control. The registration screen no longer reaches the code screen at all: with the provider credential still a placeholder, the send fails at Twilio and the screen says so. What remains is a *different* gap — no production sign-in is possible until the real SMS provider is configured (`docs/PRODUCTION_PHONE_AUTH.md` §2a).
 - **Status**: FIXED + REVERIFIED
+
+## F-0003 — the smoke lane waited for a customer the picker had filtered out
+
+- **Observed**: `tests/e2e/doubleTapSafety.spec.ts` > `sale: double-tapping Complete Sale creates one sale and deducts stock once` failed twice on CI run `45082232312` (job `e2e`, commit `9a79bd3`) with `TimeoutError: locator.click: Timeout 10000ms exceeded — waiting for getByText('QA Customer A')`, 2026-11-23.
+- **Root cause**: confirmed — the three QA fixture customers carried `is_archived = true` (archived `2026-11-20T01:28Z` by the QA owner profile), and `SelectCustomerPage` filters `!c.isArchived`, so the row could not render. The lane's own premises passed because they read the database, not the list (evidence: a direct read of QA's `customers` rows showing `archived_at 2026-11-20T01:28:17.866Z` for `QA Customer A`, and the page's `!c.isArchived` filter).
+- **Prevention**: the lane now states its premise — it un-archives `DT_CUST_ID` alongside its stock and balance resets (`tests/e2e/doubleTapSafety.spec.ts`), so an earlier run archiving a fixture can no longer surface as a selector timeout. The three QA fixture customers were restored to active in the same pass; no assertion was removed or weakened.
+- **Regression**: `tests/e2e/doubleTapSafety.spec.ts` > `sale: double-tapping Complete Sale creates one sale and deducts stock once` — NOT RUN
+- **Status**: OPEN — root cause confirmed, fix pending
