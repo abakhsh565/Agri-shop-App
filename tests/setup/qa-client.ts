@@ -170,6 +170,20 @@ export async function execSqlDirect(sql: string): Promise<{ rows: any[]; rowCoun
 const authClients = new Map<string, SupabaseClient>();
 
 /**
+ * Sign-ins in flight, one per user id — see getAuthClient.
+ *
+ * The double-submit suites call `execRpcAsUser` twice at the same instant
+ * (`Promise.all([rpcMaybe(...), rpcMaybe(...)])`). Each half used to provision credentials on its
+ * own, and the two halves can disagree: the phone read that derives the app credentials is a
+ * single pooled SELECT, so when it came back empty for one half, that half fell back to the
+ * id-scoped `qa-test-…` address. Both halves then repaired the same auth row and both signed in,
+ * and the first one to repair lost its sign-in — the `Invalid login credentials` seen for
+ * 10000000-0000-0000-0000-000000000001 on CI run 45213668252 (docs/FAILURE-LOG.md F-0004).
+ * One promise per user means one repair, one credential pair, one sign-in, however many callers ask.
+ */
+const authClientInflight = new Map<string, Promise<SupabaseClient>>();
+
+/**
  * Normalise a phone the same way the application does (src/lib/auth.ts).
  * A Supabase Auth user has exactly ONE email, so tests must derive the same
  * credentials the browser session uses — otherwise the test's private scheme
@@ -199,6 +213,21 @@ function phoneToAuthCredentials(phone: string) {
  * This produces real JWTs that PostgREST validates — no pooler session issues.
  */
 async function getAuthClient(userId: string): Promise<SupabaseClient> {
+  const inFlight = authClientInflight.get(userId);
+  if (inFlight) return inFlight;
+
+  const attempt = getAuthClientUncoalesced(userId);
+  authClientInflight.set(userId, attempt);
+  try {
+    return await attempt;
+  } finally {
+    // Only the caller that started it clears it, and a rejection is never cached, so the next
+    // call retries instead of awaiting a dead promise.
+    if (authClientInflight.get(userId) === attempt) authClientInflight.delete(userId);
+  }
+}
+
+async function getAuthClientUncoalesced(userId: string): Promise<SupabaseClient> {
   // Look up user's phone from the users table (needed for both cached and new clients)
   // Use direct PG to bypass pooler visibility issues
   let userPhone = '';
@@ -219,7 +248,9 @@ async function getAuthClient(userId: string): Promise<SupabaseClient> {
       if (currentAuthPhone !== userPhone) {
         // Phone changed — evict cache and re-authenticate with fresh JWT
         authClients.delete(userId);
-        return getAuthClient(userId);
+        // The uncoalesced path on purpose: this runs *inside* this user's in-flight promise, so
+        // asking the coalescer again would await this very promise and deadlock.
+        return getAuthClientUncoalesced(userId);
       }
     }
     return cached;
@@ -752,4 +783,6 @@ export async function asAuthenticated(_client?: any): Promise<void> {}
  */
 export function invalidateAuthCache(): void {
   authClients.clear();
+  // An in-flight sign-in would otherwise be handed to callers that asked for a fresh one.
+  authClientInflight.clear();
 }
