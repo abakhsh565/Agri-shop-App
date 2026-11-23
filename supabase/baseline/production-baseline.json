@@ -1,20 +1,20 @@
 {
-  "record": "The frozen production schema the forward-migration checks are run against. This capture is the nightly logical backup taken 2026-11-23T21:52:15Z (backup-database.yml run 45273966448) and independently restore-verified against production: 278/278 functions, every row count and digest matching, auth identities intact. It replaced the 2026-11-15 snapshot, which lacked two functions production actually has (public.resolve_product_classification, public.unit_group_for_base) and therefore failed 0326's proof on a stale baseline rather than on a real gap. The artifact lives only in gitignored backups/; the verification tool loads its schema and skips every data statement. Production is never a migrate target: it is checked against, never written.",
+  "record": "The frozen production schema the forward-migration checks are run against. Captured read-only on 2026-11-23 by the capture-production-baseline workflow (run 45275716781, artifact production-baseline-10) because the 2026-11-15 snapshot no longer described the database: production has public.resolve_product_classification and public.unit_group_for_base and the snapshot did not, which made 0326's proof fail against the ruler instead of against production. It is a full logical dump (COPY-format data, all schemas including storage and auth) and DOES contain real rows, so it lives only in gitignored backups/; the verification tool loads its schema and skips every data statement. The paired read-only fingerprint is backups/fingerprint-production-2026-11-23T22-04-08.json (32 tables, 325 rows). The same-day nightly backup (run 45273966448) is the restore-verified copy of the same state: 278/278 functions, every count and digest matching.",
   "environment": "production",
   "projectRef": "gkswcfljxlutkfdvvqng",
-  "capturedAt": "2026-11-23T21:52:15Z",
+  "capturedAt": "2026-11-23T22:03:00Z",
   "serverVersion": "17.6",
-  "artifact": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-23T21-52-15.sql",
-  "artifactSha256": "5a1c3fecc74ae711b41c4a303eaba39a1f077c4489da6b18062211c92f108c9a",
-  "artifactBytes": 1960963,
+  "artifact": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-23T22-03-00.sql",
+  "artifactSha256": "a6672096165dda2b599fcd9ef8aea878dcea18787c32ce9ad86380832d01e2ba",
+  "artifactBytes": 2380752,
   "contentType": "logical-dump",
-  "dataStatements": 467,
+  "dataStatements": 128,
   "dataHandling": "skipped-on-load",
-  "dataNote": "Measured with the project splitter: 2402 statements total, 467 of them data (all skipped, never executed). The loader also skips scaffold/extension/stub statements — see scripts/lib/baseline.mjs. Contains personal data and password hashes — never commit, never publish. The tool re-measures this count and refuses the record if it does not match.",
+  "dataNote": "Measured with the project splitter: 1689 statements total, 128 of them data (COPY rows, all skipped, never executed). The loader also skips scaffold/extension/stub statements — see scripts/lib/baseline.mjs. Contains personal data and password hashes — never commit, never publish. The tool re-measures this count and refuses the record if it does not match.",
   "ledgerOnServer": {
     "count": 118,
     "latest": "0324",
-    "note": "The server's own supabase_migrations bookkeeping at capture time: 118 rows, latest 0324. The repository directory is ahead (296 files and the OTA work up to 0334); that divergence is why batches are verified against a frozen baseline instead of replaying history."
+    "note": "The server's own supabase_migrations bookkeeping at capture time: 118 rows, latest `0324`. The repository directory is ahead (the OTA work reaches 0334), and that divergence is exactly why batches are verified against a frozen baseline instead of replaying history."
   },
   "structure": {
     "checks": 102,

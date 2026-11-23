@@ -35,7 +35,13 @@ import path from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { EXPECTED_PHASE, isDataStatement, phaseReader } from '../../scripts/lib/baseline.mjs';
+import {
+  EXPECTED_PHASE,
+  baselineSkipReason,
+  isDataStatement,
+  isExtensionStatement,
+  phaseReader,
+} from '../../scripts/lib/baseline.mjs';
 import { splitStatementsWithOffsets } from '../../scripts/lib/sql-statements.mjs';
 
 const ROOT = process.cwd();
@@ -148,6 +154,12 @@ beforeAll(async () => {
   const phase = phaseReader(source);
   for (const entry of splitStatementsWithOffsets(source)) {
     if (isDataStatement(entry.text)) continue;
+    // Skip exactly the shapes the real loader skips, for the same reason: this scaffolding is
+    // already built above, so the dump's own `CREATE SCHEMA auth`, re-created `auth.uid()` and
+    // re-created `storage.buckets` are duplicates here, not differences. Extensions go too — PGlite
+    // cannot host the platform ones, and none of them is what a privilege check is about.
+    if (baselineSkipReason(entry.text)) continue;
+    if (isExtensionStatement(entry.text)) continue;
     try {
       await db.exec(entry.text);
     } catch (error) {
