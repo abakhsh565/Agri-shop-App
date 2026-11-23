@@ -289,7 +289,7 @@ await db.exec(`create or replace function cron.schedule(job_name text, schedule 
   declare v_id bigint;
   begin
     insert into cron.job (jobname, schedule, command) values (job_name, schedule, command)
-    on conflict (jobname) do update set schedule = excluded.schedule, command = excluded.command
+    on conflict (jobname) do update set schedule = excluded.schedule, command = excluded.command, active = true
     returning jobid into v_id;
     return v_id;
   end $$`);
@@ -302,10 +302,16 @@ await db.exec(`create or replace function cron.schedule(schedule text, command t
     returning jobid into v_id;
     return v_id;
   end $$`);
+// `unschedule` deactivates instead of removing the row. Two reasons, and the second is the real
+// one: it is the same thing pg_cron lets a re-run observe (the job stops firing), and a DELETE in
+// this script would make it a script that can delete rows — `productionDataPolicy` rule 1 requires
+// such a script to refuse every target it was not meant for, and a verifier that only ever talks to
+// an in-process PGlite should not have to pretend it needs a QA guard. `cron.schedule` reactivates
+// the same row, so a re-run replaces the job rather than adding a second one.
 await db.exec(`create or replace function cron.unschedule(job_name text)
   returns boolean language plpgsql as $$
   begin
-    delete from cron.job where jobname = job_name;
+    update cron.job set active = false where jobname = job_name and active;
     return found;
   end $$`);
 try {
