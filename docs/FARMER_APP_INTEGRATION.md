@@ -43,6 +43,19 @@ All are `POST {SUPABASE_URL}/rest/v1/rpc/{name}` with headers `apikey: <anon key
 | `farmer_api_answer_offer` | `p_token`, `p_request_id`, `p_accept`, `p_note` | Accept or decline the shop's offer. The owner is told immediately. |
 | `farmer_api_notifications` | `p_token` | The shop→farmer outbox: replies, offers, visit changes (`kind`, `title`, `body`, `payload`, `created_at`). |
 | `farmer_api_register_device` | `p_token`, `p_device_token`, `p_platform` | Registers this phone for push. `p_platform` is `android`, `ios` or `web`. |
+| `farmer_api_shops` | `p_token` | The dealers he can see: every shop that opted into the marketplace, plus every shop he is already linked to (`is_linked`). Public profile only — name, city, address, phone, type, logo, coordinates. No staff code, email or documents. |
+| `farmer_api_products` | `p_token`, `p_shop_id` (null = his own shop), `p_search`, `p_limit` (1–100, default 50), `p_offset` | That shop's active catalogue: `product_id`, name, category, base unit, image, `featured`, `price_from`/`price_to`, and `variants[]` with `price`, `in_stock`, `low_stock`. Answers `count` so the app can page. |
+
+### Rendering the catalogue honestly
+
+`in_stock` / `low_stock` are STATES, never quantities — the shop does not publish how many bags it
+holds, and a farmer token must not become a way to count a competitor's shelves. Show "in stock" /
+"running low" / "out", not a number.
+
+The two calls answer `count` and echo `limit`/`offset`; page with them instead of loading everything.
+`farmer_api_products` with no `p_shop_id` uses the farmer's only shop, so a one-shop app needs one
+call. A shop that is not in the marketplace and is not linked to this farmer is `NOT_FOUND` — treat
+it as "that dealer is not available", not as a crash.
 
 Errors come back as `{ code: "P0001", message: "NOT_AUTHORIZED: …" }`. Treat `NOT_AUTHORIZED` as
 "the credential is gone — ask the shop for a new invitation", and `NOT_FOUND`/`VALIDATION` as

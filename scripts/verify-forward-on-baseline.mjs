@@ -269,6 +269,13 @@ if (!storageSchemaInBaseline) {
   );
 }
 await db.exec(`create schema if not exists cron`);
+// pg_cron owns two sequences that the pg_dump restores with `setval` even though the rows are
+// skipped. Without them the baseline load reports "relation cron.jobid_seq does not exist" as an
+// env-gap, and an env-gap makes every verdict UNVERIFIABLE instead of PASS (measured 2026-11-24
+// against the post-0334 capture). They are scaffold, not truth: nothing in the selection reads
+// them, so creating them lets the dump's own bookkeeping statements load and be checked.
+await db.exec(`create sequence if not exists cron.jobid_seq`);
+await db.exec(`create sequence if not exists cron.runid_seq`);
 // PGlite cannot host pg_cron, so `cron.job` and the two scheduling calls are scaffolded here — with
 // real behaviour, not constants. A migration that registers a job is then exercised end to end:
 // `cron.schedule` writes a row, `cron.unschedule` removes it, and the migration's own proof reads
