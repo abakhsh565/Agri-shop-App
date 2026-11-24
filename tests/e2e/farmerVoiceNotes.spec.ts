@@ -33,6 +33,8 @@ const PNG_BYTES = new Uint8Array([
 
 const ready = Boolean(URL_BASE && ANON && SERVICE);
 const tail = String(Date.now()).slice(-6);
+/** The join-code alphabet has no I, O, 0 or 1. */
+const JOIN_CODE = `S${tail.slice(0, 5)}`.replace(/[01IO]/g, '2').toUpperCase();
 const digits = (n: string) => (String(Date.now()).slice(-7) + n + '000').slice(0, 10);
 const FARMER_PHONE = `92${digits('1')}`;
 const DEALER_PHONE = `92${digits('2')}`;
@@ -85,21 +87,30 @@ test.describe('farmer conversation — voice notes and photos', () => {
 
     const rows = (await execSql(`
       insert into public.shops (id, name, phone, join_code)
-      values (gen_random_uuid(), '__voice e2e shop', '92${digits('3')}', 'V${tail.slice(0, 5)}')
+      values (gen_random_uuid(), '__voice e2e shop', '92${digits('3')}', '${JOIN_CODE}')
       returning id;
     `)) as Array<{ id: string }>;
     shopId = rows[0].id;
 
+    // The code a farmer walks in with is its own row, not shops.join_code.
+    await execSql(`
+      insert into public.marketplace_shop_join_codes (shop_id, code)
+      values ('${shopId}', '${JOIN_CODE}');
+    `);
+
+    // A farmer is not owned by a shop — the link is what ties him to it, and the farmer row has no
+    // shop_id. (The link is the membership; deleting it is what unlinks him.)
     const farmers = (await execSql(`
-      insert into public.marketplace_farmers (id, shop_id, name, phone)
-      values (gen_random_uuid(), '${shopId}', '__voice e2e farmer', '${FARMER_PHONE}')
+      insert into public.marketplace_farmers (id, name, phone, phone_key)
+      values (gen_random_uuid(), '__voice e2e farmer', '${FARMER_PHONE}',
+              public.farmer_phone_key('${FARMER_PHONE}'))
       returning id;
     `)) as Array<{ id: string }>;
     farmerId = farmers[0].id;
 
     await execSql(`
-      insert into public.marketplace_farmer_links (shop_id, farmer_id, status)
-      values ('${shopId}', '${farmerId}', 'active');
+      insert into public.marketplace_farmer_links (shop_id, farmer_id)
+      values ('${shopId}', '${farmerId}');
       insert into public.marketplace_farmer_tokens (farmer_id, token_hash)
       values ('${farmerId}', encode(extensions.digest('${'a'.repeat(60)}${tail.slice(0, 4)}', 'sha256'), 'hex'));
     `);
@@ -125,8 +136,9 @@ test.describe('farmer conversation — voice notes and photos', () => {
       insert into public.users (id, shop_id, name, phone)
       values ('${dealerUserId}', '${shopId}', '__voice e2e dealer', '${DEALER_PHONE}')
       on conflict (id) do update set shop_id = excluded.shop_id;
-      insert into public.memberships (user_id, shop_id, role)
-      values ('${dealerUserId}', '${shopId}', 'owner');
+      insert into public.memberships (user_id, tenant_id, role)
+      values ('${dealerUserId}', '${shopId}', 'owner')
+      on conflict (user_id, tenant_id) do nothing;
     `);
 
     const signIn = await fetch(`${URL_BASE}/auth/v1/token?grant_type=password`, {
@@ -138,7 +150,7 @@ test.describe('farmer conversation — voice notes and photos', () => {
     dealerJwt = session.access_token ?? '';
     expect(dealerJwt, 'the dealer can sign in').not.toBe('');
 
-    const joined = await rpc('farmer_api_join_shop', { p_code: `V${tail.slice(0, 5)}`, p_phone: FARMER_PHONE, p_name: null }, ANON);
+    const joined = await rpc('farmer_api_join_shop', { p_code: JOIN_CODE, p_phone: FARMER_PHONE, p_name: '__voice e2e farmer' }, ANON);
     farmerToken = (joined.body as { token?: string })?.token ?? '';
   });
 
@@ -148,9 +160,10 @@ test.describe('farmer conversation — voice notes and photos', () => {
       delete from public.farmer_message_attachments where shop_id = '${shopId}';
       delete from public.farmer_messages where shop_id = '${shopId}';
       delete from public.marketplace_farmer_tokens where farmer_id = '${farmerId}';
+      delete from public.marketplace_shop_join_codes where shop_id = '${shopId}';
       delete from public.marketplace_farmer_links where shop_id = '${shopId}';
-      delete from public.marketplace_farmers where shop_id = '${shopId}';
-      delete from public.memberships where shop_id = '${shopId}';
+      delete from public.marketplace_farmers where id = '${farmerId}';
+      delete from public.memberships where tenant_id = '${shopId}';
       update public.users set shop_id = null where shop_id = '${shopId}';
       delete from public.shops where id = '${shopId}';
     `);

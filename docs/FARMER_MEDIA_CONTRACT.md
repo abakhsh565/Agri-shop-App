@@ -20,6 +20,17 @@ The folder is never supplied by the client. The server derives `<shop_id>/<farme
 from the token or the membership, so an upload cannot be aimed at another conversation. A send RPC
 also refuses a `storage_path` that is not under the shop/farmer it resolved itself.
 
+For a dealer the shop is not "his first shop" — it is the database's answer to *which of his active
+memberships also links this farmer* (`farmer_media_upload_target`, service-role only). A dealer who
+belongs to two shops therefore uploads and plays back in both, and a farmer he is not linked to is
+refused with `NOT_LINKED`. The function itself never reads a protected table; every permission
+answer comes from SQL.
+
+**Verified on staging** (`bpybjrjenwccowvtrevu`, ledger `0337`, function `farmer-media`): 23/23
+checks — both directions with real bytes, metadata, a signed download, an image with a caption,
+refusals for no credential (`401`), unknown id (`404`), missing duration (`400`), wrong mime
+(`400`) and a forged path, plus a text message still sending. Locally the same door passes 19/19.
+
 ## 2. Upload
 
 ```

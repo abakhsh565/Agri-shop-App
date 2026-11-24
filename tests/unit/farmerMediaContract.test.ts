@@ -12,6 +12,10 @@ import { describe, expect, test } from 'vitest';
 const ROOT = join(__dirname, '..', '..');
 const sql = readFileSync(join(ROOT, 'supabase/migrations/0336_a_voice_note_is_still_a_message.sql'), 'utf8');
 const functionSource = readFileSync(join(ROOT, 'supabase/functions/farmer-media/index.ts'), 'utf8');
+const sql0337 = readFileSync(
+  join(ROOT, 'supabase/migrations/0337_the_upload_asks_the_database_which_shop.sql'),
+  'utf8',
+);
 
 describe('0336 — voice and image files', () => {
   test('the bucket is private and bounded', () => {
@@ -81,6 +85,26 @@ describe('0336 — voice and image files', () => {
       expect(body).toContain("'duration_ms'");
       expect(body).toContain("'sender'");
     }
+  });
+
+  test('the upload target is decided in SQL, and is server-only', () => {
+    // Found live on staging: the service role has no SELECT on the link table by design, so the
+    // function's own query failed closed and refused a linked farmer. The rule belongs in SQL.
+    expect(sql0337).toContain('create or replace function public.farmer_media_upload_target');
+    expect(sql0337).toMatch(/revoke all on function public\.farmer_media_upload_target\(uuid, uuid\)\s+from public, anon, authenticated;/);
+    expect(sql0337).toMatch(/grant execute on function public\.farmer_media_upload_target\(uuid, uuid\) to service_role;/);
+    expect(sql0337).toContain('marketplace_farmer_links');
+    expect(sql0337).toContain("mb.status = 'active'");
+    expect(functionSource, 'the function must not read the closed table itself').not.toContain(
+      'marketplace_farmer_links',
+    );
+    expect(functionSource).toContain('farmer_media_upload_target');
+  });
+
+  test('a dealer with two shops is judged by the message\'s own shop', () => {
+    expect(sql0337).toMatch(/mb\.tenant_id = m\.shop_id/);
+    // The prose in 0337 explains the old call; the function body must no longer make it.
+    expect(sql0337).not.toMatch(/=\s*public\.resolve_active_shop\(/);
   });
 
   test('the function mints a short-lived link and verifies a JWT properly', () => {

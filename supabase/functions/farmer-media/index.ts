@@ -66,14 +66,10 @@ async function dealerIdentity(req: Request, admin: ReturnType<typeof createClien
   if (!jwt) return null;
   const { data, error } = await admin.auth.getUser(jwt);
   if (error || !data?.user) return null;
-  const { data: member } = await admin
-    .from("memberships")
-    .select("tenant_id")
-    .eq("user_id", data.user.id)
-    .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
-  return { userId: data.user.id as string, shopId: (member?.tenant_id as string) ?? null };
+  // The user id is all this function asserts. WHICH shop, and whether that shop links the farmer,
+  // is a membership question and is answered by `farmer_media_upload_target` in SQL — the service
+  // role has no grant on the link table, and it should not: one authority for one rule.
+  return { userId: data.user.id as string };
 }
 
 serve(async (req: Request) => {
@@ -127,17 +123,25 @@ serve(async (req: Request) => {
       folder = `${data.shop_id}/${data.farmer_id}`;
       farmerId = data.farmer_id as string;
     } else {
-      if (!dealer!.shopId) return json({ error: "NOT_AUTHORIZED", message: "no active shop for this session" }, 401);
       const requestedFarmer = (url.searchParams.get("farmer_id") ?? "").trim();
       if (!requestedFarmer) return json({ error: "VALIDATION", message: "farmer_id is required for a dealer upload" }, 400);
-      const { data: link } = await admin
-        .from("marketplace_farmer_links")
-        .select("farmer_id")
-        .eq("shop_id", dealer!.shopId)
-        .eq("farmer_id", requestedFarmer)
-        .maybeSingle();
-      if (!link) return json({ error: "NOT_LINKED", message: "that farmer is not linked to this shop" }, 403);
-      folder = `${dealer!.shopId}/${requestedFarmer}`;
+      // The folder comes from the database's answer, never from the request: it is one of THIS
+      // dealer's shops AND a shop that really links this farmer.
+      const { data: target, error: targetError } = await admin.rpc("farmer_media_upload_target", {
+        p_user_id: dealer!.userId,
+        p_farmer_id: requestedFarmer,
+      });
+      if (targetError) {
+        const refused = /NOT_LINKED/.test(targetError.message);
+        return json(
+          {
+            error: refused ? "NOT_LINKED" : "NOT_AUTHORIZED",
+            message: refused ? "that farmer is not linked to this shop" : "no active shop for this session",
+          },
+          refused ? 403 : 401,
+        );
+      }
+      folder = `${(target as { shop_id: string }).shop_id}/${requestedFarmer}`;
       farmerId = requestedFarmer;
     }
 
