@@ -91,6 +91,9 @@ export default function FarmerThreadPage() {
   // Voice: the recorder is held while it runs, so the elapsed timer and the buttons share one truth.
   const [recording, setRecording] = useState<Recording | null>(null);
   const [recordMs, setRecordMs] = useState(0);
+  // A stopped recording waits here so it can be heard before it is sent — a voice note cannot be
+  // unsent, and a pocket recording is the usual way a wrong one gets sent.
+  const [preview, setPreview] = useState<{ blob: Blob; mimeType: string; durationMs: number; url: string } | null>(null);
   const [mediaBusy, setMediaBusy] = useState(false);
   const imageInput = useRef<HTMLInputElement | null>(null);
 
@@ -224,21 +227,22 @@ export default function FarmerThreadPage() {
     if (recording) {
       const active = recording;
       setRecording(null);
-      setMediaBusy(true);
       try {
         const captured = await active.stop();
-        await sendVoice(farmerId, captured.blob, captured.mimeType, captured.durationMs);
-        atBottomRef.current = true;
-        await loadThread(farmerId, { markRead: false });
+        if (preview) URL.revokeObjectURL(preview.url);
+        setPreview({ ...captured, url: URL.createObjectURL(captured.blob) });
       } catch {
         setError(t("messages.actionFailed"));
       } finally {
-        setMediaBusy(false);
         setRecordMs(0);
       }
       return;
     }
     try {
+      if (preview) {
+        URL.revokeObjectURL(preview.url);
+        setPreview(null);
+      }
       setRecording(await startVoiceRecording());
       setRecordMs(0);
     } catch {
@@ -250,6 +254,27 @@ export default function FarmerThreadPage() {
     recording?.cancel();
     setRecording(null);
     setRecordMs(0);
+  }
+
+  function discardPreview() {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  }
+
+  async function sendPreview() {
+    if (!preview || mediaBusy) return;
+    setMediaBusy(true);
+    try {
+      await sendVoice(farmerId, preview.blob, preview.mimeType, preview.durationMs);
+      URL.revokeObjectURL(preview.url);
+      setPreview(null);
+      atBottomRef.current = true;
+      await loadThread(farmerId, { markRead: false });
+    } catch {
+      setError(t("messages.actionFailed"));
+    } finally {
+      setMediaBusy(false);
+    }
   }
 
   async function pickImage(event: React.ChangeEvent<HTMLInputElement>) {
@@ -596,7 +621,38 @@ export default function FarmerThreadPage() {
             {error}
           </p>
         )}
-        {recording ? (
+        {preview ? (
+          <div className="flex items-center gap-2" data-testid="voice-preview">
+            <button
+              type="button"
+              onClick={discardPreview}
+              aria-label={t("messages.voiceCancel")}
+              className="flex size-11 shrink-0 items-center justify-center rounded-full"
+              style={{ background: "var(--tone-card)", color: "var(--text-secondary)" }}
+              data-testid="voice-discard"
+            >
+              <X size={18} strokeWidth={2} />
+            </button>
+            <audio
+              controls
+              src={preview.url}
+              aria-label={t("messages.voicePlay")}
+              className="h-9 flex-1"
+              data-testid="voice-preview-player"
+            />
+            <button
+              type="button"
+              onClick={() => void sendPreview()}
+              disabled={mediaBusy}
+              aria-label={t("messages.voiceSend")}
+              className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+              style={{ background: "var(--brand)", color: "var(--brand-fg)" }}
+              data-testid="voice-preview-send"
+            >
+              <Send size={18} strokeWidth={2} />
+            </button>
+          </div>
+        ) : recording ? (
           <div className="flex items-center gap-2" data-testid="voice-recording">
             <button
               type="button"
