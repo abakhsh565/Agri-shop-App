@@ -41,6 +41,15 @@ on:
         required: false
         type: boolean
         default: true
+      publish_ota:
+        description: 'Also publish this commit as the production OTA bundle (offers the update to installed phones)'
+        required: false
+        type: boolean
+        default: false
+      ota_version:
+        description: 'OTA version for the production channel (must be newer than the active one; default 1.1.<dispatch run>)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -91,3 +100,68 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECTID }}
           VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAMID }}
         run: node scripts/deploy/trigger-production.mjs
+
+      # INSTALLED PHONES ARE UPDATED BY THE OTA CHANNEL, NOT BY VERCEL. The Vercel step above
+      # redeploys the web app for browser users; an APK already on a phone asks `ota-manifest` for a
+      # bundle, and that function offers one only when its version is strictly newer than the
+      # running one. So a production promotion is not complete until the bundle is published and
+      # provably downloadable.
+      #
+      # It runs ONLY on an explicit dispatch that asks for it (`publish_ota: true`): a bundle is
+      # offered to real devices, so it is an owner decision, never a side effect of a green CI run
+      # on main. The default dispatch stays a decision-only dry run.
+      - name: Install dependencies for the OTA build
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_ota }}
+        run: npm ci --legacy-peer-deps
+
+      - name: Build the production web bundle (VITE_APP_ENV=production)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_ota }}
+        env:
+          VITE_APP_ENV: production
+          VITE_SUPABASE_URL: ${{ secrets.PROD_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.PROD_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_PROJECT_ID: gkswcfljxlutkfdvvqng
+          VITE_OTA_CHANNEL: production
+          VITE_OTA_MANIFEST_URL: ${{ secrets.PROD_SUPABASE_URL }}/functions/v1/ota-manifest
+        run: npm run build
+
+      - name: Publish the production OTA bundle
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_ota }}
+        env:
+          OTA_SUPABASE_URL: ${{ secrets.PROD_SUPABASE_URL }}
+          OTA_SERVICE_ROLE_KEY: ${{ secrets.PROD_SUPABASE_SERVICE_ROLE }}
+          REQUESTED_VERSION: ${{ inputs.ota_version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OTA_SUPABASE_URL:-}" ] || [ -z "${OTA_SERVICE_ROLE_KEY:-}" ]; then
+            echo "::error::PROD_SUPABASE_URL / PROD_SUPABASE_SERVICE_ROLE are not configured — cannot publish an OTA bundle"
+            exit 1
+          fi
+          version="${REQUESTED_VERSION:-}"
+          if [ -z "$version" ]; then
+            version=$(node -e "const p=require('./package.json');const [a,b]=String(p.version).split('.');process.stdout.write(a+'.'+b+'.'+process.env.GITHUB_RUN_NUMBER)")
+          fi
+          echo "OTA_VERSION=$version" >> "$GITHUB_ENV"
+          node scripts/ota/publish.mjs --env production --confirm-production --version "$version" --activate \
+            --notes "deploy production ${GITHUB_SHA:0:7}"
+
+      - name: The production bundle must actually download
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_ota }}
+        env:
+          OTA_SUPABASE_URL: ${{ secrets.PROD_SUPABASE_URL }}
+          OTA_SERVICE_ROLE_KEY: ${{ secrets.PROD_SUPABASE_SERVICE_ROLE }}
+        run: |
+          set -euo pipefail
+          url=$(curl -fsS "$OTA_SUPABASE_URL/rest/v1/ota_bundles?channel=eq.production&status=eq.active&select=version,url" \
+            -H "apikey: $OTA_SERVICE_ROLE_KEY" -H "Authorization: Bearer $OTA_SERVICE_ROLE_KEY" \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s)[0];if(!r)process.exit(3);process.stdout.write(r.url)})')
+          code=$(curl -s -o /dev/null -w "%{http_code}" -r 0-1023 "$url")
+          echo "active production bundle: $url (HTTP $code)"
+          if [ "$code" != "200" ]; then
+            echo "::error::the active production bundle is not downloadable"
+            exit 1
+          fi
+          {
+            echo "- OTA bundle: \`$url\`"
+            echo "- OTA version: \`$OTA_VERSION\` (HTTP $code)"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -109,6 +109,21 @@ async function bodyText(page: Page): Promise<string> {
 }
 
 /**
+ * Wait for the shell's own boot gate, instead of guessing how long boot takes.
+ *
+ * `BootGate` draws its own "Loading…" until stock, customers and sales settle, with a bounded 2.5 s
+ * escape. This lane asserted the page body after a fixed 1000 ms, so on a cold CI runner it read the
+ * gate's spinner text and reported "expected Add Employee, received Loading…" — a race in the test,
+ * not a broken screen (measured 2026-11-24, run 45379792758). Waiting for the gate to be gone keeps
+ * the assertion about the screen while still failing loudly if the shell never renders.
+ */
+async function waitForBootGate(page: Page): Promise<void> {
+  await page.waitForLoadState('domcontentloaded');
+  await expect(page.getByTestId('boot-gate')).toBeHidden({ timeout: 15_000 });
+}
+
+
+/**
  * Advance the wizard past its branch question, whether or not this shop has one.
  *
  * A shop with ONE active branch has nothing to decide, so the wizard collapses the branch step and the
@@ -215,7 +230,8 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
   test('1. Adding an employee asks only who / what job / where, with no RBAC jargon', async ({ page }) => {
     await login(page, OWNER_PHONE);
     await page.goto(`${BASE}/admin/employees/new`);
-    await page.waitForTimeout(1000);
+    await waitForBootGate(page);
+    await page.waitForTimeout(300);
 
     const step1 = await bodyText(page);
     expect(step1).toContain('Add Employee');
@@ -431,7 +447,8 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
 
     await login(page, OWNER_PHONE);
     await page.goto(`${BASE}/admin/employees/new`);
-    await page.waitForTimeout(1000);
+    await waitForBootGate(page);
+    await page.waitForTimeout(300);
     await page.getByPlaceholder('e.g. Bilal Ahmed').fill(NEW_NAME);
     await page.getByPlaceholder('03001234567').fill(NEW_PHONE_LOCAL);
     await page.getByRole('button', { name: 'Next' }).click();
@@ -820,7 +837,8 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
     );
 
     // The screen must now say the access differs from the role, and reset must clear it.
-    await page.waitForTimeout(1000);
+    await waitForBootGate(page);
+    await page.waitForTimeout(300);
     // We are still on the access editor after saving, and that is where the override is VISIBLE:
     // the editor marks the action it removed with "Removed" (measured 2026-11-14 — the same fact the
     // profile states as "changed for {name}" when it is read from the profile).
@@ -852,7 +870,8 @@ test.describe('Employee job & access — simple for the owner, exact underneath'
 
     await login(page, OWNER_PHONE);
     await page.goto(`${BASE}/admin/employees/new`);
-    await page.waitForTimeout(1000);
+    await waitForBootGate(page);
+    await page.waitForTimeout(300);
     await page.getByPlaceholder('e.g. Bilal Ahmed').fill(OVR_NAME);
     await page.getByPlaceholder('03001234567').fill(OVR_PHONE_LOCAL);
     await page.getByRole('button', { name: 'Next' }).click();

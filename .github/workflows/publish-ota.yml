@@ -150,6 +150,22 @@ jobs:
           if [ "${{ inputs.environment }}" = "production" ]; then args+=(--confirm-production); fi
           node scripts/ota/publish.mjs "${args[@]}"
 
+      # A publish that recorded a bundle nobody can download is not a publish: the app would be
+      # offered a 404 and stay on its old web build. This fetches the active object itself.
+      - name: The active bundle must actually download
+        if: ${{ inputs.rollback_to == '' }}
+        run: |
+          set -euo pipefail
+          url=$(curl -fsS "$OTA_SUPABASE_URL/rest/v1/ota_bundles?channel=eq.$VITE_OTA_CHANNEL&status=eq.active&select=url,version" \
+            -H "apikey: $OTA_SERVICE_ROLE_KEY" -H "Authorization: Bearer $OTA_SERVICE_ROLE_KEY" \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s)[0];if(!r)process.exit(3);process.stdout.write(r.url)})')
+          code=$(curl -s -o /dev/null -w "%{http_code}" -r 0-1023 "$url")
+          echo "active $VITE_OTA_CHANNEL bundle: $url (HTTP $code)"
+          if [ "$code" != "200" ]; then
+            echo "::error::the active bundle on $VITE_OTA_CHANNEL is not downloadable"
+            exit 1
+          fi
+
       - name: Report the channel's state
         if: always()
         run: |
