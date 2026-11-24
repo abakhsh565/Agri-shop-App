@@ -1,0 +1,21 @@
+{
+  "voice": {
+    "file": "voice-note.webm",
+    "mime": "audio/webm",
+    "size": 27277,
+    "duration_ms": 2209
+  },
+  "photo": {
+    "file": "photo.png",
+    "mime": "image/png",
+    "size": 7092,
+    "width": 320,
+    "height": 240
+  },
+  "decodedByChrome": {
+    "readyState": 4,
+    "duration": null,
+    "error": null,
+    "currentTime": 0.640057
+  }
+}

@@ -16,9 +16,16 @@
  * server; the bubble only renders what these calls return. This lane therefore asserts the contract
  * itself, on the same endpoints the dealer app and the farmer app call.
  *
+ * The bytes are REAL media, not filler: `tests/fixtures/media/voice-note.webm` is a genuine
+ * Opus recording captured by Chrome, and `photo.png` is a real 320x240 PNG. A 12-byte stub would
+ * have proved the door accepted a length, not that it carried something a player can decode.
+ *
  * It seeds its own shop, farmer and dealer, and deletes them again — QA/staging only.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test, expect } from './base';
 import { execSql } from './helpers';
 
@@ -26,11 +33,21 @@ const URL_BASE = (process.env.QA_SUPABASE_URL || '').replace(/\/+$/, '');
 const ANON = process.env.QA_SUPABASE_ANON_KEY || process.env.QA_SUPABASE_ANON || '';
 const SERVICE = process.env.QA_SUPABASE_SERVICE_ROLE || '';
 
-/** Windows/Safari produce mp4, Android WebView produces webm; both must be accepted. */
-const AUDIO_BYTES = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x93, 0x42, 0x82, 0x88, 0x77, 0x65, 0x62, 0x6d]);
-const PNG_BYTES = new Uint8Array([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-]);
+/**
+ * Real media. Windows/Safari produce mp4 and Android WebView produces webm; the fixture is the
+ * webm/Opus shape this app records, recorded once by Chrome (`playwright` fake microphone) and kept
+ * with its measured duration. The lane downloads it again and compares the hash, so a truncated or
+ * re-encoded upload fails here rather than in the app.
+ */
+const MEDIA = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'media');
+const VOICE_BYTES = new Uint8Array(readFileSync(path.join(MEDIA, 'voice-note.webm')));
+const PHOTO_BYTES = new Uint8Array(readFileSync(path.join(MEDIA, 'photo.png')));
+const FIXTURE = JSON.parse(readFileSync(path.join(MEDIA, 'fixture.json'), 'utf8')) as {
+  voice: { size: number; duration_ms: number };
+  photo: { size: number };
+};
+const VOICE_MS = FIXTURE.voice.duration_ms;
+const digest = (bytes: Uint8Array | Buffer) => createHash('sha256').update(bytes).digest('hex');
 
 const ready = Boolean(URL_BASE && ANON && SERVICE);
 const tail = String(Date.now()).slice(-6);
@@ -222,11 +239,11 @@ test.describe('farmer conversation — voice notes and photos', () => {
   });
 
   test('dealer sends a voice note; the farmer can read and play it', async () => {
-    const upload = await media('?kind=voice&mime=audio/webm&farmer_id=' + farmerId + '&duration_ms=4200', {
+    const upload = await media('?kind=voice&mime=audio/webm&farmer_id=' + farmerId + '&duration_ms=' + VOICE_MS, {
       method: 'POST',
       jwt: dealerJwt,
       headers: { 'Content-Type': 'audio/webm' },
-      body: AUDIO_BYTES,
+      body: VOICE_BYTES,
     });
     expect(upload.status).toBe(200);
     const path = ((await upload.json()) as { storage_path: string }).storage_path;
@@ -239,8 +256,8 @@ test.describe('farmer conversation — voice notes and photos', () => {
         p_kind: 'voice',
         p_storage_path: path,
         p_mime_type: 'audio/webm',
-        p_size_bytes: AUDIO_BYTES.length,
-        p_duration_ms: 4200,
+        p_size_bytes: VOICE_BYTES.length,
+        p_duration_ms: VOICE_MS,
         p_body: null,
       },
       dealerJwt,
@@ -255,7 +272,8 @@ test.describe('farmer conversation — voice notes and photos', () => {
     const list = await rpc('farmer_api_media', { p_token: farmerToken, p_shop_id: null }, ANON);
     const entry = (list.body as Array<Record<string, unknown>>).find((m) => m.message_id === messageId);
     expect(entry).toBeTruthy();
-    expect(entry).toMatchObject({ kind: 'voice', sender: 'owner', duration_ms: 4200, mime_type: 'audio/webm' });
+    expect(entry).toMatchObject({ kind: 'voice', sender: 'owner', duration_ms: VOICE_MS, mime_type: 'audio/webm' });
+    expect(entry!.size_bytes, 'the stored size is the real recording, not a stub').toBe(VOICE_BYTES.length);
     expect(JSON.stringify(entry), 'metadata never carries a URL').not.toContain('http');
 
     const link = await media(`?message_id=${messageId}`, { token: farmerToken });
@@ -264,15 +282,18 @@ test.describe('farmer conversation — voice notes and photos', () => {
     expect(body.expires_in).toBe(60);
     const download = await fetch(body.url);
     expect(download.status).toBe(200);
-    expect((await download.arrayBuffer()).byteLength).toBeGreaterThan(0);
+    const downloaded = new Uint8Array(await download.arrayBuffer());
+    // Byte-for-byte: the URL carries the same decodable Opus stream that was uploaded.
+    expect(downloaded.length).toBe(VOICE_BYTES.length);
+    expect(digest(downloaded), 'the download is the uploaded recording').toBe(digest(VOICE_BYTES));
   });
 
   test('farmer sends a voice note; the dealer can read and play it', async () => {
-    const upload = await media('?kind=voice&mime=audio/webm&duration_ms=2600', {
+    const upload = await media('?kind=voice&mime=audio/webm&duration_ms=' + VOICE_MS, {
       method: 'POST',
       token: farmerToken,
       headers: { 'Content-Type': 'audio/webm' },
-      body: AUDIO_BYTES,
+      body: VOICE_BYTES,
     });
     expect(upload.status).toBe(200);
     const path = ((await upload.json()) as { storage_path: string }).storage_path;
@@ -284,8 +305,8 @@ test.describe('farmer conversation — voice notes and photos', () => {
         p_kind: 'voice',
         p_storage_path: path,
         p_mime_type: 'audio/webm',
-        p_size_bytes: AUDIO_BYTES.length,
-        p_duration_ms: 2600,
+        p_size_bytes: VOICE_BYTES.length,
+        p_duration_ms: VOICE_MS,
         p_body: null,
       },
       ANON,
@@ -294,7 +315,7 @@ test.describe('farmer conversation — voice notes and photos', () => {
 
     const list = await rpc('get_farmer_media', { p_farmer_id: farmerId }, dealerJwt);
     const entry = (list.body as Array<Record<string, unknown>>).at(-1);
-    expect(entry).toMatchObject({ kind: 'voice', sender: 'farmer', duration_ms: 2600 });
+    expect(entry).toMatchObject({ kind: 'voice', sender: 'farmer', duration_ms: VOICE_MS });
 
     const link = await media(`?message_id=${entry!.message_id}`, { jwt: dealerJwt });
     expect(link.status).toBe(200);
@@ -306,7 +327,7 @@ test.describe('farmer conversation — voice notes and photos', () => {
       method: 'POST',
       token: farmerToken,
       headers: { 'Content-Type': 'image/png' },
-      body: PNG_BYTES,
+      body: PHOTO_BYTES,
     });
     expect(upload.status).toBe(200);
     const path = ((await upload.json()) as { storage_path: string }).storage_path;
@@ -318,7 +339,7 @@ test.describe('farmer conversation — voice notes and photos', () => {
         p_kind: 'image',
         p_storage_path: path,
         p_mime_type: 'image/png',
-        p_size_bytes: PNG_BYTES.length,
+        p_size_bytes: PHOTO_BYTES.length,
         p_duration_ms: null,
         p_body: 'the leaf I asked about',
       },
@@ -329,6 +350,14 @@ test.describe('farmer conversation — voice notes and photos', () => {
     const list = await rpc('get_farmer_media', { p_farmer_id: farmerId }, dealerJwt);
     const entry = (list.body as Array<Record<string, unknown>>).at(-1);
     expect(entry).toMatchObject({ kind: 'image', duration_ms: null, sender: 'farmer' });
+    expect(entry!.size_bytes).toBe(PHOTO_BYTES.length);
+
+    const link = await media(`?message_id=${entry!.message_id}`, { jwt: dealerJwt });
+    expect(link.status).toBe(200);
+    const url = ((await link.json()) as { url: string }).url;
+    const download = await fetch(url);
+    expect(download.status).toBe(200);
+    expect(digest(new Uint8Array(await download.arrayBuffer()))).toBe(digest(PHOTO_BYTES));
   });
 
   test('a stranger cannot mint a link, and a voice note cannot be faked', async () => {
@@ -346,7 +375,7 @@ test.describe('farmer conversation — voice notes and photos', () => {
       method: 'POST',
       token: farmerToken,
       headers: { 'Content-Type': 'audio/webm' },
-      body: AUDIO_BYTES,
+      body: VOICE_BYTES,
     });
     expect(noDuration.status).toBe(400);
 
@@ -354,7 +383,7 @@ test.describe('farmer conversation — voice notes and photos', () => {
       method: 'POST',
       token: farmerToken,
       headers: { 'Content-Type': 'application/zip' },
-      body: AUDIO_BYTES,
+      body: VOICE_BYTES,
     });
     expect(wrongType.status).toBe(400);
 
