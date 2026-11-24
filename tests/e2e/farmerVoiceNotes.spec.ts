@@ -18,6 +18,7 @@
  *
  * It seeds its own shop, farmer and dealer, and deletes them again — QA/staging only.
  */
+import { randomUUID } from 'node:crypto';
 import { test, expect } from './base';
 import { execSql } from './helpers';
 
@@ -45,6 +46,42 @@ let farmerId = '';
 let farmerToken = '';
 let dealerJwt = '';
 let dealerUserId = '';
+
+/**
+ * Delete one shop and everything this lane hangs off it, in FK order.
+ *
+ * Used for the lane's own rows AND for rows a crashed earlier run left behind: a Playwright worker is
+ * restarted after a failure, so `afterAll` cannot be relied on to have run, and a leftover shop makes
+ * the next run's join code and phone collide. The farmer ids are read BEFORE the links are deleted
+ * because `farmer_id` is the only reference to them once the link is gone.
+ */
+async function purgeShop(id: string): Promise<void> {
+  const links = (await execSql(
+    `select farmer_id from public.marketplace_farmer_links where shop_id = '${id}'`,
+  )) as Array<{ farmer_id: string }>;
+  const farmerIds = links.map((row) => row.farmer_id).filter(Boolean);
+
+  // The dealer's public row is DELETED, not detached: 0291's guard refuses a shop_id change to
+  // anyone but the database owner, and `run_sql` reaches the database as PostgREST's authenticator.
+  // The row belongs to the shop this lane created, so removing it is the honest teardown.
+  await execSql(`
+    delete from public.farmer_message_attachments where shop_id = '${id}';
+    delete from public.farmer_messages where shop_id = '${id}';
+    delete from public.marketplace_farmer_tokens where farmer_id in
+      (select farmer_id from public.marketplace_farmer_links where shop_id = '${id}');
+    delete from public.marketplace_shop_join_codes where shop_id = '${id}';
+    delete from public.marketplace_farmer_links where shop_id = '${id}';
+    delete from public.memberships where tenant_id = '${id}';
+    delete from public.users where shop_id = '${id}';
+    delete from public.shops where id = '${id}';
+  `);
+
+  if (farmerIds.length) {
+    await execSql(
+      `delete from public.marketplace_farmers where id in ('${farmerIds.join("','")}')`,
+    );
+  }
+}
 
 async function media(path: string, init: RequestInit & { token?: string; jwt?: string } = {}) {
   const { token, jwt, ...rest } = init;
@@ -85,12 +122,24 @@ test.describe('farmer conversation — voice notes and photos', () => {
     });
     test.skip(probe.status === 404, 'farmer-media is not deployed in this environment');
 
-    const rows = (await execSql(`
+    // A previous, failed run may have stopped after creating its rows; reclaim them by marker so
+    // this run starts from nothing it does not own.
+    const leftovers = (await execSql(
+      `select id from public.shops where name = '__voice e2e shop'`,
+    )) as Array<{ id: string }>;
+    for (const leftover of leftovers) await purgeShop(leftover.id);
+
+    // `run_sql` answers a write with no rows, so RETURNING is not a result. The id is generated here
+    // and the row is read back — the same pattern `createInWriteTenant` uses, for the same reason.
+    shopId = randomUUID();
+    await execSql(`
       insert into public.shops (id, name, phone, join_code)
-      values (gen_random_uuid(), '__voice e2e shop', '92${digits('3')}', '${JOIN_CODE}')
-      returning id;
-    `)) as Array<{ id: string }>;
-    shopId = rows[0].id;
+      values ('${shopId}', '__voice e2e shop', '92${digits('3')}', '${JOIN_CODE}');
+    `);
+    const shops = (await execSql(
+      `select id from public.shops where id = '${shopId}'`,
+    )) as Array<{ id: string }>;
+    expect(shops[0]?.id, 'the QA shop exists before the lane writes to it').toBe(shopId);
 
     // The code a farmer walks in with is its own row, not shops.join_code.
     await execSql(`
@@ -100,19 +149,22 @@ test.describe('farmer conversation — voice notes and photos', () => {
 
     // A farmer is not owned by a shop — the link is what ties him to it, and the farmer row has no
     // shop_id. (The link is the membership; deleting it is what unlinks him.)
-    const farmers = (await execSql(`
+    farmerId = randomUUID();
+    await execSql(`
       insert into public.marketplace_farmers (id, name, phone, phone_key)
-      values (gen_random_uuid(), '__voice e2e farmer', '${FARMER_PHONE}',
-              public.farmer_phone_key('${FARMER_PHONE}'))
-      returning id;
-    `)) as Array<{ id: string }>;
-    farmerId = farmers[0].id;
+      values ('${farmerId}', '__voice e2e farmer', '${FARMER_PHONE}',
+              public.farmer_phone_key('${FARMER_PHONE}'));
+    `);
+    const farmers = (await execSql(
+      `select id from public.marketplace_farmers where id = '${farmerId}'`,
+    )) as Array<{ id: string }>;
+    expect(farmers[0]?.id, 'the QA farmer exists before the lane writes to it').toBe(farmerId);
 
+    // The token is issued by the join below; the unique one-live index means seeding a hash here
+    // would only make that issuance fight this row.
     await execSql(`
       insert into public.marketplace_farmer_links (shop_id, farmer_id)
       values ('${shopId}', '${farmerId}');
-      insert into public.marketplace_farmer_tokens (farmer_id, token_hash)
-      values ('${farmerId}', encode(extensions.digest('${'a'.repeat(60)}${tail.slice(0, 4)}', 'sha256'), 'hex'));
     `);
 
     // A real dealer: admin-created, then signed in with a password so the JWT is a genuine
@@ -136,9 +188,9 @@ test.describe('farmer conversation — voice notes and photos', () => {
       insert into public.users (id, shop_id, name, phone)
       values ('${dealerUserId}', '${shopId}', '__voice e2e dealer', '${DEALER_PHONE}')
       on conflict (id) do update set shop_id = excluded.shop_id;
-      insert into public.memberships (user_id, tenant_id, role)
-      values ('${dealerUserId}', '${shopId}', 'owner')
-      on conflict (user_id, tenant_id) do nothing;
+      insert into public.memberships (user_id, tenant_id, role, status)
+      values ('${dealerUserId}', '${shopId}', 'owner', 'active')
+      on conflict (user_id, tenant_id) do update set status = 'active';
     `);
 
     const signIn = await fetch(`${URL_BASE}/auth/v1/token?grant_type=password`, {
@@ -156,17 +208,11 @@ test.describe('farmer conversation — voice notes and photos', () => {
 
   test.afterAll(async () => {
     if (!shopId) return;
-    await execSql(`
-      delete from public.farmer_message_attachments where shop_id = '${shopId}';
-      delete from public.farmer_messages where shop_id = '${shopId}';
-      delete from public.marketplace_farmer_tokens where farmer_id = '${farmerId}';
-      delete from public.marketplace_shop_join_codes where shop_id = '${shopId}';
-      delete from public.marketplace_farmer_links where shop_id = '${shopId}';
-      delete from public.marketplace_farmers where id = '${farmerId}';
-      delete from public.memberships where tenant_id = '${shopId}';
-      update public.users set shop_id = null where shop_id = '${shopId}';
-      delete from public.shops where id = '${shopId}';
-    `);
+    await purgeShop(shopId);
+    const left = (await execSql(
+      `select count(*)::int as n from public.shops where id = '${shopId}'`,
+    )) as Array<{ n: number }>;
+    expect(left[0]?.n, 'the lane leaves no shop behind').toBe(0);
     if (dealerUserId) {
       await fetch(`${URL_BASE}/auth/v1/admin/users/${dealerUserId}`, {
         method: 'DELETE',
