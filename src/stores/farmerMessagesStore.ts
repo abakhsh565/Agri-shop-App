@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
+import { uploadChatMedia, type ChatMediaMeta } from "@/lib/chatMedia";
 
 /**
  * Farmer conversations: the store behind the Messages tab.
@@ -127,6 +128,8 @@ interface FarmerMessagesState {
   actionsLoading: boolean;
   myVisits: MyVisit[];
   myVisitsLoading: boolean;
+  /** Files in the open conversation, by message id. Empty for a text-only thread. */
+  media: Record<string, ChatMediaMeta>;
 
   loadThreads: (search?: string) => Promise<void>;
   /** `markRead: false` opens the record without consuming the conversation's unread count. */
@@ -139,6 +142,12 @@ interface FarmerMessagesState {
   /** The shop's printed farmer code, made on first look and stable afterwards. */
   shopJoinCode: () => Promise<{ code: string; shop_name: string }>;
   send: (farmerId: string, body: string, via: "app" | "whatsapp") => Promise<{ delivered_to_app: boolean }>;
+  /** Record a voice note: upload the bytes, then let the server write the message. */
+  sendVoice: (farmerId: string, blob: Blob, mimeType: string, durationMs: number) => Promise<void>;
+  /** Send a photo, with an optional caption. */
+  sendImage: (farmerId: string, file: File | Blob, caption?: string) => Promise<void>;
+  /** The conversation's files, keyed by message id. Called with the thread. */
+  loadMedia: (farmerId: string) => Promise<void>;
   markRead: (farmerId: string) => Promise<void>;
   reviseOffer: (input: {
     requestId: string;
@@ -170,6 +179,7 @@ export const useFarmerMessagesStore = create<FarmerMessagesState>((set, get) => 
   actions: [],
   actionsLoading: false,
   myVisits: [],
+  media: {},
   myVisitsLoading: false,
 
   async loadThreads(search) {
@@ -190,8 +200,10 @@ export const useFarmerMessagesStore = create<FarmerMessagesState>((set, get) => 
     try {
       const { data, error } = await supabase.rpc("get_farmer_thread", { p_farmer_id: farmerId });
       if (error) fail(error);
-      set({ thread: (data as FarmerThread) ?? null });
+      set({ thread: (data as FarmerThread) ?? null, media: {} });
       if (options?.markRead !== false) await get().markRead(farmerId);
+      // Files are read once per open thread, not once per message.
+      await get().loadMedia(farmerId);
     } finally {
       set({ threadLoading: false });
     }
@@ -249,6 +261,60 @@ export const useFarmerMessagesStore = create<FarmerMessagesState>((set, get) => 
     });
     if (error) fail(error);
     return data as { delivered_to_app: boolean };
+  },
+
+  async sendVoice(farmerId, blob, mimeType, durationMs) {
+    const uploaded = await uploadChatMedia({
+      farmerId,
+      kind: "voice",
+      bytes: blob,
+      mimeType,
+      durationMs,
+    });
+    const { error } = await supabase.rpc("send_farmer_attachment", {
+      p_farmer_id: farmerId,
+      p_kind: "voice",
+      p_storage_path: uploaded.storage_path,
+      p_mime_type: mimeType,
+      p_size_bytes: uploaded.size_bytes,
+      p_duration_ms: Math.round(durationMs),
+      p_body: null,
+    });
+    if (error) fail(error);
+    await get().loadThread(farmerId, { markRead: false });
+  },
+
+  async sendImage(farmerId, file, caption) {
+    const mimeType = file.type || "image/jpeg";
+    const uploaded = await uploadChatMedia({
+      farmerId,
+      kind: "image",
+      bytes: file,
+      mimeType,
+    });
+    const { error } = await supabase.rpc("send_farmer_attachment", {
+      p_farmer_id: farmerId,
+      p_kind: "image",
+      p_storage_path: uploaded.storage_path,
+      p_mime_type: mimeType,
+      p_size_bytes: uploaded.size_bytes,
+      p_duration_ms: null,
+      p_body: caption?.trim() ? caption.trim() : null,
+    });
+    if (error) fail(error);
+    await get().loadThread(farmerId, { markRead: false });
+  },
+
+  async loadMedia(farmerId) {
+    const { data, error } = await supabase.rpc("get_farmer_media", { p_farmer_id: farmerId });
+    // A thread without files is the normal case, not an error to show: 0325-era conversations
+    // simply have none until 0336 is applied.
+    if (error) {
+      set({ media: {} });
+      return;
+    }
+    const list = (data as ChatMediaMeta[] | null) ?? [];
+    set({ media: Object.fromEntries(list.map((item) => [item.message_id, item])) });
   },
 
   async markRead(farmerId) {

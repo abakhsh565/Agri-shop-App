@@ -7,6 +7,9 @@ import {
   CheckCheck,
   ChevronRight,
   Clock,
+  ImagePlus,
+  Mic,
+  X,
   MapPin,
   Phone,
   Send,
@@ -26,6 +29,8 @@ import { useChatViewport } from "@/hooks/useChatViewport";
 import { useShellBase } from "@/lib/useShellBase";
 import { formatCurrency, formatDate, formatDateTime, formatTime } from "@/lib/formatters";
 import { whatsappShareUrl } from "@/lib/appInvite";
+import { PhotoMessage, VoiceNote } from "@/components/chat/MessageMedia";
+import { formatDuration, startVoiceRecording, type Recording } from "@/lib/chatMedia";
 import {
   useFarmerMessagesStore,
   type AssignableOfficer,
@@ -71,6 +76,9 @@ export default function FarmerThreadPage() {
   const loading = useFarmerMessagesStore((s) => s.threadLoading);
   const loadThread = useFarmerMessagesStore((s) => s.loadThread);
   const send = useFarmerMessagesStore((s) => s.send);
+  const media = useFarmerMessagesStore((s) => s.media);
+  const sendVoice = useFarmerMessagesStore((s) => s.sendVoice);
+  const sendImage = useFarmerMessagesStore((s) => s.sendImage);
   const reviseOffer = useFarmerMessagesStore((s) => s.reviseOffer);
   const closeRequest = useFarmerMessagesStore((s) => s.closeRequest);
   const scheduleVisit = useFarmerMessagesStore((s) => s.scheduleVisit);
@@ -80,6 +88,11 @@ export default function FarmerThreadPage() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Voice: the recorder is held while it runs, so the elapsed timer and the buttons share one truth.
+  const [recording, setRecording] = useState<Recording | null>(null);
+  const [recordMs, setRecordMs] = useState(0);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const imageInput = useRef<HTMLInputElement | null>(null);
 
   const [openAsk, setOpenAsk] = useState<AskRef | null>(null);
   const [offerTotal, setOfferTotal] = useState("");
@@ -198,6 +211,61 @@ export default function FarmerThreadPage() {
     setOpenAsk(null);
     setEditingVisit(false);
     if (askParam) setParams({}, { replace: true });
+  }
+
+  useEffect(() => {
+    if (!recording) return;
+    setRecordMs(Date.now() - recording.startedAt);
+    const id = window.setInterval(() => setRecordMs(Date.now() - recording.startedAt), 200);
+    return () => window.clearInterval(id);
+  }, [recording]);
+
+  async function toggleRecording() {
+    if (recording) {
+      const active = recording;
+      setRecording(null);
+      setMediaBusy(true);
+      try {
+        const captured = await active.stop();
+        await sendVoice(farmerId, captured.blob, captured.mimeType, captured.durationMs);
+        atBottomRef.current = true;
+        await loadThread(farmerId, { markRead: false });
+      } catch {
+        setError(t("messages.actionFailed"));
+      } finally {
+        setMediaBusy(false);
+        setRecordMs(0);
+      }
+      return;
+    }
+    try {
+      setRecording(await startVoiceRecording());
+      setRecordMs(0);
+    } catch {
+      setError(t("messages.voiceDenied"));
+    }
+  }
+
+  function cancelRecording() {
+    recording?.cancel();
+    setRecording(null);
+    setRecordMs(0);
+  }
+
+  async function pickImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setMediaBusy(true);
+    try {
+      await sendImage(farmerId, file);
+      atBottomRef.current = true;
+      await loadThread(farmerId, { markRead: false });
+    } catch {
+      setError(t("messages.actionFailed"));
+    } finally {
+      setMediaBusy(false);
+    }
   }
 
   async function submitMessage() {
@@ -446,7 +514,14 @@ export default function FarmerThreadPage() {
               {dayLabel(group.items[0].at, t)}
             </span>
             {group.items.map((entry) => {
-              if (entry.kind === "message") return <MessageBubble key={entry.message.id} message={entry.message} />;
+              if (entry.kind === "message")
+                return (
+                  <MessageBubble
+                    key={entry.message.id}
+                    message={entry.message}
+                    file={media[entry.message.id]}
+                  />
+                );
               if (entry.kind === "credit") {
                 return (
                   <CreditCard
@@ -521,7 +596,57 @@ export default function FarmerThreadPage() {
             {error}
           </p>
         )}
+        {recording ? (
+          <div className="flex items-center gap-2" data-testid="voice-recording">
+            <button
+              type="button"
+              onClick={cancelRecording}
+              aria-label={t("messages.voiceCancel")}
+              className="flex size-11 shrink-0 items-center justify-center rounded-full"
+              style={{ background: "var(--tone-card)", color: "var(--text-secondary)" }}
+            >
+              <X size={18} strokeWidth={2} />
+            </button>
+            <span
+              className="flex h-11 flex-1 items-center gap-2 px-4 text-14"
+              style={{ background: "var(--field-bg)", borderRadius: "var(--radius-field)", color: "var(--text-primary)" }}
+            >
+              <span className="size-2 rounded-full" style={{ background: "var(--error)" }} aria-hidden="true" />
+              {t("messages.voiceRecording", { time: formatDuration(recordMs) })}
+            </span>
+            <button
+              type="button"
+              onClick={() => void toggleRecording()}
+              disabled={mediaBusy}
+              aria-label={t("messages.voiceSend")}
+              className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+              style={{ background: "var(--brand)", color: "var(--brand-fg)" }}
+              data-testid="voice-send"
+            >
+              <Send size={18} strokeWidth={2} />
+            </button>
+          </div>
+        ) : (
         <div className="flex items-center gap-2">
+          <input
+            ref={imageInput}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(event) => void pickImage(event)}
+            data-testid="farmer-image-input"
+          />
+          <button
+            type="button"
+            onClick={() => imageInput.current?.click()}
+            disabled={mediaBusy}
+            aria-label={t("messages.photoSend")}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+            style={{ background: "var(--tone-card)", color: "var(--text-secondary)" }}
+            data-testid="farmer-image"
+          >
+            <ImagePlus size={18} strokeWidth={1.8} />
+          </button>
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -553,7 +678,19 @@ export default function FarmerThreadPage() {
           >
             <Send size={18} strokeWidth={2} />
           </button>
+          <button
+            type="button"
+            onClick={() => void toggleRecording()}
+            disabled={mediaBusy}
+            aria-label={t("messages.voiceRecord")}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+            style={{ background: "var(--brand-tint)", color: "var(--brand-dark)" }}
+            data-testid="farmer-mic"
+          >
+            <Mic size={18} strokeWidth={1.8} />
+          </button>
         </div>
+        )}
         <p className="text-10 mt-1.5 text-center" style={{ color: "var(--text-tertiary)" }}>
           {farmer.app_ready ? t("messages.sendHintApp") : t("messages.sendHintWhatsapp")}
         </p>
@@ -760,7 +897,13 @@ export default function FarmerThreadPage() {
 }
 
 /** A message bubble. Mine on the inline-end, his on the start; ticks only where they mean something. */
-function MessageBubble({ message }: { message: FarmerMessage }) {
+function MessageBubble({
+  message,
+  file,
+}: {
+  message: FarmerMessage;
+  file?: { kind: "voice" | "image"; duration_ms: number | null };
+}) {
   const t = useT();
   const mine = message.direction === "owner";
   return (
@@ -775,7 +918,14 @@ function MessageBubble({ message }: { message: FarmerMessage }) {
           borderStartEndRadius: mine ? 4 : 16,
         }}
       >
-        <p className="text-14 whitespace-pre-wrap break-words">{message.body}</p>
+        {file?.kind === "voice" ? (
+          <VoiceNote messageId={message.id} durationMs={file.duration_ms} mine={mine} />
+        ) : file?.kind === "image" ? (
+          <PhotoMessage messageId={message.id} mine={mine} />
+        ) : null}
+        {message.body.trim() ? (
+          <p className="text-14 whitespace-pre-wrap break-words">{message.body}</p>
+        ) : null}
         <span className="mt-1 flex items-center justify-end gap-1 text-10" style={{ color: "var(--text-tertiary)" }}>
           {mine && message.channel === "whatsapp" && <span>{t("messages.viaWhatsapp")}</span>}
           <span>{formatTime(message.created_at)}</span>
