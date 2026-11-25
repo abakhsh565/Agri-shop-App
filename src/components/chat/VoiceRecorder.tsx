@@ -1,39 +1,47 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { Pause, Play, Send, Trash2 } from "lucide-react";
 import { startVoiceRecording, type Recording } from "@/lib/chatMedia";
 import { useT } from "@/lib/i18n";
 
 /**
- * The voice-note gesture, in this app's own design system.
+ * Voice messages, following WhatsApp's gesture rather than an imitation of its colours.
  *
- * FOUR STATES, ONE PILL (the shapes are the good part of Bencho's `ui/VoiceNote`):
+ * ONE BUTTON, NEVER REMOUNTED. The mic is the same element in every state — idle mic, the button
+ * under the finger while recording, and the green send when there is something to send. That is
+ * not cosmetic: the pointer is captured by it, so if it were swapped for another element when the
+ * recording started (as an earlier version did) the moves and the release would go to a button
+ * that no longer exists, and the note could neither be dragged, stopped, nor cancelled.
  *
- *   hold    press the mic and keep holding. A pill opens: a dot, the running clock, one bar per
- *           real microphone sample, a bin at the end. Under the pill: "Slide left to cancel".
- *   lock    a tap, or a slide up, keeps the microphone open without a finger on it — the pill
- *           stays and gains pause and send, because a note longer than a sentence needs a breath.
- *   clip    released. The recording becomes a paused clip: bin on the left, a wide Pause/Play
- *           button in the middle, send on the right. Nothing is uploaded yet.
- *   cancel  slid far enough left: the bars fall into the bin, the pill closes, nothing is sent.
+ * THE STATES, AND WHAT EACH ONE LETS YOU PRESS
  *
- * WHY THE BARS ARE REAL. `startVoiceRecording` hands back an AnalyserNode reading of the same
- * stream that is being encoded, so the wave rises with the voice and sits flat in a quiet room.
- * It is 70 ms of an interval, and it is the only thing running while recording.
+ *   idle      one big green mic at the end of the composer. Press and hold it.
  *
- * THE PLAYHEAD IS A CSS VARIABLE, NOT A RENDER. Playing a clip paints `--prog` on the wave; each
- * bar lights itself in calc(). No React renders during playback.
+ *   hold      the composer field gives way to a bar: red dot, clock counting, live waveform, and
+ *             "Slide to cancel" inside it. The mic stays under the finger and pulses. Drag left
+ *             past 90 px and a red bin grows in where the mic sits — the waveform is what goes
+ *             into it; release there and the note is discarded. Drag up past 42 px and a lock
+ *             appears; release there and recording continues with no finger down.
+ *
+ *   locked    hands-free. The bar keeps clock and wave and the row underneath is the whole set of
+ *             actions, left to right: bin (throw it away), wide Pause (stop the clock, same
+ *             button resumes), green send (finish and send). Nothing is hidden.
+ *
+ *   preview   releasing the mic after a real hold ends the note and shows it: the same row, now
+ *             playing — bin, play/pause with a scrubbable waveform and a sweeping playhead, send.
+ *
+ * A release that arrives before the microphone has finished opening is remembered and applied the
+ * moment recording starts, so a tap always lands somewhere: it opens hands-free recording.
+ *
+ * Edge cases: a note under 1.5 s is refused instead of sent; a denied microphone reports why; a
+ * backgrounded tab pauses the note instead of losing it; every exit path stops the tracks.
  */
-
 const SAMPLE_MS = 70;
-/** shorter than this is a tap, not a hold */
-const HOLD_MS = 450;
-/** pointer travel left, in px, that throws the recording away */
-const CANCEL_PX = 80;
-/** pointer travel up, in px, that keeps the microphone open without the finger */
-const LOCK_PX = 40;
-const BARS = 30;
+const MIN_MS = 1500;
+const CANCEL_PX = 90;
+const LOCK_PX = 42;
+const BARS = 32;
 
-type Phase = "rec" | "locked" | "clip";
+type Phase = "idle" | "hold" | "locked" | "preview";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -53,6 +61,14 @@ const fmt = (ms: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
+function haptic(kind: "tap" | "lock" | "delete" = "tap") {
+  try {
+    navigator.vibrate?.(kind === "delete" ? [18, 40, 18] : kind === "lock" ? 14 : 8);
+  } catch {
+    /* no haptics on this device */
+  }
+}
+
 export interface RecordedClip {
   blob: Blob;
   mimeType: string;
@@ -62,152 +78,160 @@ export interface RecordedClip {
 export function VoiceRecorder({
   busy,
   onSend,
-  onClose,
   onError,
+  onRecordingChange,
 }: {
   busy: boolean;
-  onSend: (clip: RecordedClip) => Promise<void>;
-  onClose: () => void;
+  /** true when the clip is on the server, so the recorder knows it may clear itself */
+  onSend: (clip: RecordedClip) => Promise<boolean | void>;
   onError: (message: string) => void;
+  onRecordingChange?: (active: boolean) => void;
 }) {
   const t = useT();
-  const [phase, setPhase] = useState<Phase>("rec");
+  const [phase, setPhase] = useState<Phase>("idle");
   const [levels, setLevels] = useState<number[]>([]);
   const [ms, setMs] = useState(0);
   const [pull, setPull] = useState(0);
-  const [lifted, setLifted] = useState(false);
+  const [lift, setLift] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const [clip, setClip] = useState<RecordedClip | null>(null);
   const [clipUrl, setClipUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [paused, setPausedState] = useState(false);
 
   const recording = useRef<Recording | null>(null);
   const raw = useRef<number[]>([]);
   const tick = useRef(0);
   const origin = useRef(0);
   const pausedMs = useRef(0);
-  const pullRef = useRef(0);
-  const liftedRef = useRef(false);
-  const phaseRef = useRef<Phase>("rec");
+  const pauseStartedAt = useRef(0);
+  const phaseRef = useRef<Phase>("idle");
+  // A ref, not the state above: a second tap in the same task still sees the old render.
+  const discardingRef = useRef(false);
   const downX = useRef(0);
   const downY = useRef(0);
-  const holding = useRef(false);
+  const pullRef = useRef(0);
+  const liftRef = useRef(0);
+  const held = useRef(false);
+  const releasedEarly = useRef(false);
+  const startedAt = useRef(0);
   const wave = useRef<HTMLDivElement>(null);
-  const clock = useRef<HTMLSpanElement>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
   const progress = useRef(0);
   const scrub = useRef(false);
   const clipRef = useRef<RecordedClip | null>(null);
   clipRef.current = clip;
 
-  const setPhaseBoth = (next: Phase) => {
+  const go = useCallback((next: Phase) => {
     phaseRef.current = next;
     setPhase(next);
-  };
+  }, []);
+
+  useEffect(() => {
+    onRecordingChange?.(phase !== "idle");
+  }, [phase, onRecordingChange]);
 
   const elapsed = () => performance.now() - origin.current - pausedMs.current;
+
+  useEffect(() => () => { recording.current?.cancel(); recording.current = null; }, []);
+  useEffect(() => {
+    const url = clipUrl;
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [clipUrl]);
 
   const runClock = (rec: Recording) => {
     window.clearInterval(tick.current);
     tick.current = window.setInterval(() => {
       if (!rec.paused()) setMs(elapsed());
       raw.current.push(rec.level());
-      setLevels(raw.current.slice(-64));
+      setLevels(raw.current.slice(-96));
     }, SAMPLE_MS);
   };
 
-  // Mounting is the gesture: the finger went down on the mic.
-  useEffect(() => {
-    let cancelled = false;
-    startVoiceRecording()
-      .then((rec) => {
-        if (cancelled) {
-          rec.cancel();
-          return;
-        }
-        recording.current = rec;
-        origin.current = performance.now();
-        holding.current = true;
-        runClock(rec);
-      })
-      .catch(() => onError(t("messages.voiceDenied")));
-    return () => {
-      cancelled = true;
-      window.clearInterval(tick.current);
-      recording.current?.cancel();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => () => {
-    if (clipUrl) URL.revokeObjectURL(clipUrl);
-  }, [clipUrl]);
-
-  /* ── recording → clip ─────────────────────────────────── */
-  const toClip = async () => {
-    if (phaseRef.current === "clip") return;
+  /* ── finishing, discarding, pausing ───────────────────── */
+  const finish = async (): Promise<RecordedClip | null> => {
     const rec = recording.current;
-    if (!rec) {
-      onClose();
-      return;
-    }
+    if (!rec) return null;
     window.clearInterval(tick.current);
-    if (rec.paused()) rec.resume();
-    if (elapsed() < 250) {
+    if (rec.paused()) {
+      pausedMs.current += performance.now() - pauseStartedAt.current;
+      rec.resume();
+      setPaused(false);
+    }
+    if (elapsed() < MIN_MS) {
       rec.cancel();
-      onClose();
-      return;
+      recording.current = null;
+      onError(t("messages.voiceTooShort"));
+      go("idle");
+      return null;
     }
     try {
-      setPhaseBoth("clip");
       const result = await rec.stop();
+      recording.current = null;
       const next = { blob: result.blob, mimeType: result.mimeType, durationMs: result.durationMs };
       progress.current = 0;
       setMs(result.durationMs);
       setClip(next);
       setClipUrl(URL.createObjectURL(result.blob));
+      return next;
     } catch (cause) {
       onError(cause instanceof Error ? cause.message : t("messages.actionFailed"));
-      onClose();
+      go("idle");
+      return null;
     }
   };
 
-  /* ── cancel: the bars fall into the bin ───────────────── */
-  const cancel = () => {
+  const toPreview = async () => {
+    const next = await finish();
+    if (next) go("preview");
+  };
+
+  const discard = () => {
+    if (discardingRef.current) return;
+    discardingRef.current = true;
+    setPhase("idle");
+    haptic("delete");
+    setDiscarding(true);
     window.clearInterval(tick.current);
     recording.current?.cancel();
-    setPull(1);
-    // Let the collapse play before the pill leaves.
-    window.setTimeout(onClose, 180);
+    recording.current = null;
+    window.setTimeout(() => {
+      discardingRef.current = false;
+      setDiscarding(false);
+      setClip(null);
+      setClipUrl(null);
+      setPull(0);
+      setLift(0);
+      setMs(0);
+      raw.current = [];
+      setLevels([]);
+      pullRef.current = 0;
+      liftRef.current = 0;
+      go("idle");
+    }, 320);
   };
-
-  const lock = () => {
-    setPhaseBoth("locked");
-    setLifted(false);
-    setPull(0);
-    pullRef.current = 0;
-  };
-
-  const pauseStartedAt = useRef(0);
 
   const toggleRecordingPause = () => {
     const rec = recording.current;
     if (!rec) return;
+    haptic("tap");
     if (rec.paused()) {
       pausedMs.current += performance.now() - pauseStartedAt.current;
       rec.resume();
-      setPausedState(false);
+      setPaused(false);
       runClock(rec);
       return;
     }
     pauseStartedAt.current = performance.now();
     rec.pause();
-    setPausedState(true);
+    setPaused(true);
+    window.clearInterval(tick.current);
   };
 
   const togglePlayback = () => {
     const element = audio.current;
     if (!element) return;
+    haptic("tap");
     if (!element.paused) {
       element.pause();
       return;
@@ -215,215 +239,338 @@ export function VoiceRecorder({
     void element.play().catch(() => setPlaying(false));
   };
 
+  const paint = () => {
+    wave.current?.style.setProperty("--prog", progress.current.toFixed(4));
+  };
+
   const seek = (clientX: number) => {
     const el = wave.current;
     const element = audio.current;
-    const c = clipRef.current;
-    if (!el || !element || !c) return;
+    const current = clipRef.current;
+    if (!el || !element || !current) return;
     const box = el.getBoundingClientRect();
     progress.current = clamp((clientX - box.left) / box.width, 0, 1);
-    element.currentTime = (progress.current * c.durationMs) / 1000;
+    element.currentTime = (progress.current * current.durationMs) / 1000;
     paint();
   };
 
-  const paint = () => {
-    wave.current?.style.setProperty("--prog", progress.current.toFixed(4));
-    if (clock.current && clipRef.current) {
-      const p = progress.current;
-      clock.current.textContent = fmt(p > 0 && p < 1 ? p * clipRef.current.durationMs : clipRef.current.durationMs);
+  /* ── opening the microphone ───────────────────────────── */
+  const begin = async () => {
+    if (phaseRef.current !== "idle") return;
+    raw.current = [];
+    setLevels([]);
+    setMs(0);
+    setPull(0);
+    setLift(0);
+    pullRef.current = 0;
+    liftRef.current = 0;
+    startedAt.current = performance.now();
+    try {
+      const rec = await startVoiceRecording();
+      recording.current = rec;
+      origin.current = performance.now();
+      pausedMs.current = 0;
+      go("hold");
+      runClock(rec);
+      haptic("tap");
+      // The finger may already be up: a tap waited only for the microphone to open, so it keeps
+      // recording hands-free rather than landing on a screen with nothing to press.
+      if (releasedEarly.current) {
+        releasedEarly.current = false;
+        haptic("lock");
+        go("locked");
+      }
+    } catch {
+      releasedEarly.current = false;
+      held.current = false;
+      onError(t("messages.voiceDenied"));
+      go("idle");
     }
   };
 
-  const recBars = resample(levels.length ? levels : raw.current, BARS);
-  const clipBars = resample(raw.current, BARS);
-  const armed = pull >= 1;
+  /** What the release means, given where the finger had travelled. */
+  const resolveRelease = () => {
+    if (phaseRef.current !== "hold") return;
+    if (pullRef.current >= 1) {
+      discard();
+      return;
+    }
+    if (liftRef.current >= 1) {
+      haptic("lock");
+      setPull(0);
+      setLift(0);
+      pullRef.current = 0;
+      liftRef.current = 0;
+      go("locked");
+      return;
+    }
+    void toPreview();
+  };
 
-  /* ── the pill ─────────────────────────────────────────── */
-  const pill = (bars: number[], live: boolean) => (
+  const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (phaseRef.current === "preview") {
+      sendClipNow();
+      return;
+    }
+    if (phaseRef.current === "locked") {
+      sendNow();
+      return;
+    }
+    if (phaseRef.current !== "idle") return;
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* synthetic pointer */
+    }
+    downX.current = event.clientX;
+    downY.current = event.clientY;
+    held.current = true;
+    releasedEarly.current = false;
+    void begin();
+  };
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!held.current) return;
+    const nextPull = clamp((downX.current - event.clientX) / CANCEL_PX, 0, 1);
+    const nextLift = clamp((downY.current - event.clientY) / LOCK_PX, 0, 1);
+    pullRef.current = nextPull;
+    liftRef.current = nextLift;
+    setPull(nextPull);
+    setLift(nextLift);
+  };
+
+  const onPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!held.current) return;
+    held.current = false;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* never captured */
+    }
+    if (phaseRef.current === "idle") {
+      // Not recording yet (still waiting for the microphone): remember the release.
+      releasedEarly.current = true;
+      return;
+    }
+    if (performance.now() - startedAt.current < 300 && pullRef.current < 1) {
+      // A quick tap opens hands-free recording, the way a locked note stays open.
+      haptic("lock");
+      go("locked");
+      return;
+    }
+    resolveRelease();
+  };
+
+  // Interruptions pause the note instead of ending it behind the user's back.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState !== "hidden") return;
+      const rec = recording.current;
+      if (!rec || rec.paused() || phaseRef.current === "preview" || phaseRef.current === "idle") return;
+      pauseStartedAt.current = performance.now();
+      rec.pause();
+      setPaused(true);
+      window.clearInterval(tick.current);
+      if (phaseRef.current === "hold") go("locked");
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [go]);
+
+  /** Back to the composer once the note is sent. It stays put on a failure, clip and all. */
+  const resetToIdle = () => {
+    window.clearInterval(tick.current);
+    recording.current?.cancel();
+    recording.current = null;
+    progress.current = 0;
+    raw.current = [];
+    discardingRef.current = false;
+    setPlaying(false);
+    setDiscarding(false);
+    setPaused(false);
+    setClip(null);
+    setClipUrl(null);
+    setLevels([]);
+    setMs(0);
+    setPull(0);
+    setLift(0);
+    pullRef.current = 0;
+    liftRef.current = 0;
+    go("idle");
+  };
+
+  const ship = async (next: RecordedClip) => {
+    const ok = await onSend(next);
+    if (ok !== false) resetToIdle();
+  };
+
+  const sendClipNow = () => {
+    if (!clip || busy) return;
+    const current = clip;
+    void ship(current);
+  };
+
+  const sendNow = () => {
+    if (busy) return;
+    void finish().then((next) => {
+      if (next) void ship(next);
+    });
+  };
+
+  const liveBars = resample(levels.length ? levels : raw.current, BARS);
+  const clipBars = resample(raw.current, BARS);
+  const recordingLike = phase === "hold" || phase === "locked";
+
+  const bars = (values: number[], live: boolean) => (
     <span className="vr-wave" ref={live ? undefined : wave} style={{ "--n": BARS } as CSSProperties} aria-hidden="true">
-      {bars.map((v, i) => (
-        <i
-          key={i}
-          className="vr-bar"
-          style={{ "--l": Math.max(0.05, v).toFixed(3), "--i": i } as CSSProperties}
-          data-live={live || undefined}
-        />
+      {values.map((v, i) => (
+        <i key={i} className="vr-bar" style={{ "--l": Math.max(0.05, v).toFixed(3), "--i": i } as CSSProperties} data-live={live || undefined} />
       ))}
     </span>
   );
 
   return (
-    <div className="vr" data-phase={phase} style={{ "--pull": pull.toFixed(3) } as CSSProperties}>
-      {phase === "clip" ? (
-        <div className="vr-clip">
+    <div
+      className="vr"
+      data-phase={phase}
+      data-discarding={discarding || undefined}
+      style={{ "--pull": pull.toFixed(3), "--lift": lift.toFixed(3) } as CSSProperties}
+    >
+      <div className="vr-line">
+        {phase !== "idle" && (
+          <div className="vr-pill" style={{ translate: `${-pull * CANCEL_PX * 0.45}px 0` }}>
+            <span className="vr-dot" data-paused={paused || undefined} aria-hidden="true" />
+            <span className="vr-time">{fmt(ms)}</span>
+            {recordingLike ? bars(liveBars, true) : bars(clipBars, false)}
+            {phase === "hold" && (
+              <span className="vr-slide">
+                {pull > 0.05 ? t("messages.voiceReleaseCancel") : `‹ ${t("messages.voiceSlideCancelShort")}`}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* One button for the whole gesture: press it, hold it, drag it, and later press it to
+            send. It is the same element in every state so the pointer never loses it. */}
+        <button
+          type="button"
+          className="vr-mic"
+          data-act={phase === "idle" ? "record" : phase === "hold" ? "release" : "send"}
+          aria-label={
+            phase === "idle"
+              ? t("messages.voiceRecord")
+              : phase === "hold"
+                ? t("messages.voiceSend")
+                : t("messages.voiceSend")
+          }
+          disabled={busy && phase !== "hold"}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={() => {
+            held.current = false;
+            if (phaseRef.current === "hold") discard();
+          }}
+          onContextMenu={(e) => e.preventDefault()}
+          onClick={() => {
+            if (phase === "preview") sendClipNow();
+          }}
+          data-testid="voice-mic"
+        >
+          {phase === "preview" || phase === "locked" ? (
+            <Send size={22} strokeWidth={2} />
+          ) : (
+            <MicGlyph size={26} />
+          )}
+          {phase === "hold" && <span className="vr-lock-hint" data-on={lift > 0.4 || undefined} aria-hidden="true">↑</span>}
+        </button>
+
+        {/* sliding left puts the bin where the mic was; the wave is what goes into it */}
+        <span className="vr-bin" data-open={pull > 0.02 || discarding || undefined} aria-hidden="true">
+          <Trash2 size={24} strokeWidth={2} />
+        </span>
+      </div>
+
+      {(phase === "locked" || phase === "preview") && (
+        <div className="vr-controls">
           <button
             type="button"
-            className="vr-bin-circle"
+            className="vr-delete"
             aria-label={t("messages.voiceDiscard")}
             onClick={() => {
               audio.current?.pause();
-              onClose();
+              discard();
             }}
-            data-testid="voice-preview-discard"
+            data-testid={phase === "preview" ? "voice-preview-discard" : "voice-cancel"}
           >
-            <Trash2 size={19} strokeWidth={1.8} />
-          </button>
-
-          <div className="vr-clip-mid">
-            <span ref={clock} className="vr-time">{fmt(clip?.durationMs ?? 0)}</span>
-            {pill(clipBars, false)}
-          </div>
-
-          <button
-            type="button"
-            className="vr-pause-pill"
-            onClick={togglePlayback}
-            aria-label={playing ? t("messages.voicePause") : t("messages.voicePlay")}
-            data-testid="voice-preview-play"
-          >
-            {playing ? <Pause size={18} strokeWidth={2.2} /> : <Play size={18} strokeWidth={2.2} />}
-            <span>{playing ? t("messages.voicePause") : t("messages.voicePlay")}</span>
+            <Trash2 size={21} strokeWidth={1.9} />
           </button>
 
           <button
             type="button"
-            className="vr-send"
-            disabled={busy || !clip}
-            aria-label={t("messages.voiceSend")}
-            onClick={() => {
-              if (clip) void onSend(clip);
-            }}
-            data-testid="voice-preview-send"
+            className="vr-mid"
+            onClick={phase === "preview" ? togglePlayback : toggleRecordingPause}
+            aria-label={phase === "preview" ? (playing ? t("messages.voicePause") : t("messages.voicePlay")) : paused ? t("messages.voiceResume") : t("messages.voicePause")}
+            data-testid={phase === "preview" ? "voice-preview-play" : "voice-pause"}
           >
-            <Send size={19} strokeWidth={2} />
+            {(phase === "preview" ? playing : !paused) ? <Pause size={20} strokeWidth={2.4} /> : <Play size={20} strokeWidth={2.4} />}
+            <span>
+              {phase === "preview" ? (playing ? t("messages.voicePause") : t("messages.voicePlay")) : paused ? t("messages.voiceResume") : t("messages.voicePause")}
+            </span>
           </button>
 
-          {clipUrl && (
-            <audio
-              ref={audio}
-              src={clipUrl}
-              preload="metadata"
-              onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-              onEnded={() => {
-                setPlaying(false);
-                progress.current = 0;
-                paint();
-              }}
-              onTimeUpdate={(event) => {
-                const element = event.currentTarget;
-                if (element.duration && Number.isFinite(element.duration)) {
-                  progress.current = element.currentTime / element.duration;
-                } else if (clipRef.current) {
-                  progress.current = Math.min(1, (element.currentTime * 1000) / clipRef.current.durationMs);
-                }
-                paint();
-              }}
-            />
-          )}
+          <span className="vr-send-gap" aria-hidden="true" />
         </div>
-      ) : (
-        <>
-          <div
-            className="vr-pill"
-            style={{ translate: `${-pull * CANCEL_PX * 0.5}px 0` }}
-            onPointerDown={(e) => {
-              try {
-                e.currentTarget.setPointerCapture(e.pointerId);
-              } catch {
-                /* a scripted pointer */
-              }
-              downX.current = e.clientX;
-              downY.current = e.clientY;
-              holding.current = true;
-            }}
-            onPointerMove={(e) => {
-              if (!holding.current) return;
-              const next = clamp((downX.current - e.clientX) / CANCEL_PX, 0, 1);
-              pullRef.current = next;
-              setPull(next);
-              const up = downY.current - e.clientY >= LOCK_PX;
-              if (up !== liftedRef.current) {
-                liftedRef.current = up;
-                setLifted(up);
-              }
-            }}
-            onPointerUp={(e) => {
-              if (!holding.current) return;
-              holding.current = false;
-              try {
-                e.currentTarget.releasePointerCapture(e.pointerId);
-              } catch {
-                /* never captured */
-              }
-              if (pullRef.current >= 1) {
-                cancel();
-                return;
-              }
-              // A tap, or a slide up, keeps the microphone open — the same hands-free state.
-              if (liftedRef.current || elapsed() < HOLD_MS) {
-                lock();
-                return;
-              }
-              void toClip();
-            }}
-            onPointerCancel={() => {
-              holding.current = false;
-              void toClip();
-            }}
-            data-testid="voice-pill"
-          >
-            <span className="vr-dot" data-paused={paused || undefined} aria-hidden="true" />
-            <span className="vr-time" aria-live="off">{fmt(ms)}</span>
-            {pill(recBars, true)}
-            <button
-              type="button"
-              className="vr-bin"
-              aria-label={t("messages.voiceDiscard")}
-              onClick={cancel}
-              data-testid="voice-cancel"
-            >
-              <Trash2 size={17} strokeWidth={1.8} />
-            </button>
-            {/* The bars fall into the bin as it is thrown away. */}
-            <span className="vr-collapse" aria-hidden="true">
-              <Trash2 size={16} strokeWidth={2} />
-            </span>
-          </div>
+      )}
 
-          {phase === "locked" ? (
-            <div className="vr-controls">
-              <button
-                type="button"
-                className="vr-pause-pill"
-                onClick={toggleRecordingPause}
-                aria-label={paused ? t("messages.voiceResume") : t("messages.voicePause")}
-                data-testid="voice-pause"
-              >
-                {paused ? <Play size={18} strokeWidth={2.2} /> : <Pause size={18} strokeWidth={2.2} />}
-                <span>{paused ? t("messages.voiceResume") : t("messages.voicePause")}</span>
-              </button>
-              <button
-                type="button"
-                className="vr-send"
-                aria-label={t("messages.voiceSend")}
-                onClick={() => void toClip()}
-                data-testid="voice-send-direct"
-              >
-                <Send size={19} strokeWidth={2} />
-              </button>
-            </div>
-          ) : (
-            <span className="vr-hint" data-armed={armed || undefined} data-lock={lifted || undefined}>
-              {armed
-                ? t("messages.voiceReleaseCancel")
-                : lifted
-                  ? t("messages.voiceReleaseLock")
-                  : t("messages.voiceSlideCancel")}
-            </span>
-          )}
-        </>
+      {phase === "hold" && !discarding && (
+        <span className="vr-hint">{lift > 0.4 ? t("messages.voiceReleaseLock") : t("messages.voiceSlideUpLock")}</span>
+      )}
+
+      {phase === "preview" && clipUrl && (
+        <audio
+          ref={audio}
+          src={clipUrl}
+          preload="metadata"
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => {
+            setPlaying(false);
+            progress.current = 0;
+            paint();
+          }}
+          onTimeUpdate={(event) => {
+            const element = event.currentTarget;
+            if (element.duration && Number.isFinite(element.duration)) {
+              progress.current = element.currentTime / element.duration;
+            } else if (clipRef.current) {
+              progress.current = Math.min(1, (element.currentTime * 1000) / clipRef.current.durationMs);
+            }
+            paint();
+          }}
+        />
+      )}
+
+      {phase === "preview" && (
+        <span
+          className="vr-scrub"
+          aria-hidden="true"
+          onPointerDown={(e) => { scrub.current = true; seek(e.clientX); }}
+          onPointerMove={(e) => { if (scrub.current) seek(e.clientX); }}
+          onPointerUp={() => { scrub.current = false; }}
+        />
       )}
     </div>
+  );
+}
+
+/** The capsule filled, the stand drawn — solid, like the button it sits in. */
+function MicGlyph({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <rect x="8.5" y="2" width="7" height="12.5" rx="3.5" fill="currentColor" stroke="none" />
+      <path d="M5 11.5a7 7 0 0 0 14 0" />
+      <path d="M12 18.5V22" />
+    </svg>
   );
 }

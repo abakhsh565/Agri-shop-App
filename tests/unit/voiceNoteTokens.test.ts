@@ -62,18 +62,36 @@ describe("Bencho VoiceNote: tokens and scope", () => {
   it("offers a delete both while recording and on the recorded clip", () => {
     const RECORDER = readFileSync("src/components/chat/VoiceRecorder.tsx", "utf8");
     const I18N = readFileSync("src/lib/i18n.ts", "utf8");
-    // our own pill: a bin during recording, and one on the clip before it is sent
-    expect(RECORDER).toMatch(/data-testid="voice-cancel"/);
-    expect(RECORDER).toMatch(/data-testid="voice-preview-discard"/);
-    // a tap keeps the microphone open: pause, and send straight from the recording
-    expect(RECORDER).toMatch(/data-testid="voice-pause"/);
-    expect(RECORDER).toMatch(/data-testid="voice-send-direct"/);
-    // the way out is written under the pill, not left to be discovered
-    expect(RECORDER).toMatch(/messages\.voiceSlideCancel/);
-    expect(RECORDER).toMatch(/data-testid="voice-pill"/);
-    // the clip is paused with a wide pause and a green send, as the reference draws it
-    expect(CSS).toContain('.vr-bin-circle');
-    expect(CSS).toContain('.vr-pause-pill');
+    // the recorder owns the whole gesture, from the idle mic to the finished clip
+    expect(RECORDER).toMatch(/data-testid="voice-mic"/);
+    // one control row serves both states, chosen by phase
+    for (const id of ["voice-cancel", "voice-preview-discard", "voice-pause", "voice-preview-play"]) {
+      expect(RECORDER, `${id} is gone`).toContain(`"${id}"`);
+    }
+    // the mic is the same element in every state: press to record, press to send
+    expect(RECORDER).toMatch(/data-act=/);
+    // both gestures are named, not left to be discovered
+    expect(RECORDER).toMatch(/messages\.voiceSlideCancelShort/);
+    expect(RECORDER).toMatch(/messages\.voiceSlideUpLock/);
+    expect(CSS).toContain('.vr-slide');
+    expect(CSS).toContain('.vr-lock-hint');
+    // the bin arrives where the mic was, and the bars are thrown into it
+    expect(CSS).toContain('.vr-bin');
+    expect(CSS).toContain('[data-discarding] .vr-bar');
+    expect(CSS).toMatch(/transition-delay: calc\(\(var\(--n\) - var\(--i\)\) \* 4ms\)/);
+    // the layout the reference uses: clock and wave, then bin / wide middle button / send
+    expect(CSS).toContain('.vr-pill');
+    expect(CSS).toContain('.vr-controls');
+    expect(CSS).toContain('.vr-delete');
+    expect(CSS).toContain('.vr-mid');
+    // dragging left past the threshold and up past the lock both release on pointerup
+    expect(RECORDER).toMatch(/const CANCEL_PX = 90;/);
+    expect(RECORDER).toMatch(/const LOCK_PX = 42;/);
+    // a bumped button is not a message
+    expect(RECORDER).toMatch(/const MIN_MS = 1500;/);
+    expect(RECORDER).toMatch(/messages\.voiceTooShort/);
+    // losing the foreground pauses instead of ending the note
+    expect(RECORDER).toMatch(/visibilitychange/);
     // Bencho's pill: the slide, plus a bin while recording, and its vn-x on the clip
     expect(COMPONENT).toMatch(/className="vn-x vn-bin"/);
     expect(COMPONENT).toMatch(/className="vn-x"/);

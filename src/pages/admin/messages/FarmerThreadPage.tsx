@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Clock,
   ImagePlus,
-  Mic,
   X,
   MapPin,
   Phone,
@@ -92,8 +91,11 @@ export default function FarmerThreadPage() {
   const [error, setError] = useState("");
   // Voice: pressing the mic mounts the recorder pill, which owns the microphone, the wave, the
   // timer and the clip preview. The screen only decides when it lives and where the clip goes.
-  const [voiceOpen, setVoiceOpen] = useState(false);
+  // The bar takes the composer over while a note is being recorded; the field steps aside.
+  const [voiceActive, setVoiceActive] = useState(false);
   const [mediaBusy, setMediaBusy] = useState(false);
+  // The ref is what actually stops a second send: the state is still false in the same task.
+  const mediaBusyRef = useRef(false);
   const imageInput = useRef<HTMLInputElement | null>(null);
   // A picked photo waits here, already compressed, so it can be looked at and given a caption
   // before it is sent — a picture cannot be unsent any more than a voice note can.
@@ -222,21 +224,25 @@ export default function FarmerThreadPage() {
     if (askParam) setParams({}, { replace: true });
   }
 
-  async function sendClip(clip: { blob: Blob; mimeType: string; durationMs: number }) {
-    if (mediaBusy) return;
+  /** Resolves true when the note is on the server — the recorder keeps an unsent clip only then. */
+  async function sendClip(clip: { blob: Blob; mimeType: string; durationMs: number }): Promise<boolean> {
+    if (mediaBusyRef.current) return false;
+    mediaBusyRef.current = true;
     setMediaBusy(true);
     setError("");
     try {
       await sendVoice(farmerId, clip.blob, clip.mimeType, clip.durationMs);
-      setVoiceOpen(false);
       atBottomRef.current = true;
       await loadThread(farmerId, { markRead: false });
+      return true;
     } catch (cause) {
       // The reason the server gave, when it gave one: "try again" on its own is what made this
       // failure unanswerable from the screen.
       const detail = cause instanceof Error ? cause.message : "";
       setError(detail && !/^HTTP \d+$/.test(detail) ? detail : t("messages.actionFailed"));
+      return false;
     } finally {
+      mediaBusyRef.current = false;
       setMediaBusy(false);
     }
   }
@@ -656,86 +662,83 @@ export default function FarmerThreadPage() {
             {error}
           </p>
         )}
-        {voiceOpen ? (
-          <VoiceRecorder
-            busy={mediaBusy}
-            onSend={sendClip}
-            onClose={() => setVoiceOpen(false)}
-            onError={setError}
-          />
-) : (
-        <div className="flex items-center gap-2">
-          <input
-            ref={imageInput}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={(event) => void pickImage(event)}
-            data-testid="farmer-image-input"
-          />
-          <button
-            type="button"
-            onClick={() => imageInput.current?.click()}
-            disabled={mediaBusy}
-            aria-label={t("messages.photoSend")}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
-            style={{ background: "var(--tone-card)", color: "var(--text-secondary)" }}
-            data-testid="farmer-image"
-          >
-            <ImagePlus size={18} strokeWidth={1.8} />
-          </button>
-          <textarea
-            value={draft}
-            rows={1}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              // Grow with the text up to five lines, then scroll inside the field.
-              const field = e.currentTarget;
-              field.style.height = "auto";
-              field.style.height = `${Math.min(field.scrollHeight, 120)}px`;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void submitMessage();
-                e.currentTarget.style.height = "auto";
-              }
-            }}
-            placeholder={t("messages.chatPlaceholder")}
-            aria-label={t("messages.chatPlaceholder")}
-            className="flex-1 resize-none px-4 py-[11px] text-14 leading-5 outline-none"
-            style={{
-              background: "var(--field-bg)",
-              border: "1px solid var(--field-border)",
-              borderRadius: "var(--radius-field)",
-              color: "var(--text-primary)",
-              maxHeight: 120,
-            }}
-            data-testid="farmer-message-input"
-          />
-          {/* One trailing button that becomes the other action: a typed line sends, an empty field
-              records. Two buttons side by side is what made the composer look unlike a messenger. */}
-          <button
-            type="button"
-            onClick={() => (draft.trim() ? void submitMessage() : setVoiceOpen(true))}
-            disabled={draft.trim() ? busy : mediaBusy}
-            aria-label={draft.trim() ? t("messages.send") : t("messages.voiceRecord")}
-            className="flex shrink-0 items-center justify-center rounded-full disabled:opacity-40 active:scale-95"
-            style={{
-              // The mic is the biggest control in the row: holding it is the gesture, so it reads as
-              // one target, 52 and centred on the field, not a small icon beside it.
-              width: 52,
-              height: 52,
-              background: "var(--brand)",
-              color: "var(--brand-fg)",
-              transition: "transform 120ms ease, background-color 150ms ease",
-            }}
-            data-testid={draft.trim() ? "farmer-send" : "farmer-mic"}
-          >
-            {draft.trim() ? <Send size={18} strokeWidth={2} /> : <Mic size={18} strokeWidth={1.8} />}
-          </button>
+        <div className="flex items-end gap-2">
+          {!voiceActive && (
+            <>
+              <input
+                ref={imageInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(event) => void pickImage(event)}
+                data-testid="farmer-image-input"
+              />
+              <button
+                type="button"
+                onClick={() => imageInput.current?.click()}
+                disabled={mediaBusy}
+                aria-label={t("messages.photoSend")}
+                className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+                style={{ background: "var(--tone-card)", color: "var(--text-secondary)" }}
+                data-testid="farmer-image"
+              >
+                <ImagePlus size={18} strokeWidth={1.8} />
+              </button>
+            </>
+          )}
+          {!voiceActive && (
+            <textarea
+              value={draft}
+              rows={1}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                const field = e.currentTarget;
+                field.style.height = "auto";
+                field.style.height = Math.min(field.scrollHeight, 120) + "px";
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void submitMessage();
+                  e.currentTarget.style.height = "auto";
+                }
+              }}
+              placeholder={t("messages.chatPlaceholder")}
+              aria-label={t("messages.chatPlaceholder")}
+              className="flex-1 resize-none px-4 py-[11px] text-14 leading-5 outline-none"
+              style={{
+                background: "var(--field-bg)",
+                border: "1px solid var(--field-border)",
+                borderRadius: "var(--radius-field)",
+                color: "var(--text-primary)",
+                maxHeight: 120,
+              }}
+              data-testid="farmer-message-input"
+            />
+          )}
+          <div className={voiceActive ? "flex-1 min-w-0" : "shrink-0"}>
+            <VoiceRecorder
+              busy={mediaBusy}
+              onSend={sendClip}
+              onError={setError}
+              onRecordingChange={setVoiceActive}
+            />
+          </div>
+          {!voiceActive && draft.trim() && (
+            <button
+              type="button"
+              onClick={() => void submitMessage()}
+              disabled={busy}
+              aria-label={t("messages.send")}
+              className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40 active:scale-95"
+              style={{ width: 52, height: 52, background: "var(--brand)", color: "var(--brand-fg)" }}
+              data-testid="farmer-send"
+            >
+              <Send size={19} strokeWidth={2} />
+            </button>
+          )}
         </div>
-        )}
+        
         <p className="text-10 mt-1.5 text-center" style={{ color: "var(--text-tertiary)" }}>
           {farmer.app_ready ? t("messages.sendHintApp") : t("messages.sendHintWhatsapp")}
         </p>
