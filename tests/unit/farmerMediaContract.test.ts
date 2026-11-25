@@ -1,0 +1,126 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, test } from 'vitest';
+
+/**
+ * 0336's contract, asserted on the file that ships it.
+ *
+ * The accent is on the boundaries, because that is where a voice note differs from a text message:
+ * the file lives in a private bucket, a farmer has no JWT, and one shared storage policy would hand
+ * every shop's audio to every other shop. These assertions fail if that shape is edited away.
+ */
+const ROOT = join(__dirname, '..', '..');
+const sql = readFileSync(join(ROOT, 'supabase/migrations/0336_a_voice_note_is_still_a_message.sql'), 'utf8');
+const functionSource = readFileSync(join(ROOT, 'supabase/functions/farmer-media/index.ts'), 'utf8');
+const sql0337 = readFileSync(
+  join(ROOT, 'supabase/migrations/0337_the_upload_asks_the_database_which_shop.sql'),
+  'utf8',
+);
+
+describe('0336 — voice and image files', () => {
+  test('the bucket is private and bounded', () => {
+    expect(sql).toMatch(/values \(\s*'farmer-chat-media', 'farmer-chat-media', false, 10485760/);
+    expect(sql).toMatch(/on conflict \(id\) do update\s+set public = false/);
+  });
+
+  test('no storage policy is created for a client role', () => {
+    expect(sql, 'a client-side storage policy would break tenant isolation').not.toMatch(
+      /create policy[\s\S]*?on storage\.objects/i,
+    );
+  });
+
+  test('the attachment table is server-only', () => {
+    expect(sql).toContain('alter table public.farmer_message_attachments enable row level security');
+    expect(sql).toContain(
+      'revoke all on table public.farmer_message_attachments from public, anon, authenticated;',
+    );
+  });
+
+  test('each sender is granted to exactly one role', () => {
+    expect(sql).toContain(
+      'grant execute on function public.farmer_api_send_attachment(text, text, text, text, integer, integer, text, uuid)\n  to anon;',
+    );
+    expect(sql).toMatch(
+      /grant execute on function public\.send_farmer_attachment\(uuid, text, text, text, integer, integer, text\)\s+to authenticated;/,
+    );
+    expect(sql).toMatch(
+      /revoke all on function public\.farmer_api_send_attachment\([^)]*\)\s+from public, authenticated;/,
+    );
+    expect(sql).toMatch(
+      /revoke all on function public\.send_farmer_attachment\([^)]*\)\s+from public, anon;/,
+    );
+  });
+
+  test('the service-role lookup is the only way the function reads a file', () => {
+    expect(sql).toMatch(
+      /revoke all on function public\.farmer_media_attachment\(uuid, text, uuid\) from public, anon, authenticated;/,
+    );
+    expect(sql).toMatch(
+      /grant execute on function public\.farmer_media_attachment\(uuid, text, uuid\) to service_role;/,
+    );
+    expect(sql).toMatch(/grant execute on function public\.farmer_media_identity\(text\) to service_role;/);
+    expect(functionSource).toContain('farmer_media_attachment');
+  });
+
+  test('a send refuses a path outside the conversation', () => {
+    // Both senders compare the derived prefix; the comparison must be positional, not a substring.
+    expect(sql.match(/position\([^)]*in p_storage_path\) <> 1/g)?.length).toBe(2);
+  });
+
+  test('voice needs a duration and an image must not have one', () => {
+    expect(sql).toContain("check (kind <> 'voice' or duration_ms is not null)");
+    expect(sql).toContain("check (kind <> 'image' or duration_ms is null)");
+    expect(functionSource).toMatch(/duration_ms between 1 and 600000/);
+  });
+
+  test('the body may be empty but is still capped at 2000 characters', () => {
+    expect(sql).toContain('drop constraint if exists farmer_messages_body_check');
+    expect(sql).toMatch(/add constraint farmer_messages_body_check\s+check \(length\(btrim\(body\)\) <= 2000\);/);
+  });
+
+  test('the readers answer metadata, never a URL', () => {
+    for (const fn of ['farmer_api_media', 'get_farmer_media']) {
+      const body = sql.split(`function public.${fn}`)[1] ?? '';
+      expect(body, `${fn} must not invent a URL`).not.toContain("'url'");
+      expect(body).toContain("'duration_ms'");
+      expect(body).toContain("'sender'");
+    }
+  });
+
+  test('the upload target is decided in SQL, and is server-only', () => {
+    // Found live on staging: the service role has no SELECT on the link table by design, so the
+    // function's own query failed closed and refused a linked farmer. The rule belongs in SQL.
+    expect(sql0337).toContain('create or replace function public.farmer_media_upload_target');
+    expect(sql0337).toMatch(/revoke all on function public\.farmer_media_upload_target\(uuid, uuid\)\s+from public, anon, authenticated;/);
+    expect(sql0337).toMatch(/grant execute on function public\.farmer_media_upload_target\(uuid, uuid\) to service_role;/);
+    expect(sql0337).toContain('marketplace_farmer_links');
+    expect(sql0337).toContain("mb.status = 'active'");
+    expect(functionSource, 'the function must not read the closed table itself').not.toContain(
+      'marketplace_farmer_links',
+    );
+    expect(functionSource).toContain('farmer_media_upload_target');
+  });
+
+  test('a dealer with two shops is judged by the message\'s own shop', () => {
+    expect(sql0337).toMatch(/mb\.tenant_id = m\.shop_id/);
+    // The prose in 0337 explains the old call; the function body must no longer make it.
+    expect(sql0337).not.toMatch(/=\s*public\.resolve_active_shop\(/);
+  });
+
+  test('a transient auth failure is never reported as a bad credential', () => {
+    // Measured on staging: the same JWT answered 200 at /auth/v1/user at the moment the function
+    // answered 401, and every retry a second later succeeded. Only an explicit rejection of the
+    // token (400/401/403 from the auth API) may become 401; rate limits, 5xx and transport errors
+    // are 503 AUTH_UNAVAILABLE so the client retries instead of refreshing a session that is fine.
+    expect(functionSource).toContain('AUTH_UNAVAILABLE');
+    expect(functionSource).toMatch(/status === 400 \|\| status === 401 \|\| status === 403/);
+    expect(functionSource).toMatch(/status: 503/);
+    expect(functionSource).toContain('Retry-After');
+  });
+
+  test('the function mints a short-lived link and verifies a JWT properly', () => {
+    expect(functionSource).toContain('createSignedUrl');
+    expect(functionSource).toContain('SIGNED_URL_SECONDS = 60');
+    expect(functionSource, 'a decoded-but-unverified JWT is not an identity').toContain('auth.getUser(jwt)');
+  });
+});

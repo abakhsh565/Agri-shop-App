@@ -73,15 +73,25 @@ export default function BranchEditor({ branch }: { branch: BranchSummary }) {
     try {
       // Through `set_place` rather than a direct UPDATE: that is the one writer that knows a
       // location must be a point inside Pakistan, and it takes a pin back off too.
-      const { error: placeError } = await supabase.rpc("set_place", {
-        p_table: "branches",
-        p_id: branch.id,
+      // TWO ROWS, ON PURPOSE. The `branches` row is where this branch's stock movements and
+      // receipts are stamped; the `shops` row (the tenant) is the place a FARMER measures against,
+      // because the marketplace contract reads `shops.latitude/longitude` (0184/0185). Writing
+      // only the branches row is why a branch could show a saved pin here and still be told
+      // "this branch has no location yet", and why a dealer's pin never reached the farmer app.
+      const placeArgs = {
         p_latitude: next?.lat ?? null,
         p_longitude: next?.lng ?? null,
         p_label: next?.label ?? null,
         p_address: next?.address ?? null,
         p_source: next?.source ?? null,
+      };
+      const { error: placeError } = await supabase.rpc("set_place", {
+        p_table: "shops",
+        p_id: branch.tenantId ?? branch.id,
+        ...placeArgs,
       });
+      // The branch row follows its own place; a failure here leaves the farmer-facing pin written.
+      await supabase.rpc("set_place", { p_table: "branches", p_id: branch.id, ...placeArgs });
       if (placeError) {
         setLocationError(t("branches.locationFailed"));
         return false;
@@ -195,9 +205,12 @@ export default function BranchEditor({ branch }: { branch: BranchSummary }) {
 
       {/* The decision and the state it is in, as one row: the name says what it is, the second
           line says whether it is on, the box is the control. */}
+      {/* Name and state on the leading side, the switch on the trailing side — the shape every
+          other on/off row in this app already uses. A checkbox read as a form to submit; a switch
+          says the change happens now, which is what this row does. */}
       <button
         type="button"
-        role="checkbox"
+        role="switch"
         aria-checked={marketplaceOn}
         aria-label={t("marketplace.branchToggle")}
         disabled={busy}
@@ -208,11 +221,27 @@ export default function BranchEditor({ branch }: { branch: BranchSummary }) {
       >
         <span className="min-w-0 flex-1">
           <span className="text-15 font-semibold block">{t("marketplace.branchTitle")}</span>
-          <span className="text-13 block mt-1" style={{ color: "var(--text-secondary)" }}>
-            {marketplaceOn ? t("marketplace.branchToggleNotice") : t("marketplace.branchToggleOffNotice")}
+          <span className="text-12 block mt-1" style={{ color: "var(--text-secondary)" }}>
+            {marketplaceOn
+              ? t("marketplace.branchToggleNotice")
+              : hasPin
+                ? t("marketplace.branchToggleHint")
+                : t("marketplace.branchNoLocation")}
           </span>
         </span>
-        <Checkbox checked={marketplaceOn} size={22} />
+        <span
+          className="relative w-12 h-6 rounded-full transition-all duration-300 shrink-0"
+          style={{ background: marketplaceOn ? "var(--brand)" : "var(--muted)" }}
+          aria-hidden="true"
+        >
+          <span
+            className="absolute top-1 w-4 h-4 rounded-full transition-all duration-300"
+            style={{
+              insetInlineStart: marketplaceOn ? "calc(100% - 20px)" : "4px",
+              background: marketplaceOn ? "#0a0a0a" : "var(--text-secondary)",
+            }}
+          />
+        </span>
       </button>
 
       {marketError && (

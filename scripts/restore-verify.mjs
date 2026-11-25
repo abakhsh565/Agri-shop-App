@@ -455,11 +455,27 @@ async function main() {
       else replayFailures.push(record);
     }
   }
+  // The file defers `functions-pre-tables` failures to a later pass and the comment above says the
+  // same definitions must succeed there. Nothing used to check that promise: a deferred statement
+  // that failed in *every* pass left the function absent while the replay still reported zero
+  // failures, and the loss only appeared at the very end as one `missing:` line with no reason
+  // attached. Re-running every deferred statement now, with the schema complete, either proves the
+  // promise or names the statement and Postgres's own explanation for it.
+  const deferredFailures = [];
+  for (const record of expectedFailures) {
+    try {
+      await db.exec(statements[record.index].text);
+    } catch (error) {
+      deferredFailures.push({ ...record, error: error.message });
+    }
+  }
   const replayMs = Date.now() - startedReplay;
   report.checks.replay = {
     statements: statements.length,
     failures: replayFailures.length,
     expectedFailures: expectedFailures.length,
+    deferredFailures: deferredFailures.length,
+    deferredFailureDetails: deferredFailures,
     durationMs: replayMs,
     authShimTables: shim.length,
     pgcrypto,
@@ -477,6 +493,13 @@ async function main() {
     console.log(`  Expected (functions-pre-tables, re-applied later): ${expectedFailures.length}`);
     for (const f of expectedFailures.slice(0, 6)) {
       console.log(`    · [${f.index}] ${f.statement.slice(0, 96)}`);
+      console.log(`        ${f.error.split('\n')[0]}`);
+    }
+  }
+  if (deferredFailures.length) {
+    console.log(`  Deferred statements that still fail with the schema complete: ${deferredFailures.length}  ✗`);
+    for (const f of deferredFailures.slice(0, 10)) {
+      console.log(`    ✗ [${f.index}] ${f.statement.slice(0, 100)}`);
       console.log(`        ${f.error.split('\n')[0]}`);
     }
   }
@@ -785,7 +808,7 @@ async function main() {
   // ── 8. Verdict ──────────────────────────────────────────────────────────────────────────
   const verdict = {
     integrity: report.checks.integrity.sha256Matches && report.checks.integrity.bytesMatch,
-    replay: replayFailures.length === 0,
+    replay: replayFailures.length === 0 && deferredFailures.length === 0,
     counts: countDiffs.lost.length === 0,
     structure: structureProblems === 0,
     digests: digestResults.mismatched.length === 0,

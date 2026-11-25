@@ -131,6 +131,8 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
           VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
           VITE_APP_ENV: staging
+          VITE_OTA_CHANNEL: staging
+          VITE_OTA_MANIFEST_URL: ${{ secrets.QA_SUPABASE_URL }}/functions/v1/ota-manifest
           VITE_OTP_DELIVERY: demo
 
       - name: Upload Playwright Report
@@ -242,6 +244,8 @@ jobs:
           # explicit VITE_APP_ENV, and src/lib/envGuard.ts refuses to start without it, so a
           # missing block here is not a warning — it is a build that cannot produce an app.
           VITE_APP_ENV: staging
+          VITE_OTA_CHANNEL: staging
+          VITE_OTA_MANIFEST_URL: ${{ secrets.QA_SUPABASE_URL }}/functions/v1/ota-manifest
           VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.QA_SUPABASE_ANON_KEY }}
           VITE_SUPABASE_PROJECT_ID: bpybjrjenwccowvtrevu
@@ -251,6 +255,12 @@ jobs:
         run: |
           rm -rf android/
           npx cap add android
+
+      # The shell version comes from package.json: `nativeVersion` is the APK's versionCode, the number
+      # OTA's `native_min` compares against, and `version` is what the phone shows. `android/` is
+      # regenerated on every run, so these numbers cannot live in the repository's gradle file.
+      - name: Stamp the shell version from package.json
+        run: node scripts/ota/stamp-native-version.mjs
 
       # `android/` is regenerated on every run and the whole folder is gitignored, so the Firebase
       # Android config cannot be committed — it is written from a repository secret here. The file

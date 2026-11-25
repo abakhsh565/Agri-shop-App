@@ -8,6 +8,7 @@ import { readEnvironmentInput, resolveEnvironment } from './src/lib/environmentC
 import { localStackUnreachableReason } from './src/lib/localStackHealth'
 
 import siteConfiguration from './.figma/make/site.json'
+import appPackage from './package.json'
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode, isPreview }) => {
@@ -43,7 +44,12 @@ export default defineConfig(({ mode, isPreview }) => {
     base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
     // Consumed by src/lib/errorReporting.ts. A literal in the source would be a build that lies
     // about which commit it is; this is the only definition.
-    define: { __APP_RELEASE__: JSON.stringify(releaseId) },
+    define: {
+      __APP_RELEASE__: JSON.stringify(releaseId),
+      // The bundle's own version, stamped at build time. The OTA publisher records the same number
+      // from package.json, so "what is installed" and "what was published" cannot drift.
+      __APP_VERSION__: JSON.stringify(appPackage.version),
+    },
     build: {
       sourcemap: uploadSourcemaps ? 'hidden' : emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,

@@ -1,0 +1,122 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-11-24T11:18:14.017Z",
+  "baseline": {
+    "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-23T22-55-54.sql",
+    "environment": "production",
+    "artifactSha256": "6cab2da58fcd4326f951e4c9cea5e32fdd9be683d88365348e9e7c7893c29f25",
+    "sha256Verified": true,
+    "capturedAt": "2026-11-23T22:55:54Z",
+    "statements": 1829,
+    "dataStatements": 142,
+    "dataStatementsSkipped": 140,
+    "referenceData": [
+      {
+        "table": "public.permissions",
+        "rows": 33
+      },
+      {
+        "table": "storage.buckets",
+        "rows": 7
+      }
+    ],
+    "loadFailures": [],
+    "skippedStatements": [
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA auth"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA public"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA storage"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" WITH SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('r"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('req"
+      },
+      {
+        "reason": "scaffold-publication",
+        "statement": "CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate')"
+      }
+    ]
+  },
+  "selection": {
+    "since": null,
+    "upto": null,
+    "files": "supabase/migrations/0335_a_farmer_can_see_the_shops_and_what_they_sell.sql",
+    "resolved": [
+      "0335_a_farmer_can_see_the_shops_and_what_they_sell.sql"
+    ]
+  },
+  "files": [
+    {
+      "filename": "0335_a_farmer_can_see_the_shops_and_what_they_sell.sql",
+      "version": "0335",
+      "statements": 10,
+      "sha256": "df60563eef41876fba0c4508624666b61f036b0a977d3ed6cfc0ef23362726b5",
+      "failures": [],
+      "skipped": []
+    }
+  ],
+  "summary": {
+    "status": "PASS",
+    "files": 1,
+    "statements": 10,
+    "failedStatements": 0,
+    "envGapFailures": 0,
+    "sqlFailures": 0,
+    "expectedPhaseFailures": 0,
+    "baselineLoadFailures": 0,
+    "baselineSqlFailures": 0,
+    "baselineEnvGapFailures": 0,
+    "baselineExpectedPhaseFailures": 0,
+    "baselineSkippedStatements": 14,
+    "baselineSkippedByReason": {
+      "scaffold-schema": 3,
+      "extension-unavailable": 6,
+      "scaffold-function": 4,
+      "scaffold-publication": 1
+    }
+  },
+  "exitCode": 0
+}

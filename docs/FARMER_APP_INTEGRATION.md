@@ -43,6 +43,45 @@ All are `POST {SUPABASE_URL}/rest/v1/rpc/{name}` with headers `apikey: <anon key
 | `farmer_api_answer_offer` | `p_token`, `p_request_id`, `p_accept`, `p_note` | Accept or decline the shop's offer. The owner is told immediately. |
 | `farmer_api_notifications` | `p_token` | The shop→farmer outbox: replies, offers, visit changes (`kind`, `title`, `body`, `payload`, `created_at`). |
 | `farmer_api_register_device` | `p_token`, `p_device_token`, `p_platform` | Registers this phone for push. `p_platform` is `android`, `ios` or `web`. |
+| `farmer_api_contact_shop` | `p_token`, `p_shop_id` | Opens the conversation with one branch the farmer discovered — **no shop code**. Needs the credential and a branch that opted into the marketplace; creates at most one link and one "Started a conversation from the marketplace." line per branch, and answers `is_new_link: false` when it already existed. The shop code stays as an optional way in, never the only one. |
+| `farmer_api_shops` | `p_token` | The dealers he can see: every shop that opted into the marketplace, plus every shop he is already linked to (`is_linked`). Public profile only — name, city, address, phone, type, logo, coordinates. No staff code, email or documents. |
+| `farmer_api_products` | `p_token`, `p_shop_id` (null = his own shop), `p_search`, `p_limit` (1–100, default 50), `p_offset` | That shop's active catalogue: `product_id`, name, category, base unit, image, `featured`, `price_from`/`price_to`, and `variants[]` with `price`, `in_stock`, `low_stock`. Answers `count` so the app can page. |
+
+### Rendering the catalogue honestly
+
+`in_stock` / `low_stock` are STATES, never quantities — the shop does not publish how many bags it
+holds, and a farmer token must not become a way to count a competitor's shelves. Show "in stock" /
+"running low" / "out", not a number.
+
+The two calls answer `count` and echo `limit`/`offset`; page with them instead of loading everything.
+`farmer_api_products` with no `p_shop_id` uses the farmer's only shop, so a one-shop app needs one
+call. A shop that is not in the marketplace and is not linked to this farmer is `NOT_FOUND` — treat
+it as "that dealer is not available", not as a crash.
+
+### One branch, one conversation
+
+`farmer_api_thread`, `farmer_api_send_message`, `farmer_api_send_attachment` and `farmer_api_media`
+all take `p_shop_id`, and they are what keeps two branches apart. Pass the branch the farmer is
+looking at, always — `farmer_shop_scope` refuses a farmer who deals with two shops and names none
+(`VALIDATION: this farmer deals with more than one shop — name the shop`) rather than guessing and
+landing a message in the wrong conversation. The dealer side is scoped the same way: his thread is
+the branch he is standing in, and the payload now says which one.
+
+### Photos: 400 KB before upload
+
+The bucket accepts up to 10 MB, but a chat photo is expected to arrive at **400 KB or less**. The
+dealer app resizes and re-encodes to that ceiling before uploading (JPEG/WebP, keeping the aspect
+ratio and as much edge resolution as fits). The farmer app should do the same before calling
+`farmer_api_send_attachment`: the server validates size, kind and duration, and will refuse an
+object outside the farmer's own `shop/farmer` folder, but it cannot shrink a file after the fact.
+
+### Voice notes: send the container, not the codec
+
+`MediaRecorder.mimeType` reports `audio/webm;codecs=opus`, and that label is **not** a container
+name. Send the bare type in `p_mime_type` (`audio/webm`, `audio/ogg`, `audio/mp4`, `audio/mpeg`) —
+the dealer app and the media function now strip a codec parameter for older builds, but the stored
+row and the bucket allowlist want the bare type. A record-then-refuse loop costs the farmer the
+clip he just spoke.
 
 Errors come back as `{ code: "P0001", message: "NOT_AUTHORIZED: …" }`. Treat `NOT_AUTHORIZED` as
 "the credential is gone — ask the shop for a new invitation", and `NOT_FOUND`/`VALIDATION` as

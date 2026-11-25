@@ -1,0 +1,208 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-11-23T22:36:28.512Z",
+  "baseline": {
+    "label": "backups/backup-production-gkswcfljxlutkfdvvqng-2026-11-23T22-03-00.sql",
+    "environment": "production",
+    "artifactSha256": "a6672096165dda2b599fcd9ef8aea878dcea18787c32ce9ad86380832d01e2ba",
+    "sha256Verified": true,
+    "capturedAt": "2026-11-23T22:03:00Z",
+    "statements": 1689,
+    "dataStatements": 128,
+    "dataStatementsSkipped": 126,
+    "referenceData": [
+      {
+        "table": "public.permissions",
+        "rows": 33
+      },
+      {
+        "table": "storage.buckets",
+        "rows": 6
+      }
+    ],
+    "loadFailures": [],
+    "skippedStatements": [
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA auth"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-schema",
+        "statement": "CREATE SCHEMA storage"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault"
+      },
+      {
+        "reason": "extension-unavailable",
+        "statement": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" WITH SCHEMA extensions"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('r"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('re"
+      },
+      {
+        "reason": "scaffold-function",
+        "statement": "CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ select coalesce( nullif(current_setting('req"
+      },
+      {
+        "reason": "scaffold-publication",
+        "statement": "CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate')"
+      }
+    ]
+  },
+  "selection": {
+    "since": null,
+    "upto": null,
+    "files": "supabase/migrations/0325_a_farmer_can_talk_to_the_shop_that_lists_for_him.sql,supabase/migrations/0326_the_guard_the_product_writer_calls_actually_exists.sql,supabase/migrations/0327_a_request_is_a_promise_three_people_keep.sql,supabase/migrations/0328_a_farmer_can_walk_in_with_the_shop_code.sql,supabase/migrations/0329_a_notification_reaches_a_pocket.sql,supabase/migrations/0330_the_farmer_door_is_not_a_shop_session.sql,supabase/migrations/0331_the_queue_leaves_the_building.sql,supabase/migrations/0332_the_dispatcher_is_declared_not_merely_revoked.sql,supabase/migrations/0333_the_sender_can_read_its_own_queue.sql,supabase/migrations/0334_the_app_updates_itself_without_the_store.sql",
+    "resolved": [
+      "0325_a_farmer_can_talk_to_the_shop_that_lists_for_him.sql",
+      "0326_the_guard_the_product_writer_calls_actually_exists.sql",
+      "0327_a_request_is_a_promise_three_people_keep.sql",
+      "0328_a_farmer_can_walk_in_with_the_shop_code.sql",
+      "0329_a_notification_reaches_a_pocket.sql",
+      "0330_the_farmer_door_is_not_a_shop_session.sql",
+      "0331_the_queue_leaves_the_building.sql",
+      "0332_the_dispatcher_is_declared_not_merely_revoked.sql",
+      "0333_the_sender_can_read_its_own_queue.sql",
+      "0334_the_app_updates_itself_without_the_store.sql"
+    ]
+  },
+  "files": [
+    {
+      "filename": "0325_a_farmer_can_talk_to_the_shop_that_lists_for_him.sql",
+      "version": "0325",
+      "statements": 80,
+      "sha256": "90ba9ad4bfe872a24b69d3366702c1e62f526d638da4a74758ae1ee6f8afa118",
+      "failures": [],
+      "skipped": []
+    },
+    {
+      "filename": "0326_the_guard_the_product_writer_calls_actually_exists.sql",
+      "version": "0326",
+      "statements": 6,
+      "sha256": "72e1ba4e5d21f7b74f40c635e44a48171413771d11ec586e034f540318712032",
+      "failures": [],
+      "skipped": []
+    },
+    {
+      "filename": "0327_a_request_is_a_promise_three_people_keep.sql",
+      "version": "0327",
+      "statements": 26,
+      "sha256": "db43f533771074d749db96473b2b431c8d0310faae2212d130f020b25c954603",
+      "failures": [],
+      "skipped": []
+    },
+    {
+      "filename": "0328_a_farmer_can_walk_in_with_the_shop_code.sql",
+      "version": "0328",
+      "statements": 13,
+      "sha256": "6b1c4842b3d7ee0c292a961d967fd2e8e6536152caf0bb7e1c248898a17a8e1a",
+      "failures": [],
+      "skipped": []
+    },
+    {
+      "filename": "0329_a_notification_reaches_a_pocket.sql",
+      "version": "0329",
+      "statements": 36,
+      "sha256": "00beda7efccf709c16df7f9e2785c7ae29594d9e698735595a3dfe343979a3a7",
+      "failures": [],
+      "skipped": []
+    },
+    {
+      "filename": "0330_the_farmer_door_is_not_a_shop_session.sql",
+      "version": "0330",
+      "statements": 1,
+      "sha256": "0aa8b685864230855a54954e5ac81bcd196ab31d6a02260befc30ea16092b300",
+      "failures": [],
+      "skipped": []
+    },
+    {
+      "filename": "0331_the_queue_leaves_the_building.sql",
+      "version": "0331",
+      "statements": 11,
+      "sha256": "7801d1161d1dc190467f8498bb04d683e48a03c3e06b419ed8e2b17e34c45ef5",
+      "failures": [],
+      "skipped": [
+        {
+          "reason": "extension-unavailable",
+          "statement": "create extension if not exists pg_cron"
+        },
+        {
+          "reason": "extension-unavailable",
+          "statement": "create extension if not exists pg_net"
+        },
+        {
+          "reason": "extension-unavailable",
+          "statement": "create extension if not exists supabase_vault"
+        }
+      ]
+    },
+    {
+      "filename": "0332_the_dispatcher_is_declared_not_merely_revoked.sql",
+      "version": "0332",
+      "statements": 4,
+      "sha256": "18e34c1ac7f6ba2f78a3caea886fbdd8f49f5be8ce6f6fcb326a5886c0bd7cee",
+      "failures": [],
+      "skipped": []
+    },
+    {
+      "filename": "0333_the_sender_can_read_its_own_queue.sql",
+      "version": "0333",
+      "statements": 3,
+      "sha256": "54137f733cc82b7c727c7e30bfb753d8bd423a2560604d9b36cfd849e42c662d",
+      "failures": [],
+      "skipped": []
+    },
+    {
+      "filename": "0334_the_app_updates_itself_without_the_store.sql",
+      "version": "0334",
+      "statements": 15,
+      "sha256": "153c0192d38535396584ae2f4df0052d23abaa4163edee2f4c45b9183cd17594",
+      "failures": [],
+      "skipped": []
+    }
+  ],
+  "summary": {
+    "status": "PASS",
+    "files": 10,
+    "statements": 195,
+    "failedStatements": 0,
+    "envGapFailures": 0,
+    "sqlFailures": 0,
+    "expectedPhaseFailures": 0,
+    "baselineLoadFailures": 0,
+    "baselineSqlFailures": 0,
+    "baselineEnvGapFailures": 0,
+    "baselineExpectedPhaseFailures": 0,
+    "baselineSkippedStatements": 12,
+    "baselineSkippedByReason": {
+      "scaffold-schema": 3,
+      "extension-unavailable": 4,
+      "scaffold-function": 4,
+      "scaffold-publication": 1
+    }
+  },
+  "exitCode": 0
+}

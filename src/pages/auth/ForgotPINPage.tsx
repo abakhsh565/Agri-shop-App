@@ -32,7 +32,16 @@ export default function ForgotPINPage() {
   const { setUser, setPendingPhone, setPendingFlow, pendingPhone } = useAuthStore();
 
   // User passed from PINLoginPage (skip phone entry)
-  const routeUser = (location.state as { user?: User } | null)?.user;
+  const routeState = location.state as { user?: User; returnTo?: string } | null;
+  const routeUser = routeState?.user;
+  /**
+   * Where to go once the new PIN is set. Changing a PIN from Settings is the same proof as a
+   * reset, but it was reached from inside the app — so it returns there instead of dropping the
+   * owner on the workspace home, and its arrow leads back where it came from too.
+   */
+  const returnTo = typeof routeState?.returnTo === "string" && routeState.returnTo.startsWith("/")
+    ? routeState.returnTo
+    : null;
 
   const [step, setStep] = useState<Step>(routeUser ? "otp" : "phone");
   const [phone, setPhone] = useState(routeUser?.phone || pendingPhone || "");
@@ -145,7 +154,7 @@ export default function ForgotPINPage() {
         }
       }
       setPendingFlow(null);
-      const dest = activeUser ? homePathForUser(activeUser) : "/login";
+      const dest = returnTo ?? (activeUser ? homePathForUser(activeUser) : "/login");
       navigate(dest, { replace: true });
     }
   }
@@ -160,7 +169,7 @@ export default function ForgotPINPage() {
 
   return (
     <AuthLayout>
-      <NavHeader title={t("auth.resetPin")} backTo="/login" />
+      <NavHeader title={t("auth.resetPin")} backTo={returnTo ?? "/login"} />
       {/* `.ds-auth-screen` sizes the code row and the keypad from the height the screen has
           (see the stylesheet), so all four steps of this flow fit one screen. */}
       <div

@@ -269,9 +269,58 @@ if (!storageSchemaInBaseline) {
   );
 }
 await db.exec(`create schema if not exists cron`);
-await db.exec(`create or replace function cron.schedule(job_name text, schedule text, command text) returns bigint language sql as $$ select 1::bigint $$`);
-await db.exec(`create or replace function cron.schedule(schedule text, command text) returns bigint language sql as $$ select 1::bigint $$`);
-await db.exec(`create or replace function cron.unschedule(job_name text) returns boolean language sql as $$ select true $$`);
+// pg_cron owns two sequences that the pg_dump restores with `setval` even though the rows are
+// skipped. Without them the baseline load reports "relation cron.jobid_seq does not exist" as an
+// env-gap, and an env-gap makes every verdict UNVERIFIABLE instead of PASS (measured 2026-11-24
+// against the post-0334 capture). They are scaffold, not truth: nothing in the selection reads
+// them, so creating them lets the dump's own bookkeeping statements load and be checked.
+await db.exec(`create sequence if not exists cron.jobid_seq`);
+await db.exec(`create sequence if not exists cron.runid_seq`);
+// PGlite cannot host pg_cron, so `cron.job` and the two scheduling calls are scaffolded here — with
+// real behaviour, not constants. A migration that registers a job is then exercised end to end:
+// `cron.schedule` writes a row, `cron.unschedule` removes it, and the migration's own proof reads
+// the row back. A stub returning `1::bigint` would let that proof pass while proving nothing,
+// which is the failure mode this whole tool exists to avoid.
+await db.exec(`create table if not exists cron.job (
+  jobid bigserial primary key,
+  jobname text unique,
+  schedule text,
+  command text,
+  nodename text default 'localhost',
+  nodeport integer default 5432,
+  database text default 'postgres',
+  username text default 'postgres',
+  active boolean default true)`);
+await db.exec(`create or replace function cron.schedule(job_name text, schedule text, command text)
+  returns bigint language plpgsql as $$
+  declare v_id bigint;
+  begin
+    insert into cron.job (jobname, schedule, command) values (job_name, schedule, command)
+    on conflict (jobname) do update set schedule = excluded.schedule, command = excluded.command, active = true
+    returning jobid into v_id;
+    return v_id;
+  end $$`);
+await db.exec(`create or replace function cron.schedule(schedule text, command text)
+  returns bigint language plpgsql as $$
+  declare v_id bigint;
+  begin
+    insert into cron.job (jobname, schedule, command)
+    values ('job-' || (select coalesce(max(jobid), 0) + 1 from cron.job)::text, schedule, command)
+    returning jobid into v_id;
+    return v_id;
+  end $$`);
+// `unschedule` deactivates instead of removing the row. Two reasons, and the second is the real
+// one: it is the same thing pg_cron lets a re-run observe (the job stops firing), and a DELETE in
+// this script would make it a script that can delete rows — `productionDataPolicy` rule 1 requires
+// such a script to refuse every target it was not meant for, and a verifier that only ever talks to
+// an in-process PGlite should not have to pretend it needs a QA guard. `cron.schedule` reactivates
+// the same row, so a re-run replaces the job rather than adding a second one.
+await db.exec(`create or replace function cron.unschedule(job_name text)
+  returns boolean language plpgsql as $$
+  begin
+    update cron.job set active = false where jobname = job_name and active;
+    return found;
+  end $$`);
 try {
   await db.exec(`create publication supabase_realtime`);
 } catch {
@@ -438,7 +487,26 @@ const fileResults = [];
 for (const file of selected) {
   const statements = splitStatements(file.body);
   const failures = [];
+  const skipped = [];
   for (const statement of statements) {
+    // The baseline loader already treats an extension this harness cannot host as a recorded skip
+    // rather than a failure; a forward file's `create extension pg_cron` deserves the same reading,
+    // because the failure says something about PGlite, not about the migration. The statements that
+    // USE the extension still execute — `pg_cron`'s schema and `cron.job` are scaffolded above — so
+    // what is skipped is the plumbing line alone, and it is printed and stored in the report.
+    if (isExtensionStatement(statement)) {
+      try {
+        await db.exec(statement);
+      } catch (error) {
+        const message = firstLine(error);
+        if (/extension "[^"]+" is not available/i.test(message)) {
+          skipped.push({ reason: 'extension-unavailable', statement: collapse(statement) });
+        } else {
+          failures.push({ class: classifyBaselineFailure(message), message, statement: collapse(statement) });
+        }
+      }
+      continue;
+    }
     try {
       await db.exec(statement);
     } catch (error) {
@@ -457,6 +525,7 @@ for (const file of selected) {
     statements: statements.length,
     sha256: file.sha256 ?? sha256(file.body),
     failures,
+    skipped,
   });
   const mark = failures.some((f) => f.class === 'sql') ? '✗' : failures.length ? '~' : '✓';
   console.log(`${mark} ${file.filename}: ${statements.length} statements, ${failures.length} failures`);

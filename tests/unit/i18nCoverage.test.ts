@@ -138,7 +138,10 @@ describe("i18n coverage", () => {
 
   it("has no hardcoded JSX text nodes", () => {
     const found: string[] = [];
-    for (const file of shipped) {
+    // JSX only exists in .tsx. A .ts module has no text nodes, and its comparisons
+    // (`file.size <= hardMax && …`) read as `>text<` to this regex — that is how
+    // imageCompression.ts was reported for a sentence nobody wrote.
+    for (const file of shipped.filter((f) => f.endsWith(".tsx"))) {
       const text = fs.readFileSync(file, "utf8");
       for (const m of text.matchAll(TEXT_NODE)) {
         const before = text.slice(0, m.index ?? 0);
@@ -188,6 +191,8 @@ describe("i18n coverage", () => {
   });
 
   it("no new untranslated JSX literals (AST ratchet)", () => {
+    // Parsing every shipped file with the TypeScript compiler takes ~37 s on this machine; the
+    // 30 s default made the lane fail for being slow, not for finding anything.
     const KEY_TOKENS = new Set(["Enter", "Escape", "Backspace", "Tab", "Shift", "Delete", "Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
 
     const looksLikeUiText = (s: string) => {
@@ -260,7 +265,8 @@ describe("i18n coverage", () => {
       `Untranslated JSX literals (${found.length}, baseline ${JSX_LITERAL_BASELINE}) — ` +
         `route new strings through t() with EN + UR keys:\n${found.join("\n")}`,
     ).toBeLessThanOrEqual(JSX_LITERAL_BASELINE);
-  });
+    // Parsing every .tsx with the compiler is the slow part of this lane (~37 s here).
+  }, 120_000);
 
   it("has no hardcoded prose inside a template literal", () => {
     // WHY THIS CASE EXISTS. Product delete confirmed with

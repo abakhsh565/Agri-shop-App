@@ -9,7 +9,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { hasPermission } from "@/lib/tenantContext";
-import { useEmployeesStore } from "@/stores/employeesStore";
+import { staffInBranch, useEmployeesStore } from "@/stores/employeesStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopStore } from "@/stores/shopStore";
 import { useThemeStore } from "@/stores/themeStore";
@@ -36,6 +36,7 @@ export default function AdminEmployeesDirectoryPage() {
   const navigate = useNavigate();
 
   const employees = useEmployeesStore((s) => s.employees);
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
   const ready = useEmployeesStore((s) => s.ready);
   const load = useEmployeesStore((s) => s.load);
   const currentUserId = useAuthStore((s) => s.user?.id);
@@ -97,7 +98,9 @@ export default function AdminEmployeesDirectoryPage() {
     };
   }
 
-  const visible = employees.filter((employee) => {
+  // The directory is the branch you are working in. The same person can be staff in two
+  // branches, and each branch opens its own roster rather than the business's whole list.
+  const visible = staffInBranch(employees, activeBranchId).filter((employee) => {
     // The signed-in account and the original owner are not employees in this directory.
     if (employee.id === currentUserId || employee.isOriginalOwner) return false;
     if (filter !== "all" && statusOf(employee) !== filter) return false;

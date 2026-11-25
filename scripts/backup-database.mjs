@@ -285,6 +285,26 @@ async function main() {
     push(`do $$ begin create type public.${ident(e.typname)} as enum (${labels});`);
     push(`exception when duplicate_object then null; end $$;`);
   }
+
+  // Composite types (`create type x as (...)`) are not tables, so the Tables pass never sees them —
+  // and a function whose signature says `returns invoice_amounts` is unparseable until the type
+  // exists, in *every* pass. That is what turned one production function into a nightly failure
+  // with no attribution: the artifact never carried the type, so no function pass could create the
+  // function, and the only symptom was a single `missing:` line at the very end of the report.
+  // Dumped from the catalogue like everything else (attributes and their types, in order).
+  const composites = await client.query(`
+    select t.typname,
+           string_agg(a.attname || ' ' || format_type(a.atttypid, a.atttypmod), ', ' order by a.attnum) attrs
+    from pg_type t
+    join pg_class c on c.oid = t.typrelid
+    join pg_namespace n on n.oid = t.typnamespace
+    join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+    where n.nspname = 'public' and t.typtype = 'c' and c.relkind = 'c'
+    group by t.typname order by t.typname`);
+  for (const c of composites.rows) {
+    push(`do $$ begin create type public.${ident(c.typname)} as (${c.attrs});`);
+    push(`exception when duplicate_object then null; end $$;`);
+  }
   push('');
 
   // ── 4a. Functions, EARLY: a column DEFAULT may call one ───────────────────────────────────
@@ -540,6 +560,7 @@ async function main() {
   manifest.structure.policies = policies.rows.length;
   manifest.structure.tables = tables.rows.length;
   manifest.structure.enums = enums.rows.length;
+  manifest.structure.compositeTypes = composites.rows.length;
 
   await client.end();
 

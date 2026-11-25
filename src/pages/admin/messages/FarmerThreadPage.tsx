@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  ArrowDown,
   ArrowLeft,
   CalendarClock,
   Check,
   CheckCheck,
   ChevronRight,
   Clock,
+  ImagePlus,
+  X,
   MapPin,
   Phone,
   Send,
@@ -26,6 +29,9 @@ import { useChatViewport } from "@/hooks/useChatViewport";
 import { useShellBase } from "@/lib/useShellBase";
 import { formatCurrency, formatDate, formatDateTime, formatTime } from "@/lib/formatters";
 import { whatsappShareUrl } from "@/lib/appInvite";
+import { PhotoMessage, VoiceNote } from "@/components/chat/MessageMedia";
+import { prepareChatImage } from "@/lib/chatMedia";
+import { VoiceRecorder } from "@/components/chat/VoiceRecorder";
 import {
   useFarmerMessagesStore,
   type AssignableOfficer,
@@ -71,6 +77,9 @@ export default function FarmerThreadPage() {
   const loading = useFarmerMessagesStore((s) => s.threadLoading);
   const loadThread = useFarmerMessagesStore((s) => s.loadThread);
   const send = useFarmerMessagesStore((s) => s.send);
+  const media = useFarmerMessagesStore((s) => s.media);
+  const sendVoice = useFarmerMessagesStore((s) => s.sendVoice);
+  const sendImage = useFarmerMessagesStore((s) => s.sendImage);
   const reviseOffer = useFarmerMessagesStore((s) => s.reviseOffer);
   const closeRequest = useFarmerMessagesStore((s) => s.closeRequest);
   const scheduleVisit = useFarmerMessagesStore((s) => s.scheduleVisit);
@@ -80,6 +89,18 @@ export default function FarmerThreadPage() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Voice: pressing the mic mounts the recorder pill, which owns the microphone, the wave, the
+  // timer and the clip preview. The screen only decides when it lives and where the clip goes.
+  // The bar takes the composer over while a note is being recorded; the field steps aside.
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  // The ref is what actually stops a second send: the state is still false in the same task.
+  const mediaBusyRef = useRef(false);
+  const imageInput = useRef<HTMLInputElement | null>(null);
+  // A picked photo waits here, already compressed, so it can be looked at and given a caption
+  // before it is sent — a picture cannot be unsent any more than a voice note can.
+  const [photoPreview, setPhotoPreview] = useState<{ file: File; url: string; bytes: number } | null>(null);
+  const [photoCaption, setPhotoCaption] = useState("");
 
   const [openAsk, setOpenAsk] = useState<AskRef | null>(null);
   const [offerTotal, setOfferTotal] = useState("");
@@ -94,6 +115,9 @@ export default function FarmerThreadPage() {
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
+  // Mirrors the ref for the one thing the DOM cannot render: the pill that appears once the reader
+  // has scrolled away from the newest message.
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
 
   // The chat owns the visible viewport: the header and the composer stay put while the transcript
   // scrolls, and the whole shell follows the keyboard instead of the document scrolling under it.
@@ -198,6 +222,76 @@ export default function FarmerThreadPage() {
     setOpenAsk(null);
     setEditingVisit(false);
     if (askParam) setParams({}, { replace: true });
+  }
+
+  /** Resolves true when the note is on the server — the recorder keeps an unsent clip only then. */
+  async function sendClip(clip: { blob: Blob; mimeType: string; durationMs: number }): Promise<boolean> {
+    if (mediaBusyRef.current) return false;
+    mediaBusyRef.current = true;
+    setMediaBusy(true);
+    setError("");
+    try {
+      await sendVoice(farmerId, clip.blob, clip.mimeType, clip.durationMs);
+      atBottomRef.current = true;
+      await loadThread(farmerId, { markRead: false });
+      return true;
+    } catch (cause) {
+      // The reason the server gave, when it gave one: "try again" on its own is what made this
+      // failure unanswerable from the screen.
+      const detail = cause instanceof Error ? cause.message : "";
+      setError(detail && !/^HTTP \d+$/.test(detail) ? detail : t("messages.actionFailed"));
+      return false;
+    } finally {
+      mediaBusyRef.current = false;
+      setMediaBusy(false);
+    }
+  }
+
+  async function pickImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setMediaBusy(true);
+    setError("");
+    try {
+      // Compressed before it is even shown: the farmer receives exactly what is previewed here,
+      // so the 400 KB ceiling belongs to the send rather than to a step someone can skip.
+      const prepared = await prepareChatImage(file);
+      if (photoPreview) URL.revokeObjectURL(photoPreview.url);
+      setPhotoCaption("");
+      setPhotoPreview({
+        file: prepared.file,
+        url: URL.createObjectURL(prepared.file),
+        bytes: prepared.bytes,
+      });
+    } catch (cause) {
+      const tooLarge = cause instanceof Error && cause.message.startsWith("VALIDATION");
+      setError(t(tooLarge ? "messages.photoTooLarge" : "messages.actionFailed"));
+    } finally {
+      setMediaBusy(false);
+    }
+  }
+
+  function discardPhoto() {
+    if (photoPreview) URL.revokeObjectURL(photoPreview.url);
+    setPhotoPreview(null);
+    setPhotoCaption("");
+  }
+
+  async function sendPhoto() {
+    if (!photoPreview || mediaBusy) return;
+    setMediaBusy(true);
+    setError("");
+    try {
+      await sendImage(farmerId, photoPreview.file, photoCaption);
+      discardPhoto();
+      atBottomRef.current = true;
+      await loadThread(farmerId, { markRead: false });
+    } catch {
+      setError(t("messages.actionFailed"));
+    } finally {
+      setMediaBusy(false);
+    }
   }
 
   async function submitMessage() {
@@ -385,7 +479,13 @@ export default function FarmerThreadPage() {
         </button>
         <button
           type="button"
-          onClick={() => navigate(`${base}/messages/${farmerId}/profile`)}
+          onClick={() =>
+            navigate(`${base}/messages/${farmerId}/profile`, {
+              // The profile's arrow comes back here, not to the list: a conversation and its
+              // contact card are one visit, and the list is behind both of them.
+              state: { from: `${base}/messages/${farmerId}` },
+            })
+          }
           aria-label={t("messages.openProfileAria", { name: farmer.name })}
           className="flex items-center gap-2.5 min-w-0 flex-1 text-start"
           data-testid="farmer-open-profile"
@@ -398,6 +498,11 @@ export default function FarmerThreadPage() {
             <span className="text-11 truncate" style={{ color: "var(--text-secondary)" }}>
               {[farmer.village, farmer.phone].filter(Boolean).join(" · ")}
             </span>
+            {current.shop?.name && (
+              <span className="text-10 truncate" style={{ color: "var(--text-tertiary)" }} data-testid="thread-branch">
+                {t("messages.branchLabel")} · {current.shop.name}
+              </span>
+            )}
           </span>
         </button>
         <button
@@ -416,11 +521,15 @@ export default function FarmerThreadPage() {
 
       {/* The conversation. The quiet dotted ground is the messenger convention; the bubbles are
           the app's own tones, so it belongs to this product rather than imitating another. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRef}
         onScroll={(e) => {
           const el = e.currentTarget;
-          atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          atBottomRef.current = atBottom;
+          setAwayFromBottom(!atBottom);
+
         }}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain flex flex-col gap-1 px-3 py-3"
         aria-live="polite"
@@ -446,7 +555,14 @@ export default function FarmerThreadPage() {
               {dayLabel(group.items[0].at, t)}
             </span>
             {group.items.map((entry) => {
-              if (entry.kind === "message") return <MessageBubble key={entry.message.id} message={entry.message} />;
+              if (entry.kind === "message")
+                return (
+                  <MessageBubble
+                    key={entry.message.id}
+                    message={entry.message}
+                    file={media[entry.message.id]}
+                  />
+                );
               if (entry.kind === "credit") {
                 return (
                   <CreditCard
@@ -466,6 +582,31 @@ export default function FarmerThreadPage() {
             })}
           </div>
         ))}
+      </div>
+
+        {/* Reading back through the history: one tap returns to the newest message. */}
+        {awayFromBottom && (
+          <button
+            type="button"
+            onClick={() => {
+              const el = scrollRef.current;
+              if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+              atBottomRef.current = true;
+              setAwayFromBottom(false);
+            }}
+            aria-label={t("messages.jumpToLatest")}
+            className="absolute bottom-3 end-4 flex size-9 items-center justify-center rounded-full shadow-md active:scale-95"
+            style={{
+              background: "var(--tone-card)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--hairline)",
+              transition: "transform 120ms ease, opacity 150ms ease",
+            }}
+            data-testid="chat-jump-latest"
+          >
+            <ArrowDown size={16} strokeWidth={2} />
+          </button>
+        )}
       </div>
 
       {/* Composer. One field, one send. The caption says where the message will go. */}
@@ -521,39 +662,83 @@ export default function FarmerThreadPage() {
             {error}
           </p>
         )}
-        <div className="flex items-center gap-2">
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void submitMessage();
-              }
-            }}
-            placeholder={t("messages.chatPlaceholder")}
-            aria-label={t("messages.chatPlaceholder")}
-            className="h-11 flex-1 px-4 text-14 outline-none"
-            style={{
-              background: "var(--field-bg)",
-              border: "1px solid var(--field-border)",
-              borderRadius: "var(--radius-field)",
-              color: "var(--text-primary)",
-            }}
-            data-testid="farmer-message-input"
-          />
-          <button
-            type="button"
-            onClick={() => void submitMessage()}
-            disabled={!draft.trim() || busy}
-            aria-label={t("messages.send")}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
-            style={{ background: "var(--brand)", color: "var(--brand-fg)" }}
-            data-testid="farmer-send"
-          >
-            <Send size={18} strokeWidth={2} />
-          </button>
+        <div className="flex items-end gap-2">
+          {!voiceActive && (
+            <>
+              <input
+                ref={imageInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(event) => void pickImage(event)}
+                data-testid="farmer-image-input"
+              />
+              <button
+                type="button"
+                onClick={() => imageInput.current?.click()}
+                disabled={mediaBusy}
+                aria-label={t("messages.photoSend")}
+                className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+                style={{ background: "var(--tone-card)", color: "var(--text-secondary)" }}
+                data-testid="farmer-image"
+              >
+                <ImagePlus size={18} strokeWidth={1.8} />
+              </button>
+            </>
+          )}
+          {!voiceActive && (
+            <textarea
+              value={draft}
+              rows={1}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                const field = e.currentTarget;
+                field.style.height = "auto";
+                field.style.height = Math.min(field.scrollHeight, 120) + "px";
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void submitMessage();
+                  e.currentTarget.style.height = "auto";
+                }
+              }}
+              placeholder={t("messages.chatPlaceholder")}
+              aria-label={t("messages.chatPlaceholder")}
+              className="flex-1 resize-none px-4 py-[11px] text-14 leading-5 outline-none"
+              style={{
+                background: "var(--field-bg)",
+                border: "1px solid var(--field-border)",
+                borderRadius: "var(--radius-field)",
+                color: "var(--text-primary)",
+                maxHeight: 120,
+              }}
+              data-testid="farmer-message-input"
+            />
+          )}
+          <div className={voiceActive ? "flex-1 min-w-0" : "shrink-0"}>
+            <VoiceRecorder
+              busy={mediaBusy}
+              onSend={sendClip}
+              onError={setError}
+              onRecordingChange={setVoiceActive}
+            />
+          </div>
+          {!voiceActive && draft.trim() && (
+            <button
+              type="button"
+              onClick={() => void submitMessage()}
+              disabled={busy}
+              aria-label={t("messages.send")}
+              className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40 active:scale-95"
+              style={{ width: 52, height: 52, background: "var(--brand)", color: "var(--brand-fg)" }}
+              data-testid="farmer-send"
+            >
+              <Send size={19} strokeWidth={2} />
+            </button>
+          )}
         </div>
+        
         <p className="text-10 mt-1.5 text-center" style={{ color: "var(--text-tertiary)" }}>
           {farmer.app_ready ? t("messages.sendHintApp") : t("messages.sendHintWhatsapp")}
         </p>
@@ -741,6 +926,38 @@ export default function FarmerThreadPage() {
           </div>
         )}
 
+        <Sheet
+          open={Boolean(photoPreview)}
+          title={t("messages.photoPreviewTitle")}
+          onClose={discardPhoto}
+        >
+          {photoPreview && (
+            <div className="px-4 pb-6 flex flex-col gap-3" data-testid="photo-preview">
+              <img
+                src={photoPreview.url}
+                alt={t("messages.photoAlt")}
+                className="w-full rounded-[var(--radius-card)] object-contain"
+                style={{ maxHeight: 280, background: "var(--tone-sunken)" }}
+              />
+              <span className="text-10 text-center" style={{ color: "var(--text-tertiary)" }}>
+                {t("messages.photoSize", { kb: Math.max(1, Math.round(photoPreview.bytes / 1024)) })}
+              </span>
+              <Input
+                label={t("messages.photoCaption")}
+                value={photoCaption}
+                onChange={(event) => setPhotoCaption(event.target.value)}
+                data-testid="photo-caption"
+              />
+              <Button fullWidth loading={mediaBusy} onClick={() => void sendPhoto()} testId="photo-preview-send">
+                {t("messages.photoSendNow")}
+              </Button>
+              <Button variant="ghost" fullWidth disabled={mediaBusy} onClick={discardPhoto}>
+                {t("common.cancel")}
+              </Button>
+            </div>
+          )}
+        </Sheet>
+
         <SelectSheet
           open={officerPickerOpen}
           title={t("messages.pickOfficer")}
@@ -760,13 +977,19 @@ export default function FarmerThreadPage() {
 }
 
 /** A message bubble. Mine on the inline-end, his on the start; ticks only where they mean something. */
-function MessageBubble({ message }: { message: FarmerMessage }) {
+function MessageBubble({
+  message,
+  file,
+}: {
+  message: FarmerMessage;
+  file?: { kind: "voice" | "image"; duration_ms: number | null };
+}) {
   const t = useT();
   const mine = message.direction === "owner";
   return (
-    <div className={`flex ${mine ? "justify-end" : "justify-start"}`} data-testid={`message-${message.id}`}>
+    <div className={`flex chat-bubble-in ${mine ? "justify-end" : "justify-start"}`} data-testid={`message-${message.id}`}>
       <div
-        className="max-w-[82%] px-3 py-2"
+        className="relative max-w-[82%] px-3 py-2"
         style={{
           background: mine ? "var(--brand-tint)" : "var(--tone-card)",
           color: "var(--text-primary)",
@@ -775,7 +998,30 @@ function MessageBubble({ message }: { message: FarmerMessage }) {
           borderStartEndRadius: mine ? 4 : 16,
         }}
       >
-        <p className="text-14 whitespace-pre-wrap break-words">{message.body}</p>
+        {/* The tail: a rotated square sitting on the sender's own corner, clipped by the row. */}
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 0,
+            insetInlineStart: mine ? undefined : -3,
+            insetInlineEnd: mine ? -3 : undefined,
+            width: 10,
+            height: 10,
+            background: mine ? "var(--brand-tint)" : "var(--tone-card)",
+            transform: "rotate(45deg)",
+            borderStartStartRadius: 2,
+            pointerEvents: "none",
+          }}
+        />
+        {file?.kind === "voice" ? (
+          <VoiceNote messageId={message.id} durationMs={file.duration_ms} mine={mine} />
+        ) : file?.kind === "image" ? (
+          <PhotoMessage messageId={message.id} mine={mine} />
+        ) : null}
+        {message.body.trim() ? (
+          <p className="text-14 whitespace-pre-wrap break-words">{message.body}</p>
+        ) : null}
         <span className="mt-1 flex items-center justify-end gap-1 text-10" style={{ color: "var(--text-tertiary)" }}>
           {mine && message.channel === "whatsapp" && <span>{t("messages.viaWhatsapp")}</span>}
           <span>{formatTime(message.created_at)}</span>
