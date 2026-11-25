@@ -126,9 +126,9 @@ jobs:
           # 206 Partial Content. Only a real 200/206 carrying bytes proves the object is served;
           # asking for a range and then demanding 200 failed every promotion that got this far.
           code=$(curl -s -o /dev/null -w "%{http_code}" -r 0-1023 "$url")
-          head=$(curl -fsSI "$url" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-length"{print $2}')
+          head=$(curl -fsSI "$url" | tr -d '' | awk -F': ' 'tolower($1)=="content-length"{print $2}')
           echo "active bundle: $url (HTTP $code, $head bytes)"
-          if [ "$code" != "200" ] && [ "$code" != "206" ]; then
+          if { [ "$code" != "200" ] && [ "$code" != "206" ]; } || [ -z "$head" ]; then
             echo "::error::the active staging bundle is not downloadable — the app would be offered a 404"
             exit 1
           fi
