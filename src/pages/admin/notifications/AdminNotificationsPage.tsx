@@ -19,7 +19,7 @@ import { useShellBase } from "@/lib/useShellBase";
 import { useReturnTo } from "@/lib/useReturnTo";
 import {
   Bell, ShoppingCart, CreditCard, RotateCcw, Package,
-  AlertTriangle, Users, Truck, Info,
+  AlertTriangle, Users, Truck, Info, MessageSquare, Wallet, MapPin, UserPlus,
 } from "lucide-react";
 
 /** Map notification kind + entity_id → the correct route in the active shell. */
@@ -34,6 +34,15 @@ function notificationRoute(n: AppNotification, base: "/admin" | "/employee" | "/
       case "low_stock": return `${base}/products/${n.entity_id}`;
       case "stock_adjust": return `${base}/products`;
       case "payment": return base === "/co-owner" ? `${base}/customers` : `${base}/payments`;
+      // A farmer's ask is answered in the conversation it came from, never on a list of asks:
+      // that is where the offer, the visit and the reply buttons already live.
+      case "farmer_message":
+      case "farmer_credit":
+      case "farmer_visit":
+      case "farmer_accepted":
+      case "farmer_declined":
+      case "farmer_joined":
+        return `${base}/messages/${n.entity_id}`;
       default: return null;
     }
   }
@@ -57,6 +66,15 @@ const KIND_ICON: Record<string, any> = {
   employee: Users,
   purchase: Truck,
   system: Info,
+  // Kinds written by migration 0329 when a farmer talks to the shop. Without these the row
+  // falls back to a generic bell and the list stops telling an owner at a glance which of
+  // four different things happened.
+  farmer_message: MessageSquare,
+  farmer_credit: Wallet,
+  farmer_visit: MapPin,
+  farmer_joined: UserPlus,
+  farmer_accepted: MessageSquare,
+  farmer_declined: MessageSquare,
 };
 
 /** Group notifications by time period */

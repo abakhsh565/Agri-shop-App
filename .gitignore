@@ -48,3 +48,4 @@ logs/
 *.p12
 /keystore/
 /freebuff-sites-build/
+.freebuff/sr.key

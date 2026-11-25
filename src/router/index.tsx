@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, useParams } from "react-router-dom";
 import React, { Suspense } from "react";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
@@ -48,6 +48,8 @@ const StockManagementPage = React.lazy(() => import("@/pages/admin/inventory/Sto
 const SaleDetailView = React.lazy(() => import("@/components/sales/SaleDetailView"));
 
 import AdminMessagesPage from "@/pages/admin/messages/AdminMessagesPage";
+import FarmerThreadPage from "@/pages/admin/messages/FarmerThreadPage";
+import FarmerProfilePage from "@/pages/admin/messages/FarmerProfilePage";
 import BranchDetailPage from "@/pages/admin/more/BranchDetailPage";
 const EmployeesListPage = React.lazy(() => import("@/pages/admin/employees/EmployeesListPage"));
 const EmployeeDetailPage = React.lazy(() => import("@/pages/admin/employees/EmployeeDetailPage"));
@@ -163,6 +165,7 @@ import MyReportsPage from "@/pages/employee/reports/MyReportsPage";
 import ActivityLogPage from "@/pages/employee/activity/ActivityLogPage";
 import EmployeeNotificationsPage from "@/pages/employee/notifications/EmployeeNotificationsPage";
 import EmployeeMorePage from "@/pages/employee/more/MorePage";
+import MyVisitsPage from "@/pages/employee/visits/MyVisitsPage";
 import EmployeeTeamPage from "@/pages/employee/team/TeamPage";
 const BarcodeGeneratePage = React.lazy(() => import("@/pages/admin/inventory/BarcodeGeneratePage"));
 import AdminReturnSelectItemsPage from "@/pages/admin/returns/AdminReturnSelectItemsPage";
@@ -190,6 +193,14 @@ import PaymentRemindersBookPage from "@/pages/admin/finance/PaymentRemindersBook
 import InventoryAlertsPage from "@/pages/admin/alerts/InventoryAlertsPage";
 import ExpiryAlertsPage from "@/pages/admin/alerts/ExpiryAlertsPage";
 import GroupDetailPage from "@/pages/admin/alerts/GroupDetailPage";
+
+/** An old per-request link now opens the request where it lives: inside the conversation. */
+function FarmerRequestRedirect() {
+  const { farmerId = "", kind = "credit", requestId = "" } = useParams();
+  return (
+    <Navigate to={`/admin/messages/${farmerId}?ask=${kind === "visit" ? "visit" : "credit"}:${requestId}`} replace />
+  );
+}
 
 export const router = createBrowserRouter([
   { path: "/", element: <SplashPage /> },
@@ -235,6 +246,15 @@ export const router = createBrowserRouter([
       // way round: a business module belongs one tap from the bar, not inside an account page.
       { path: "more",       element: <AdminMorePage /> },
       { path: "messages",   element: <AdminMessagesPage /> },
+      // One farmer's conversation: the thread, his credit request and his visit request. A new
+      // screen, deliberately not the customer profile — a farmer is not a customer of the credit book.
+      { path: "messages/:farmerId", element: <FarmerThreadPage /> },
+      // The person behind the conversation, opened by tapping his picture in the list or the
+      // thread header: contact details, how the shop reaches him, and every ask in one place.
+      { path: "messages/:farmerId/profile", element: <FarmerProfilePage /> },
+      // A request no longer has a screen of its own: it is answered in the chat it belongs to.
+      // The old address still works and lands on that chat with the request sheet already open.
+      { path: "messages/:farmerId/request/:kind/:requestId", element: <FarmerRequestRedirect /> },
       // Every ledger, read through one date range. The screen is an index over the screens that
       // already own each book; it does not keep a second copy of any of them.
       { path: "history",    element: <AdminHistoryPage /> },
@@ -660,6 +680,9 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/employee/dashboard" replace /> },
       { path: "dashboard", element: <DashboardPage /> },
+      // The visits the owner booked for this employee. Reads list_my_farmer_visits, so the
+      // officer sees only his own rows.
+      { path: "visits", element: <MyVisitsPage /> },
       { path: "assistant", element: <AssistantPage /> },
       { path: "sale", element: <SelectCustomerPage /> },
       { path: "sale/products", element: <BrowseProductsPage /> },

@@ -4,7 +4,7 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import { useT } from "@/lib/i18n";
 import { hasPermission } from "@/lib/tenantContext";
-import { useEmployeesStore } from "@/stores/employeesStore";
+import { staffInBranch, useEmployeesStore } from "@/stores/employeesStore";
 import { useSalesStore } from "@/stores/salesStore";
 import { useShopStore } from "@/stores/shopStore";
 import { formatCurrency } from "@/lib/formatters";
@@ -17,6 +17,7 @@ import { pkToday } from "@/lib/pkDate";
 export default function EmployeeTeamPage() {
   const t = useT();
   const employees = useEmployeesStore((s) => s.employees);
+  const activeBranchId = useShopStore((s) => s.activeBranchId);
   const loading = useEmployeesStore((s) => s.loading);
   const load = useEmployeesStore((s) => s.load);
   const sales = useSalesStore((s) => s.sales);
@@ -27,7 +28,12 @@ export default function EmployeeTeamPage() {
     void load();
   }, [load]);
 
-  const team = employees.filter((employee) => employee.membershipRole !== "owner");
+  // This is the branch's own team. Someone placed in other branches is not staff here, and
+  // showing the whole roster made every branch look like the main one.
+  const team = staffInBranch(
+    employees.filter((employee) => employee.membershipRole !== "owner"),
+    activeBranchId,
+  );
   const month = pkToday().slice(0, 7);
   const byEmployee = new Map<string, number>();
   if (canSeeSales) {

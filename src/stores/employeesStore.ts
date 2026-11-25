@@ -67,6 +67,24 @@ function userFromRow(
 }
 
 /** One branch's role for this person. `roleId` null means the membership default applies. */
+/**
+ * The people who work in one branch.
+ *
+ * A membership carries the branches it was placed in (`branch_scope`). An empty scope is the
+ * business's own owner/admin, who belongs everywhere; everyone else belongs only to the branches
+ * they were given. Reading the whole shop's roster on a branch screen is why every branch showed
+ * the main branch's staff.
+ */
+export function staffInBranch<T extends { branchScope?: string[] | null }>(
+  people: T[],
+  branchId: string | null,
+): T[] {
+  if (!branchId) return people;
+  return people.filter(
+    (person) => !person.branchScope || person.branchScope.length === 0 || person.branchScope.includes(branchId),
+  );
+}
+
 export interface EmployeeBranchRole {
   roleId: string | null;
   roleName: string | null;
@@ -108,6 +126,15 @@ interface EmployeesState {
   ready: boolean;
   error: string | null;
   load: () => Promise<void>;
+  /**
+   * The people who actually work in one branch.
+   *
+   * A membership carries the branches it was placed in (`branch_scope`). A person with no scope
+   * is the business's own owner/admin and belongs to every branch; everyone else belongs only to
+   * the ones they were given. Reading the whole shop's roster on a branch screen is what showed
+   * the main branch's staff under every other branch.
+   */
+  employeesInBranch: (branchId: string | null) => User[];
   subscribe: () => () => void;
   createEmployee: (input: {
     name: string;
@@ -160,6 +187,8 @@ export const useEmployeesStore = create<EmployeesState>((set, get) => ({
 
   // The active shop changed: the previous shop's staff list must not be shown as this one's.
   reset: () => set({ employees: [], loading: false, ready: false, error: null }),
+
+  employeesInBranch: (branchId) => staffInBranch(get().employees, branchId),
 
   load: async () => {
     const context = captureDataContext();

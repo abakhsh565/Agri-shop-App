@@ -2139,3 +2139,441 @@ prefers-reduced-motion. */
   .ds-splash-name,
   .ds-splash-tagline { animation: none; opacity: 1; transform: none; }
 }
+
+/* ── Chat: bubbles and the recording dot ──────────────────────────────────────
+   A message settles in from the bottom edge in 160 ms, transform and opacity only,
+   so a long transcript keeps scrolling on the compositor instead of repainting.
+   The tail is one small rotated square in the sender's own bubble colour, aligned
+   with the bubble's corner radius. Nothing here loops, except the recording dot,
+   which is the one indicator that must look alive. */
+@keyframes chatBubbleIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+.chat-bubble-in {
+  animation: chatBubbleIn 160ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+@keyframes chatRecDot {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.12); }
+}
+.chat-rec-dot {
+  animation: chatRecDot 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble-in { animation: none; }
+  .chat-rec-dot { animation: none; opacity: 1; transform: none; }
+}
+
+/* ══ Voice note (Bencho, MIT) ═══════════════════════════════
+   The only adaptation is the token block on this component's own root: Bencho's eight tokens are
+   mapped onto what this project already uses for the same job, so nothing is added to :root and
+   no other surface can inherit them. `-rgb` variants are not needed: this file builds no rgba()
+   from a token. Everything below the mapping is Bencho's, comments included, because the numbers
+   are the design. */
+.vn-frame {
+  /* Two of Bencho's eight already exist here with the same meaning, so they are reused as they
+     are and deliberately NOT redefined: `--card` (the surface a card sits on) and `--ink` (primary
+     ink) live in :root for light and dark alike. The rest are new names for jobs this project
+     does differently, and they are local to this block. */
+  /* the pill's own raised fill, and the ink that sits on it */
+  --fill-slab: var(--field-bg);
+  --fill-on: var(--text-primary);
+  /* the UI face this app already renders in (body Inter) */
+  --font-ui: inherit;
+  /* the quiet ink for hints */
+  --ink-3: var(--text-tertiary);
+  /* the 1px edge that separates a pane from its ground */
+  --pane-edge: var(--hairline);
+  /* the one interactive accent */
+  --signal: var(--brand);
+  --red: var(--error);
+}
+
+/* a fixed frame, so opening the pill never rescales the block */
+.vn-frame {
+  position: relative;
+  width: 300px;
+  height: 156px;
+  display: grid;
+  place-items: center;}
+
+.vn {
+  --red: var(--error);
+  position: relative;
+  width: var(--w);
+  height: 56px;
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--fill-slab, var(--card));
+  color: var(--fill-on, var(--ink));
+  font-family: var(--font-ui);
+  font-size: var(--fs-16);
+  font-weight: 500;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  /* y1 past 1 is the overshoot; Bounce sets it */
+  transition:
+    width 420ms cubic-bezier(0.3, var(--ov), 0.4, 1),
+    scale 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  letter-spacing: -0.01em;}
+
+[data-stroke="on"] .vn { box-shadow: inset 0 0 0 1px var(--pane-edge); }
+
+.vn[data-phase="clip"] { cursor: default; }
+
+.vn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--fill-slab, #fff), 0 0 0 4px var(--signal, #2231dd);}
+
+.vn-in {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  animation: vn-in 240ms ease 80ms both;}
+
+.vn-idle { justify-content: center; gap: 12px; }
+
+.vn-rec { display: flex; gap: 12px; padding-block: 0; padding-inline: 24px 46px; }
+
+.vn-clip { display: flex; gap: 12px; padding: 0 12px 0 8px; }
+
+.vn-time {
+  font-variant-numeric: tabular-nums;
+  min-width: 38px;
+  opacity: 0.6;}
+
+.vn-rec .vn-time { opacity: 1; }
+
+.vn-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--red);
+  animation: vn-blink 1s ease-in-out infinite;}
+
+.vn-wave {
+  flex: 1;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* the wave goes quiet as you drag toward throwing it away */
+  opacity: calc(1 - var(--pull) * 0.7);}
+
+.vn-bar {
+  width: 3px;
+  flex: none;
+  height: calc(4px + var(--l) * 28px);
+  border-radius: 2px;
+  background: currentColor;
+  transition: height 160ms linear;}
+
+/* each new sample grows in from the middle */
+.vn-rec .vn-bar { animation: vn-grow 200ms cubic-bezier(0.3, 1.5, 0.4, 1) both; }
+
+/* the playhead: a bar is lit once progress has passed it */
+.vn-scrub { cursor: ew-resize; }
+
+.vn-scrub .vn-bar {
+  transition: none;
+  opacity: clamp(0.3, calc((var(--prog) * var(--n) - var(--i)) * 99), 1);}
+
+/* thrown away: the bars fold to nothing before the pill closes */
+.vn[data-phase="cancel"] .vn-in { animation: none; }
+
+.vn[data-phase="cancel"] .vn-bar {
+  scale: 1 0;
+  opacity: 0;
+  transition: scale 220ms ease, opacity 220ms ease;}
+
+.vn[data-phase="cancel"] .vn-dot,
+.vn[data-phase="cancel"] .vn-time,
+.vn[data-phase="cancel"] button { opacity: 0; transition: opacity 160ms ease; }
+
+.vn-play, .vn-x {
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: scale 160ms cubic-bezier(0.22, 1, 0.36, 1), color 160ms ease;}
+
+.vn-play {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--inner);
+  background: var(--fill-on, var(--ink));
+  color: var(--fill-slab, var(--card));}
+
+.vn-x {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: none;
+  color: color-mix(in srgb, var(--fill-on, var(--ink)) 50%, var(--fill-slab, var(--card)));}
+
+.vn-x:hover { color: var(--fill-on, var(--ink)); }
+
+.vn-play:active, .vn-x:active { scale: 0.96; }
+
+.vn-play:focus-visible, .vn-x:focus-visible {
+  outline: 2px solid var(--signal, #2231dd);
+  outline-offset: 2px;}
+
+.vn-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% + 42px);
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
+  color: var(--ink-3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+  letter-spacing: 0em;}
+
+.vn-hint[data-on] { opacity: calc(1 - var(--pull, 0)); }
+
+.vn-hint[data-armed] { opacity: 1; color: var(--red, #e5484d); }
+
+/* the row fades as it slides, so the cancel mark has the left
+   end of the pill to itself when it arrives */
+.vn-rec { opacity: calc(1 - var(--pull) * 0.55); }
+
+/* the dot and the clock are gone before the mark lands on them */
+.vn-rec .vn-dot, .vn-rec .vn-time { opacity: max(0, 1 - var(--pull) * 1.6); }
+
+.vn-cancel {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--red);
+  color: var(--fill-slab);
+  opacity: 0;
+  scale: 0.4;
+  pointer-events: none;
+  transition: opacity 160ms ease, scale 160ms ease;}
+
+.vn-cancel[data-on] {
+  opacity: 1;
+  scale: 1;
+  transition: opacity 160ms ease, scale 420ms cubic-bezier(0.24, 1.34, 0.38, 1);}
+
+.vn[data-phase="cancel"] .vn-cancel { opacity: 0; scale: 0.6; transition: opacity 220ms ease, scale 220ms ease; }
+
+@keyframes vn-in { from { opacity: 0; } }
+
+@keyframes vn-blink { 50% { opacity: 0.25; } }
+
+@keyframes vn-grow { from { scale: 1 0.2; } }
+
+/* Bencho's pill is a concept, so its wave never loops forever; the only motion to still is the
+   blink and the growth, for readers who asked the system not to move. */
+@media (prefers-reduced-motion: reduce) {
+  .vn-dot, .vn-rec .vn-bar, .vn-in { animation: none; }
+  .vn { transition: none; }
+}
+
+/* ══ Voice messages ══════════════════════════════════════════════════════════
+   One button runs the whole thing, so it is never swapped out from under the finger:
+   a mic when idle, the pressed mic while a finger is on it, and the green send once
+   there is something to send. The bar and the action row are drawn around it.
+
+     idle     mic only, at the end of the composer
+     hold     bar: dot, clock, live wave, "Slide to cancel" — mic still under the finger
+     locked   bar on top, then bin / wide Pause / send on one line
+     preview  the same line, playing: bin / play-pause / send, scrubable wave
+
+   Motion is short and directional: the bar follows the finger, the bin scales in where
+   the mic sat, and a discarded note is thrown into it bar by bar. */
+.vr { position: relative; display: flex; flex-direction: column; gap: 8px; width: 100%; min-width: 0; }
+.vr-line { display: flex; align-items: center; gap: 8px; justify-content: flex-end; min-width: 0; }
+
+.vr-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  height: 56px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  overflow: hidden;
+  transition: translate 60ms linear;
+}
+
+.vr-dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--error);
+  animation: vn-blink 1s ease-in-out infinite;
+}
+.vr-dot[data-paused] { animation: none; opacity: 0.45; }
+
+.vr-time { flex: none; min-width: 40px; font-size: var(--fs-15); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+
+.vr-wave { display: flex; align-items: center; justify-content: space-between; gap: 2px; flex: 1; min-width: 0; height: 30px; }
+.vr-bar { width: 3px; flex: none; height: calc(3px + var(--l) * 26px); border-radius: 2px; background: var(--brand); transition: height 90ms linear; }
+.vr-bar:not([data-live]) { background: var(--text-tertiary); }
+.vr[data-phase="preview"] .vr-bar { opacity: clamp(0.35, calc((var(--prog, 0) * var(--n) - var(--i)) * 99), 1); }
+
+.vr-slide { flex: none; font-size: var(--fs-13); white-space: nowrap; color: var(--text-tertiary); }
+
+/* the one button */
+.vr-mic {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--brand-fg);
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: scale 120ms ease, background-color 140ms ease;
+}
+.vr-mic:disabled { opacity: 0.4; }
+.vr-mic:active { scale: 0.94; }
+.vr[data-phase="hold"] .vr-mic { translate: 0 calc(var(--lift) * -6px); animation: vrRing 1.7s ease-out infinite; }
+
+@keyframes vrRing {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 42%, transparent); }
+  70%  { box-shadow: 0 0 0 13px color-mix(in srgb, var(--brand) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 0%, transparent); }
+}
+
+/* the "keep recording" mark, shown once the finger is on its way up */
+.vr-lock-hint {
+  position: absolute;
+  translate: 22px -24px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--brand-dark);
+  color: var(--brand-fg);
+  font-size: var(--fs-11);
+  font-weight: 700;
+  opacity: 0;
+  scale: 0.5;
+  transition: opacity 120ms ease, scale 140ms cubic-bezier(0.24, 1.34, 0.38, 1);
+}
+.vr-lock-hint[data-on] { opacity: 1; scale: 1; }
+
+/* sliding left: the bin arrives where the mic was */
+.vr-bin {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--error);
+  color: var(--brand-fg);
+  pointer-events: none;
+  opacity: 0;
+  scale: 0.35;
+  transition: opacity 100ms linear, scale 140ms cubic-bezier(0.24, 1.34, 0.38, 1);
+}
+.vr-bin[data-open] { opacity: min(1, calc(var(--pull) * 1.4)); scale: calc(0.35 + var(--pull) * 0.75); }
+
+/* locked and preview: bar on top, then bin / wide middle / send */
+.vr[data-phase="locked"] .vr-line,
+.vr[data-phase="preview"] .vr-line { display: block; }
+.vr[data-phase="locked"] .vr-pill,
+.vr[data-phase="preview"] .vr-pill { width: 100%; }
+.vr[data-phase="locked"] .vr-mic,
+.vr[data-phase="preview"] .vr-mic { position: absolute; inset-inline-end: 0; bottom: 0; }
+
+.vr-controls { display: flex; align-items: center; gap: 10px; padding-inline-end: 66px; }
+
+.vr-delete {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 16%, var(--background));
+  transition: scale 120ms ease, background-color 120ms ease;
+}
+.vr-delete:active { scale: 0.94; }
+
+.vr-mid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  height: 56px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  background: var(--tone-card);
+  color: var(--text-primary);
+  font-size: var(--fs-15);
+  font-weight: 600;
+  transition: scale 120ms ease;
+}
+.vr-mid:active { scale: 0.985; }
+
+.vr-send-gap { display: none; }
+
+.vr-hint { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 16px; font-size: var(--fs-12); color: var(--text-tertiary); }
+
+/* scrubbing the preview: the top row is the timeline */
+.vr-scrub { position: absolute; left: 0; right: 56px; top: 0; height: 56px; cursor: ew-resize; touch-action: none; }
+
+/* ── throwing it away ─────────────────────────────────── */
+.vr[data-discarding] { pointer-events: none; }
+.vr[data-discarding] .vr-pill { translate: -84px 0; opacity: 0; transition: translate 200ms cubic-bezier(0.3, 1, 0.4, 1), opacity 200ms ease; }
+.vr[data-discarding] .vr-bar {
+  transform: translateX(calc((var(--n) - var(--i)) * 2.2px)) scaleY(0.1);
+  opacity: 0;
+  transition: transform 200ms cubic-bezier(0.3, 1, 0.4, 1), opacity 160ms linear;
+  transition-delay: calc((var(--n) - var(--i)) * 4ms);
+}
+.vr[data-discarding] .vr-bin { opacity: 1; scale: 1.16; }
+.vr[data-discarding] .vr-mic,
+.vr[data-discarding] .vr-controls,
+.vr[data-discarding] .vr-hint { opacity: 0; transition: opacity 140ms linear; }
+.vr[data-discarding] .vr-controls { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vr-dot, .vr[data-phase="hold"] .vr-mic { animation: none; }
+  .vr[data-discarding] .vr-bar { transform: none; transition: opacity 120ms linear; }
+  .vr[data-discarding] .vr-pill { transition: opacity 120ms linear; }
+}

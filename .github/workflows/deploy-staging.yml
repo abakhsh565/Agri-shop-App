@@ -95,6 +95,45 @@ jobs:
           VITE_OTP_DELIVERY: demo
         run: npx vite build --mode qa
 
+      # WHY A VERSION IS DERIVED HERE, NOT READ FROM package.json. `ota_manifest` offers a bundle
+      # only when `ota_compare_versions(bundle.version, current) > 0`. Publishing the same 1.1.0
+      # bytes on every promotion therefore reaches nobody: an install already on 1.1.0 is told
+      # there is no update, however new the bundle is. The run number makes each promotion
+      # strictly newer (1.1.0 -> 1.1.<run>) while staying inside the ledger's version grammar.
+      - name: Publish this bundle to the staging channel
+        env:
+          OTA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          OTA_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+        run: |
+          set -euo pipefail
+          version=$(node -e "const p=require('./package.json');const [a,b]=String(p.version).split('.');process.stdout.write(a+'.'+b+'.'+process.env.GITHUB_RUN_NUMBER)")
+          echo "OTA_VERSION=$version" >> "$GITHUB_ENV"
+          node scripts/ota/publish.mjs --env staging --version "$version" --activate \
+            --notes "deploy staging ${GITHUB_SHA:0:7}"
+
+      # A build that published nothing, or published an object nobody can download, is not a
+      # promotion. This reads the ledger back and fetches the first bytes of the object.
+      # A build that published nothing, or published an object nobody can download, is not a
+      # promotion. This reads the ledger back and fetches the first bytes of the object.
+      - name: The published bundle must actually download
+        env:
+          OTA_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
+          OTA_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE }}
+        run: |
+          set -euo pipefail
+          url=$(curl -fsS "$OTA_SUPABASE_URL/rest/v1/ota_bundles?channel=eq.staging&status=eq.active&select=version,url,checksum,size_bytes" -H "apikey: $OTA_SERVICE_ROLE_KEY" -H "Authorization: Bearer $OTA_SERVICE_ROLE_KEY" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s)[0];if(!r)process.exit(3);process.stdout.write(r.url)})')
+          code=$(curl -s -o /dev/null -w "%{http_code}" -r 0-1023 "$url")
+          head=$(curl -fsSI "$url" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-length"{print $2}')
+          echo "active bundle: $url (HTTP $code, $head bytes)"
+          if { [ "$code" != "200" ] && [ "$code" != "206" ]; } || [ -z "$head" ]; then
+            echo "::error::the active staging bundle is not downloadable"
+            exit 1
+          fi
+          {
+            echo "- OTA bundle: $url"
+            echo "- OTA version: $OTA_VERSION (HTTP $code, $head bytes)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Report the live staging URL
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
