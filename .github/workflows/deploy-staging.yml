@@ -122,10 +122,13 @@ jobs:
           url=$(curl -fsS "$OTA_SUPABASE_URL/rest/v1/ota_bundles?channel=eq.staging&status=eq.active&select=version,url,checksum,size_bytes" \
             -H "apikey: $OTA_SERVICE_ROLE_KEY" -H "Authorization: Bearer $OTA_SERVICE_ROLE_KEY" \
             | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s)[0];if(!r)process.exit(3);process.stdout.write(r.url)})')
+          # A ranged read is what the app's own downloader does, and object storage answers it with
+          # 206 Partial Content. Only a real 200/206 carrying bytes proves the object is served;
+          # asking for a range and then demanding 200 failed every promotion that got this far.
           code=$(curl -s -o /dev/null -w "%{http_code}" -r 0-1023 "$url")
           head=$(curl -fsSI "$url" | tr -d '\r' | awk -F': ' 'tolower($1)=="content-length"{print $2}')
           echo "active bundle: $url (HTTP $code, $head bytes)"
-          if [ "$code" != "200" ] || [ -z "$head" ]; then
+          if [ "$code" != "200" ] && [ "$code" != "206" ]; then
             echo "::error::the active staging bundle is not downloadable — the app would be offered a 404"
             exit 1
           fi
