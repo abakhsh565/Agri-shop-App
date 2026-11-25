@@ -2393,42 +2393,49 @@ prefers-reduced-motion. */
   .vn { transition: none; }
 }
 
-/* ══ Recording pill (our own, shapes after Bencho's) ═════════════════════════
-   Same gesture, our tokens: the bar grows out of the composer field, one bar per
-   microphone sample, and the clip is scrubbed with a CSS variable rather than a
-   React render. Heights and gaps are the ones already used by the field row, so
-   the pill and the text field are interchangeable without a layout shift. */
-.vr { display: flex; flex-direction: column; gap: 4px; }
+/* ══ Recording pill ════════════════════════════════════════════════════════
+   Four states off one pill, after the messenger convention: while a finger holds the
+   mic the pill carries a dot, the clock, the live wave and a bin, and the way out is
+   written under it. A tap (or a slide up) keeps the microphone open, so pause and send
+   join it. Released, the clip is paused with a bin, a wide Pause and send. Anything
+   dragged left pulls the wave into the bin as it goes, and the pill is gone. */
+.vr { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 
-.vr-row {
+.vr-pill {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 44px;
-  padding: 0 6px;
-  border-radius: var(--radius-field);
+  height: 46px;
+  padding: 0 6px 0 14px;
+  border-radius: 999px;
   background: var(--field-bg);
   border: 1px solid var(--field-border);
-  transition: translate 120ms ease;
+  overflow: hidden;
+  touch-action: none;
+  transition: translate 90ms linear;
 }
 
+/* the dot breathes while the microphone is open, and holds still while paused */
 .vr-dot {
   width: 9px;
   height: 9px;
   flex: none;
-  margin-inline-start: 8px;
   border-radius: 50%;
   background: var(--error);
   animation: vn-blink 1s ease-in-out infinite;
 }
+.vr-dot[data-paused] { animation: none; opacity: 0.45; }
 
 .vr-time {
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-secondary);
-  min-width: 38px;
+  min-width: 36px;
 }
 
+/* mirrored bars: they grow up and down from the centre line, so a loud word is tall and a
+   pause is a dot — the level is the microphone, not a timer */
 .vr-wave {
   flex: 1;
   height: 26px;
@@ -2437,8 +2444,12 @@ prefers-reduced-motion. */
   justify-content: space-between;
   gap: 2px;
   touch-action: none;
+  transition: translate 90ms linear, opacity 90ms linear;
 }
-.vr-scrub { cursor: ew-resize; }
+.vr[data-phase="rec"] .vr-wave {
+  translate: calc(var(--pull) * 26px) 0;
+  opacity: calc(1 - var(--pull));
+}
 
 .vr-bar {
   width: 3px;
@@ -2446,20 +2457,21 @@ prefers-reduced-motion. */
   height: calc(3px + var(--l) * 20px);
   border-radius: 2px;
   background: var(--brand);
-  transition: height 120ms linear;
+  transition: height 90ms linear;
 }
+.vr-bar:not([data-live]) { background: var(--text-tertiary); }
 
 /* the playhead: a bar is lit once progress has passed it */
-.vr-scrub .vr-bar {
-  transition: none;
+.vr-wave[--prog] .vr-bar,
+.vr[data-phase="clip"] .vr-bar {
   opacity: clamp(0.35, calc((var(--prog) * var(--n) - var(--i)) * 99), 1);
 }
 
-.vr-cancel {
+.vr-bin {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   flex: none;
   border: 0;
   border-radius: 50%;
@@ -2467,72 +2479,101 @@ prefers-reduced-motion. */
   color: var(--text-secondary);
   cursor: pointer;
 }
+.vr-bin:active { background: var(--tone-card); }
 
-.vr-play {
+/* thrown away: the bin takes the wave, then the pill goes */
+.vr-collapse {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  flex: none;
-  margin-inline-start: 6px;
+  width: 0;
+  overflow: hidden;
+  color: var(--error);
+  opacity: var(--pull);
+  scale: calc(0.7 + var(--pull) * 0.3);
+  transition: width 120ms ease, opacity 120ms linear;
+}
+.vr[data-phase="rec"] .vr-bin { color: color-mix(in srgb, var(--error) calc(var(--pull) * 70%), var(--text-secondary)); }
+
+.vr-hint {
+  min-height: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.vr-hint[data-lock] { color: var(--brand-dark); }
+.vr-hint[data-armed] { color: var(--error); }
+
+/* locked (or paused): pause and send under the pill */
+.vr-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vr-pause-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  height: 46px;
   border: 0;
-  border-radius: 50%;
-  background: var(--brand);
-  color: var(--brand-fg);
+  border-radius: 999px;
+  background: var(--tone-card);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
 }
+.vr-pause-pill:active { scale: 0.985; }
 
-.vr-tri {
-  width: 0;
-  height: 0;
-  margin-inline-start: 2px;
-  border-inline-start: 8px solid currentColor;
-  border-block: 5px solid transparent;
+/* the clip: bin, wave + clock, wide pause, send */
+.vr-clip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.vr-pause {
-  width: 3px;
-  height: 10px;
-  background: currentColor;
-  box-shadow: 6px 0 0 currentColor;
-  margin-inline-start: -3px;
+.vr-bin-circle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 14%, var(--background));
 }
+
+.vr-clip-mid {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.vr-clip-mid .vr-wave { cursor: ew-resize; }
 
 .vr-send {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 46px;
+  height: 46px;
   flex: none;
   border: 0;
   border-radius: 50%;
   background: var(--brand);
   color: var(--brand-fg);
   cursor: pointer;
+  transition: scale 120ms ease;
 }
+.vr-send:active { scale: 0.94; }
 .vr-send:disabled { opacity: 0.4; }
-
-.vr-hint {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  text-align: center;
-  min-height: 14px;
-}
-.vr-hint[data-armed] { color: var(--error); }
 
 @media (prefers-reduced-motion: reduce) {
   .vr-dot { animation: none; }
-  .vr-row { transition: none; }
-  .vr-bar { transition: none; }
+  .vr-pill, .vr-wave, .vr-bar, .vr-collapse, .vr-send { transition: none; }
 }
 
-/* The bin while recording sits at the trailing end of the open pill, in the space the wave gives
-   up via .vn-rec's extra padding. */
-.vn-bin {
-  position: absolute;
-  inset-inline-end: 8px;
-  top: 50%;
-  margin-top: -16px;
-  z-index: 1;
-}
-.vn-bin:hover { color: var(--red); }

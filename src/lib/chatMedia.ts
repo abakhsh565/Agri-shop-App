@@ -221,6 +221,10 @@ export interface Recording {
   stop: () => Promise<{ blob: Blob; mimeType: string; durationMs: number }>;
   cancel: () => void;
   startedAt: number;
+  /** Hold the recording where it is. A voice note longer than a sentence needs a breath. */
+  pause: () => void;
+  resume: () => void;
+  paused: () => boolean;
   /**
    * How loud the microphone is right now, 0..1.
    *
@@ -258,6 +262,10 @@ export async function startVoiceRecording(): Promise<Recording> {
   });
   const chunks: BlobPart[] = [];
   const startedAt = Date.now();
+  // Paused time is not part of the note: a clip says how long it plays, not how long the phone sat
+  // in a pocket with the button held.
+  let pausedAt = 0;
+  let pausedMs = 0;
 
   recorder.ondataavailable = (event) => {
     if (event.data.size > 0) chunks.push(event.data);
@@ -298,6 +306,18 @@ export async function startVoiceRecording(): Promise<Recording> {
   return {
     startedAt,
     level: readLevel,
+    paused: () => recorder.state === "paused",
+    pause: () => {
+      if (recorder.state !== "recording") return;
+      pausedAt = Date.now();
+      recorder.pause();
+    },
+    resume: () => {
+      if (recorder.state !== "paused") return;
+      pausedMs += Date.now() - pausedAt;
+      pausedAt = 0;
+      recorder.resume();
+    },
     cancel: () => {
       try {
         if (recorder.state !== "inactive") recorder.stop();
@@ -312,7 +332,11 @@ export async function startVoiceRecording(): Promise<Recording> {
           const type = baseMimeType(recorder.mimeType || mimeType || "audio/webm") || "audio/webm";
           const blob = new Blob(chunks, { type });
           if (blob.size === 0) return reject(new Error("VALIDATION: nothing was recorded"));
-          resolve({ blob, mimeType: type, durationMs: Math.max(1, Date.now() - startedAt) });
+          resolve({
+            blob,
+            mimeType: type,
+            durationMs: Math.max(1, Date.now() - startedAt - pausedMs - (pausedAt ? Date.now() - pausedAt : 0)),
+          });
         };
         recorder.onstop = finish;
         recorder.onerror = () => reject(new Error("RECORDING_FAILED"));

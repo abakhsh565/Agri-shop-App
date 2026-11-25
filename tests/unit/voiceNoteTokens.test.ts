@@ -65,6 +65,15 @@ describe("Bencho VoiceNote: tokens and scope", () => {
     // our own pill: a bin during recording, and one on the clip before it is sent
     expect(RECORDER).toMatch(/data-testid="voice-cancel"/);
     expect(RECORDER).toMatch(/data-testid="voice-preview-discard"/);
+    // a tap keeps the microphone open: pause, and send straight from the recording
+    expect(RECORDER).toMatch(/data-testid="voice-pause"/);
+    expect(RECORDER).toMatch(/data-testid="voice-send-direct"/);
+    // the way out is written under the pill, not left to be discovered
+    expect(RECORDER).toMatch(/messages\.voiceSlideCancel/);
+    expect(RECORDER).toMatch(/data-testid="voice-pill"/);
+    // the clip is paused with a wide pause and a green send, as the reference draws it
+    expect(CSS).toContain('.vr-bin-circle');
+    expect(CSS).toContain('.vr-pause-pill');
     // Bencho's pill: the slide, plus a bin while recording, and its vn-x on the clip
     expect(COMPONENT).toMatch(/className="vn-x vn-bin"/);
     expect(COMPONENT).toMatch(/className="vn-x"/);

@@ -720,8 +720,12 @@ export default function FarmerThreadPage() {
             onClick={() => (draft.trim() ? void submitMessage() : setVoiceOpen(true))}
             disabled={draft.trim() ? busy : mediaBusy}
             aria-label={draft.trim() ? t("messages.send") : t("messages.voiceRecord")}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40 active:scale-95"
+            className="flex shrink-0 items-center justify-center rounded-full disabled:opacity-40 active:scale-95"
             style={{
+              // The mic is the biggest control in the row: holding it is the gesture, so it reads as
+              // one target, 52 and centred on the field, not a small icon beside it.
+              width: 52,
+              height: 52,
               background: "var(--brand)",
               color: "var(--brand-fg)",
               transition: "transform 120ms ease, background-color 150ms ease",
