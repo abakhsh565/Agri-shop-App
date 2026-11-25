@@ -34,6 +34,12 @@ describe("chat voice notes: mime and link", () => {
     expect(MEDIA_FUNCTION).toMatch(/get\("mime"\)[\s\S]{0,120}split\(";"\)\[0\]/);
   });
 
+  it("records mono at the voice bitrate, so a note is compressed at the source", () => {
+    expect(CLIENT).toMatch(/channelCount: 1/);
+    expect(CLIENT).toMatch(/VOICE_BITS_PER_SECOND = 24_000/);
+    expect(CLIENT).toMatch(/audioBitsPerSecond: VOICE_BITS_PER_SECOND/);
+  });
+
   it("hands back a link on the origin the caller reached, not the function's own", () => {
     expect(MEDIA_FUNCTION).toMatch(/new URL\(signed\.signedUrl, url\.origin\)/);
     expect(CLIENT).toMatch(/const origin = new URL\(functionsBase\(\)\)\.origin/);

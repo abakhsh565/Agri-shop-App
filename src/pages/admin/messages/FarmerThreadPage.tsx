@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  ArrowDown,
   ArrowLeft,
   CalendarClock,
   Check,
@@ -30,7 +31,8 @@ import { useShellBase } from "@/lib/useShellBase";
 import { formatCurrency, formatDate, formatDateTime, formatTime } from "@/lib/formatters";
 import { whatsappShareUrl } from "@/lib/appInvite";
 import { PhotoMessage, VoiceNote } from "@/components/chat/MessageMedia";
-import { formatDuration, prepareChatImage, startVoiceRecording, type Recording } from "@/lib/chatMedia";
+import { prepareChatImage } from "@/lib/chatMedia";
+import { VoiceRecorder } from "@/components/chat/VoiceRecorder";
 import {
   useFarmerMessagesStore,
   type AssignableOfficer,
@@ -88,12 +90,9 @@ export default function FarmerThreadPage() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // Voice: the recorder is held while it runs, so the elapsed timer and the buttons share one truth.
-  const [recording, setRecording] = useState<Recording | null>(null);
-  const [recordMs, setRecordMs] = useState(0);
-  // A stopped recording waits here so it can be heard before it is sent — a voice note cannot be
-  // unsent, and a pocket recording is the usual way a wrong one gets sent.
-  const [preview, setPreview] = useState<{ blob: Blob; mimeType: string; durationMs: number; url: string } | null>(null);
+  // Voice: pressing the mic mounts the recorder pill, which owns the microphone, the wave, the
+  // timer and the clip preview. The screen only decides when it lives and where the clip goes.
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [mediaBusy, setMediaBusy] = useState(false);
   const imageInput = useRef<HTMLInputElement | null>(null);
   // A picked photo waits here, already compressed, so it can be looked at and given a caption
@@ -114,6 +113,9 @@ export default function FarmerThreadPage() {
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const atBottomRef = useRef(true);
+  // Mirrors the ref for the one thing the DOM cannot render: the pill that appears once the reader
+  // has scrolled away from the newest message.
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
 
   // The chat owns the visible viewport: the header and the composer stay put while the transcript
   // scrolls, and the whole shell follows the keyboard instead of the document scrolling under it.
@@ -220,58 +222,13 @@ export default function FarmerThreadPage() {
     if (askParam) setParams({}, { replace: true });
   }
 
-  useEffect(() => {
-    if (!recording) return;
-    setRecordMs(Date.now() - recording.startedAt);
-    const id = window.setInterval(() => setRecordMs(Date.now() - recording.startedAt), 200);
-    return () => window.clearInterval(id);
-  }, [recording]);
-
-  async function toggleRecording() {
-    if (recording) {
-      const active = recording;
-      setRecording(null);
-      try {
-        const captured = await active.stop();
-        if (preview) URL.revokeObjectURL(preview.url);
-        setPreview({ ...captured, url: URL.createObjectURL(captured.blob) });
-      } catch {
-        setError(t("messages.actionFailed"));
-      } finally {
-        setRecordMs(0);
-      }
-      return;
-    }
-    try {
-      if (preview) {
-        URL.revokeObjectURL(preview.url);
-        setPreview(null);
-      }
-      setRecording(await startVoiceRecording());
-      setRecordMs(0);
-    } catch {
-      setError(t("messages.voiceDenied"));
-    }
-  }
-
-  function cancelRecording() {
-    recording?.cancel();
-    setRecording(null);
-    setRecordMs(0);
-  }
-
-  function discardPreview() {
-    if (preview) URL.revokeObjectURL(preview.url);
-    setPreview(null);
-  }
-
-  async function sendPreview() {
-    if (!preview || mediaBusy) return;
+  async function sendClip(clip: { blob: Blob; mimeType: string; durationMs: number }) {
+    if (mediaBusy) return;
     setMediaBusy(true);
+    setError("");
     try {
-      await sendVoice(farmerId, preview.blob, preview.mimeType, preview.durationMs);
-      URL.revokeObjectURL(preview.url);
-      setPreview(null);
+      await sendVoice(farmerId, clip.blob, clip.mimeType, clip.durationMs);
+      setVoiceOpen(false);
       atBottomRef.current = true;
       await loadThread(farmerId, { markRead: false });
     } catch (cause) {
@@ -558,11 +515,15 @@ export default function FarmerThreadPage() {
 
       {/* The conversation. The quiet dotted ground is the messenger convention; the bubbles are
           the app's own tones, so it belongs to this product rather than imitating another. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRef}
         onScroll={(e) => {
           const el = e.currentTarget;
-          atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          atBottomRef.current = atBottom;
+          setAwayFromBottom(!atBottom);
+
         }}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain flex flex-col gap-1 px-3 py-3"
         aria-live="polite"
@@ -615,6 +576,31 @@ export default function FarmerThreadPage() {
             })}
           </div>
         ))}
+      </div>
+
+        {/* Reading back through the history: one tap returns to the newest message. */}
+        {awayFromBottom && (
+          <button
+            type="button"
+            onClick={() => {
+              const el = scrollRef.current;
+              if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+              atBottomRef.current = true;
+              setAwayFromBottom(false);
+            }}
+            aria-label={t("messages.jumpToLatest")}
+            className="absolute bottom-3 end-4 flex size-9 items-center justify-center rounded-full shadow-md active:scale-95"
+            style={{
+              background: "var(--tone-card)",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--hairline)",
+              transition: "transform 120ms ease, opacity 150ms ease",
+            }}
+            data-testid="chat-jump-latest"
+          >
+            <ArrowDown size={16} strokeWidth={2} />
+          </button>
+        )}
       </div>
 
       {/* Composer. One field, one send. The caption says where the message will go. */}
@@ -670,68 +656,14 @@ export default function FarmerThreadPage() {
             {error}
           </p>
         )}
-        {preview ? (
-          <div className="flex items-center gap-2" data-testid="voice-preview">
-            <button
-              type="button"
-              onClick={discardPreview}
-              aria-label={t("messages.voiceCancel")}
-              className="flex size-11 shrink-0 items-center justify-center rounded-full"
-              style={{ background: "var(--tone-card)", color: "var(--text-secondary)" }}
-              data-testid="voice-discard"
-            >
-              <X size={18} strokeWidth={2} />
-            </button>
-            <audio
-              controls
-              src={preview.url}
-              aria-label={t("messages.voicePlay")}
-              className="h-9 flex-1"
-              data-testid="voice-preview-player"
-            />
-            <button
-              type="button"
-              onClick={() => void sendPreview()}
-              disabled={mediaBusy}
-              aria-label={t("messages.voiceSend")}
-              className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
-              style={{ background: "var(--brand)", color: "var(--brand-fg)" }}
-              data-testid="voice-preview-send"
-            >
-              <Send size={18} strokeWidth={2} />
-            </button>
-          </div>
-        ) : recording ? (
-          <div className="flex items-center gap-2" data-testid="voice-recording">
-            <button
-              type="button"
-              onClick={cancelRecording}
-              aria-label={t("messages.voiceCancel")}
-              className="flex size-11 shrink-0 items-center justify-center rounded-full"
-              style={{ background: "var(--tone-card)", color: "var(--text-secondary)" }}
-            >
-              <X size={18} strokeWidth={2} />
-            </button>
-            <span
-              className="flex h-11 flex-1 items-center gap-2 px-4 text-14"
-              style={{ background: "var(--field-bg)", borderRadius: "var(--radius-field)", color: "var(--text-primary)" }}
-            >
-              <span className="size-2 rounded-full" style={{ background: "var(--error)" }} aria-hidden="true" />
-              {t("messages.voiceRecording", { time: formatDuration(recordMs) })}
-            </span>
-            <button
-              type="button"
-              onClick={() => void toggleRecording()}
-              disabled={mediaBusy}
-              aria-label={t("messages.voiceSend")}
-              className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
-              style={{ background: "var(--brand)", color: "var(--brand-fg)" }}
-              data-testid="voice-send"
-            >
-              <Send size={18} strokeWidth={2} />
-            </button>
-          </div>
-        ) : (
+        {voiceOpen ? (
+          <VoiceRecorder
+            busy={mediaBusy}
+            onSend={sendClip}
+            onClose={() => setVoiceOpen(false)}
+            onError={setError}
+          />
+) : (
         <div className="flex items-center gap-2">
           <input
             ref={imageInput}
@@ -752,47 +684,51 @@ export default function FarmerThreadPage() {
           >
             <ImagePlus size={18} strokeWidth={1.8} />
           </button>
-          <input
+          <textarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            rows={1}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              // Grow with the text up to five lines, then scroll inside the field.
+              const field = e.currentTarget;
+              field.style.height = "auto";
+              field.style.height = `${Math.min(field.scrollHeight, 120)}px`;
+            }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 void submitMessage();
+                e.currentTarget.style.height = "auto";
               }
             }}
             placeholder={t("messages.chatPlaceholder")}
             aria-label={t("messages.chatPlaceholder")}
-            className="h-11 flex-1 px-4 text-14 outline-none"
+            className="flex-1 resize-none px-4 py-[11px] text-14 leading-5 outline-none"
             style={{
               background: "var(--field-bg)",
               border: "1px solid var(--field-border)",
               borderRadius: "var(--radius-field)",
               color: "var(--text-primary)",
+              maxHeight: 120,
             }}
             data-testid="farmer-message-input"
           />
+          {/* One trailing button that becomes the other action: a typed line sends, an empty field
+              records. Two buttons side by side is what made the composer look unlike a messenger. */}
           <button
             type="button"
-            onClick={() => void submitMessage()}
-            disabled={!draft.trim() || busy}
-            aria-label={t("messages.send")}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
-            style={{ background: "var(--brand)", color: "var(--brand-fg)" }}
-            data-testid="farmer-send"
+            onClick={() => (draft.trim() ? void submitMessage() : setVoiceOpen(true))}
+            disabled={draft.trim() ? busy : mediaBusy}
+            aria-label={draft.trim() ? t("messages.send") : t("messages.voiceRecord")}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40 active:scale-95"
+            style={{
+              background: "var(--brand)",
+              color: "var(--brand-fg)",
+              transition: "transform 120ms ease, background-color 150ms ease",
+            }}
+            data-testid={draft.trim() ? "farmer-send" : "farmer-mic"}
           >
-            <Send size={18} strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            onClick={() => void toggleRecording()}
-            disabled={mediaBusy}
-            aria-label={t("messages.voiceRecord")}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
-            style={{ background: "var(--brand-tint)", color: "var(--brand-dark)" }}
-            data-testid="farmer-mic"
-          >
-            <Mic size={18} strokeWidth={1.8} />
+            {draft.trim() ? <Send size={18} strokeWidth={2} /> : <Mic size={18} strokeWidth={1.8} />}
           </button>
         </div>
         )}
@@ -1044,9 +980,9 @@ function MessageBubble({
   const t = useT();
   const mine = message.direction === "owner";
   return (
-    <div className={`flex ${mine ? "justify-end" : "justify-start"}`} data-testid={`message-${message.id}`}>
+    <div className={`flex chat-bubble-in ${mine ? "justify-end" : "justify-start"}`} data-testid={`message-${message.id}`}>
       <div
-        className="max-w-[82%] px-3 py-2"
+        className="relative max-w-[82%] px-3 py-2"
         style={{
           background: mine ? "var(--brand-tint)" : "var(--tone-card)",
           color: "var(--text-primary)",
@@ -1055,6 +991,22 @@ function MessageBubble({
           borderStartEndRadius: mine ? 4 : 16,
         }}
       >
+        {/* The tail: a rotated square sitting on the sender's own corner, clipped by the row. */}
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 0,
+            insetInlineStart: mine ? undefined : -3,
+            insetInlineEnd: mine ? -3 : undefined,
+            width: 10,
+            height: 10,
+            background: mine ? "var(--brand-tint)" : "var(--tone-card)",
+            transform: "rotate(45deg)",
+            borderStartStartRadius: 2,
+            pointerEvents: "none",
+          }}
+        />
         {file?.kind === "voice" ? (
           <VoiceNote messageId={message.id} durationMs={file.duration_ms} mine={mine} />
         ) : file?.kind === "image" ? (

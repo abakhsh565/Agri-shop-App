@@ -46,6 +46,15 @@ const BUCKET_LIMIT = 10 * 1024 * 1024;
 export const CHAT_IMAGE_MAX_BYTES = 400 * 1024;
 
 /**
+ * The voice-note bitrate: 24 kbps mono Opus.
+ *
+ * Speech is fully intelligible there and it is ~5× smaller than the browser default (~128 kbps):
+ * a 10-second note lands near 30 KB. The recording itself is the only place this can be decided;
+ * once uploaded, compression is lossy on top of lossy.
+ */
+export const VOICE_BITS_PER_SECOND = 24_000;
+
+/**
  * Reduce one picked photo to the chat ceiling before it is uploaded.
  *
  * The receiver is another app (the farmer app) reading the same bucket through a signed link, so
@@ -212,6 +221,14 @@ export interface Recording {
   stop: () => Promise<{ blob: Blob; mimeType: string; durationMs: number }>;
   cancel: () => void;
   startedAt: number;
+  /**
+   * How loud the microphone is right now, 0..1.
+   *
+   * The recording bar is meant to move with the voice, not with a timer, so the level is measured
+   * from the same stream that is being encoded: one AnalyserNode, read on demand, no second
+   * permission and no extra stream.
+   */
+  level: () => number;
 }
 
 /**
@@ -222,9 +239,23 @@ export async function startVoiceRecording(): Promise<Recording> {
   if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
     throw new Error("UNSUPPORTED: this device cannot record audio");
   }
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  // Voice, not music: one channel, the browser's own noise handling, and a bitrate that keeps a
+  // half-minute note around 90 KB instead of 1 MB. A recorded clip is the one thing on this screen
+  // the farmer has to download over a rural connection, so it is compressed at the source — the
+  // server cannot shrink it afterwards.
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+  });
   const mimeType = AUDIO_PREFERENCE.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
-  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  const recorder = new MediaRecorder(stream, {
+    ...(mimeType ? { mimeType } : {}),
+    audioBitsPerSecond: VOICE_BITS_PER_SECOND,
+  });
   const chunks: BlobPart[] = [];
   const startedAt = Date.now();
 
@@ -233,10 +264,40 @@ export async function startVoiceRecording(): Promise<Recording> {
   };
   recorder.start(250);
 
-  const closeStream = () => stream.getTracks().forEach((track) => track.stop());
+  const closeStream = () => {
+    stream.getTracks().forEach((track) => track.stop());
+    if (analyserContext) void analyserContext.close().catch(() => undefined);
+  };
+
+  // A private context per recording: nothing is left running between notes.
+  let analyserContext: AudioContext | null = null;
+  let analyser: AnalyserNode | null = null;
+  try {
+    analyserContext = new AudioContext();
+    analyser = analyserContext.createAnalyser();
+    analyser.fftSize = 512;
+    analyserContext.createMediaStreamSource(stream).connect(analyser);
+  } catch {
+    analyserContext = null;
+    analyser = null;
+  }
+  const samples = analyser ? new Uint8Array(analyser.fftSize) : null;
+  const readLevel = () => {
+    if (!analyser || !samples) return 0;
+    analyser.getByteTimeDomainData(samples);
+    let sum = 0;
+    for (let i = 0; i < samples.length; i += 1) {
+      const v = (samples[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / samples.length);
+    // Speech sits low in a linear window; the curve is what makes quiet words visible.
+    return Math.min(1, Math.pow(rms * 3.4, 0.7));
+  };
 
   return {
     startedAt,
+    level: readLevel,
     cancel: () => {
       try {
         if (recorder.state !== "inactive") recorder.stop();

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { ImageOff, Pause, Play } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { chatMediaLink, formatDuration } from "@/lib/chatMedia";
@@ -53,6 +53,29 @@ function useSignedLink(messageId: string, active: boolean) {
   return { url, failed, loading };
 }
 
+/**
+ * The shape of a voice note, the way a messenger draws one.
+ *
+ * A thin line is a progress bar; a voice note is read as a shape. The bars are fixed per message
+ * (hashed from its id, not randomised on render) so a clip looks the same every time it scrolls
+ * back into view, and they are painted with one clip-path instead of thirty animated nodes.
+ */
+const BAR_COUNT = 30;
+
+function waveform(messageId: string): number[] {
+  let seed = 0;
+  for (let i = 0; i < messageId.length; i += 1) seed = (seed * 31 + messageId.charCodeAt(i)) % 100003;
+  const bars: number[] = [];
+  for (let i = 0; i < BAR_COUNT; i += 1) {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    const noise = (seed / 2147483648);
+    // A slow envelope keeps it looking like speech instead of noise.
+    const envelope = 0.55 + 0.45 * Math.sin((i / BAR_COUNT) * Math.PI);
+    bars.push(0.28 + noise * 0.72 * envelope);
+  }
+  return bars;
+}
+
 export function VoiceNote({
   messageId,
   durationMs,
@@ -66,8 +89,10 @@ export function VoiceNote({
   const audio = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [rate, setRate] = useState(1);
   const [wanted, setWanted] = useState(false);
   const { url, failed, loading } = useSignedLink(messageId, wanted && !playing);
+  const bars = useRef(waveform(messageId));
 
   const toggle = () => {
     if (playing) {
@@ -92,10 +117,32 @@ export function VoiceNote({
   }, [url]);
 
   const total = durationMs ?? 0;
-  const elapsed = total > 0 ? Math.round((progress || 0) * total) : 0;
+  const ratio = Math.min(1, Math.max(0, progress || 0));
+  const elapsed = total > 0 ? Math.round(ratio * total) : 0;
+  // Idle shows the length, playing shows how far along it is — the same reading order as a player.
+  const clock = playing || ratio > 0 ? elapsed : total;
+
+  const seek = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const element = audio.current;
+    const box = event.currentTarget.getBoundingClientRect();
+    if (!element || !box.width) return;
+    const next = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+    setProgress(next);
+    if (Number.isFinite(element.duration) && element.duration > 0) {
+      element.currentTime = next * element.duration;
+    } else if (total > 0) {
+      element.currentTime = (next * total) / 1000;
+    }
+  };
+
+  const cycleRate = () => {
+    const next = rate === 1 ? 1.5 : rate === 1.5 ? 2 : 1;
+    setRate(next);
+    if (audio.current) audio.current.playbackRate = next;
+  };
 
   return (
-    <div className="flex items-center gap-2" data-testid={`voice-${messageId}`}>
+    <div className="flex items-center gap-2.5 min-w-[168px]" data-testid={`voice-${messageId}`}>
       <button
         type="button"
         onClick={toggle}
@@ -105,20 +152,81 @@ export function VoiceNote({
           background: mine ? "var(--brand)" : "var(--brand-tint)",
           color: mine ? "var(--brand-fg)" : "var(--brand-dark)",
         }}
+        data-testid={`voice-toggle-${messageId}`}
       >
-        {playing ? <Pause size={16} strokeWidth={2} /> : <Play size={16} strokeWidth={2} />}
+        {playing ? (
+          <Pause size={16} strokeWidth={2} fill="currentColor" />
+        ) : (
+          <Play size={16} strokeWidth={2} fill="currentColor" style={{ marginInlineStart: 2 }} />
+        )}
       </button>
-      <div className="flex flex-1 flex-col gap-1 min-w-[110px]">
-        <div className="h-1 rounded-full overflow-hidden" style={{ background: "var(--divider)" }}>
-          <div
-            className="h-full"
-            style={{ width: `${Math.min(100, Math.max(0, (progress || 0) * 100))}%`, background: "var(--brand)" }}
-          />
+
+      <div className="flex flex-1 flex-col gap-1">
+        {/* The bars: one wrapper paints the played half in brand, the rest stays muted. */}
+        <div
+          onClick={seek}
+          role="slider"
+          tabIndex={0}
+          aria-label={t("messages.voicePlay")}
+          aria-valuemin={0}
+          aria-valuemax={Math.round(total / 1000)}
+          aria-valuenow={Math.round(elapsed / 1000)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") void toggle();
+          }}
+          className="flex h-6 cursor-pointer items-center gap-[2px] touch-none"
+        >
+          {bars.current.map((height, index) => {
+            const played = index / BAR_COUNT <= ratio;
+            return (
+              <span
+                key={index}
+                className="w-[2px] shrink-0 rounded-full"
+                style={{
+                  height: Math.round(height * 22),
+                  background: played
+                    ? mine
+                      ? "var(--brand-dark)"
+                      : "var(--brand)"
+                    : mine
+                      ? "color-mix(in srgb, var(--brand-dark) 34%, transparent)"
+                      : "var(--divider)",
+                  transition: "background-color 120ms linear",
+                }}
+              />
+            );
+          })}
         </div>
-        <span className="text-10" style={{ color: "var(--text-tertiary)" }}>
-          {loading ? t("messages.voiceLoading") : failed ? t("messages.voiceUnavailable") : formatDuration(elapsed || total)}
+        <span className="flex items-center gap-1.5 text-10 tabular-nums" style={{ color: "var(--text-tertiary)" }}>
+          {loading
+            ? t("messages.voiceLoading")
+            : failed
+              ? t("messages.voiceUnavailable")
+              : playing
+                ? formatDuration(elapsed)
+                : formatDuration(clock)}
+          {playing && (
+            <span className="size-1.5 rounded-full" style={{ background: "var(--brand)" }} aria-hidden="true" />
+          )}
         </span>
       </div>
+
+      {/* Speed: only meaningful once there is audio to speed up. */}
+      <button
+        type="button"
+        onClick={cycleRate}
+        aria-label={`${t("messages.voiceSpeed")} ${rate}×`}
+        className="flex h-6 min-w-8 shrink-0 items-center justify-center rounded-full px-1.5 text-10 font-semibold tabular-nums"
+        style={{
+          background: rate === 1 ? "transparent" : "var(--brand-tint)",
+          color: rate === 1 ? "var(--text-tertiary)" : "var(--brand-dark)",
+          border: "1px solid var(--hairline)",
+        }}
+        data-testid={`voice-rate-${messageId}`}
+      >
+        {rate}×
+      </button>
+
       <audio
         ref={audio}
         preload="none"
@@ -132,6 +240,9 @@ export function VoiceNote({
           const element = event.currentTarget;
           if (element.duration && Number.isFinite(element.duration)) {
             setProgress(element.currentTime / element.duration);
+          } else if (total > 0) {
+            // A MediaRecorder WebM reports Infinity until it is seeked; the stored duration is truth.
+            setProgress(Math.min(1, (element.currentTime * 1000) / total));
           }
         }}
       />
