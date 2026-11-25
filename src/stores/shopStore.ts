@@ -10,9 +10,15 @@ import { useEmployeesStore } from "@/stores/employeesStore";
 import { useRolesStore } from "@/stores/rolesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useCartStore } from "@/stores/cartStore";
-import { getPendingCount, syncPendingOperations } from "@/lib/offlineQueue";
+import {
+  discardExhausted,
+  getBlockingPendingCount,
+  getPendingCount,
+  syncPendingOperations,
+} from "@/lib/offlineQueue";
 import { clearNav } from "@/lib/navContext";
-import { clearAllCachedData, suspendCachedData, confirmCacheBranch, hasScopedWriteInFlight } from "@/lib/localCache";
+import {
+  clearAllCachedData, suspendCachedData, confirmCacheBranch, hasScopedWriteInFlight } from "@/lib/localCache";
 import { setShopRolesByShop } from "@/lib/shopRoles";
 import type { PickedPlace } from "@/lib/geo";
 import type { MembershipRole, MembershipStatus } from "@/types";
@@ -641,9 +647,14 @@ export const useShopStore = create<ShopState>((set, get) => ({
     if (branchId === get().activeBranchId) return { ok: true };
     if (get().switching) return { ok: false, code: "switch_failed" };
     if (hasScopedWriteInFlight()) return { ok: false, code: "pending_sync" };
+    // Work that used every retry is not "waiting to send" — it never will be — and counting it
+    // as pending is what made changing branch impossible with no way out (owner report: the red
+    // "Some of your work has not been sent yet" banner, every time). It is dropped here, after
+    // the sync below gets its one honest chance, so only genuinely sendable work blocks.
     if (getPendingCount() > 0) {
       await syncPendingOperations(supabase).catch(() => undefined);
-      if (getPendingCount() > 0) return { ok: false, code: "pending_sync" };
+      discardExhausted();
+      if (getBlockingPendingCount() > 0) return { ok: false, code: "pending_sync" };
     }
     set({ switching: true });
     suspendCachedData();

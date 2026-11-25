@@ -38,6 +38,14 @@ export default function AdminMessagesPage() {
   const t = useT();
   const base = useShellBase();
   const returnTo = useReturnTo(`${base}/more`);
+  /**
+   * The list's own parent, stated rather than stepped back to.
+   *
+   * `navigate(-1)` from here retraces into the thread that was just left, so the arrow bounced
+   * between the conversation and the list and never reached More. The list is a module root: its
+   * back goes to the screen it belongs to, always.
+   */
+  const backTo = returnTo ?? `${base}/more`;
   const navigate = useNavigate();
 
   const threads = useFarmerMessagesStore((s) => s.threads);
@@ -153,6 +161,7 @@ export default function AdminMessagesPage() {
     <div className="flex flex-col w-full min-h-full" style={{ background: "var(--background)" }}>
       <StatusBar />
       <NavHeader
+        onBack={() => navigate(backTo, { replace: true })}
         title={t("admin.messages")}
         backTo={returnTo}
         right={

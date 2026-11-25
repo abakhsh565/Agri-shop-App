@@ -24,6 +24,7 @@ import Sheet from "@/components/ui/Sheet";
 import QrCode from "@/components/ui/QrCode";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
+import { useReturnTo } from "@/lib/useReturnTo";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/formatters";
 import { whatsappShareUrl } from "@/lib/appInvite";
 import { copyText } from "@/lib/clipboard";
@@ -53,6 +54,12 @@ export default function FarmerProfilePage() {
   const base = useShellBase();
   const { farmerId = "" } = useParams();
   const navigate = useNavigate();
+  /**
+   * The screen this profile was opened from — the thread when it came from the conversation, the
+   * list otherwise. Stated instead of retraced: `historyBack` stepped back into the thread and
+   * from there into the list and back again, which is the loop the owner reported.
+   */
+  const backTo = useReturnTo(`${base}/messages`) ?? `${base}/messages`;
 
   const thread = useFarmerMessagesStore((s) => s.thread);
   const loading = useFarmerMessagesStore((s) => s.threadLoading);
@@ -201,7 +208,7 @@ export default function FarmerProfilePage() {
   }
 
   return (
-    <Shell title={t("messages.profile")} backTo={`${base}/messages`} historyBack>
+          <Shell title={t("messages.profile")} backTo={backTo}>
       <div className="px-4 pb-3">
         <div className="ds-card flex flex-col items-center text-center gap-1 p-4">
           <LogoTile name={farmer.name} size={88} />

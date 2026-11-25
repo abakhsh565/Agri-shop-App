@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { prepareImage } from "@/lib/imageCompression";
 
 /**
  * Voice notes and photos in a farmer conversation.
@@ -33,6 +34,41 @@ export interface ChatMediaLink extends Omit<ChatMediaMeta, "attachment_id"> {
 }
 
 const BUCKET_LIMIT = 10 * 1024 * 1024;
+
+/**
+ * The photo ceiling for a chat attachment.
+ *
+ * 400 KB is the requirement, and it is deliberately below the app-wide 500 KB used by the finance
+ * screens: a chat picture is seen on a phone in a field, not printed, so resolution can be traded
+ * for a send that finishes. The encoder targets 92% of it and the check below refuses anything
+ * that still came out over, rather than uploading a file that only looks close.
+ */
+export const CHAT_IMAGE_MAX_BYTES = 400 * 1024;
+
+/**
+ * Reduce one picked photo to the chat ceiling before it is uploaded.
+ *
+ * The receiver is another app (the farmer app) reading the same bucket through a signed link, so
+ * what matters is that the bytes are a normal JPEG/WebP it can decode — never an exotic container
+ * or a ten-megabyte camera original.
+ */
+export async function prepareChatImage(file: File): Promise<{
+  file: File;
+  bytes: number;
+  originalBytes: number;
+  changed: boolean;
+}> {
+  const prepared = await prepareImage(file, { maxBytes: CHAT_IMAGE_MAX_BYTES });
+  if (prepared.file.size > CHAT_IMAGE_MAX_BYTES) {
+    throw new Error("VALIDATION: that photo could not be reduced below 400 KB — try another one");
+  }
+  return {
+    file: prepared.file,
+    bytes: prepared.file.size,
+    originalBytes: prepared.originalBytes,
+    changed: prepared.changed,
+  };
+}
 
 /** The project's functions origin. `VITE_SUPABASE_URL` is the same value the rest of the app uses. */
 function functionsBase(): string {
@@ -139,8 +175,18 @@ export async function chatMediaLink(messageId: string): Promise<ChatMediaLink> {
   return (await response.json()) as ChatMediaLink;
 }
 
-/** The recorder's preferred container, in the order Android WebView and desktop Chromium support it. */
-const AUDIO_PREFERENCE = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+/**
+ * The recorder's preferred container.
+ *
+ * Android's WebView advertises WebM/Opus and then, on several devices, produces a clip the
+ * bucket accepts and no player can read — the preview shows 0:00 and the send fails after it
+ * has been recorded. Those devices record MP4/AAC correctly, so Android asks for that first;
+ * desktop Chromium keeps WebM, which it writes reliably.
+ */
+const IS_ANDROID = /Android/i.test(typeof navigator === "undefined" ? "" : navigator.userAgent);
+const AUDIO_PREFERENCE = IS_ANDROID
+  ? ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"]
+  : ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
 
 export interface Recording {
   stop: () => Promise<{ blob: Blob; mimeType: string; durationMs: number }>;

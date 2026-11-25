@@ -30,7 +30,7 @@ import { useShellBase } from "@/lib/useShellBase";
 import { formatCurrency, formatDate, formatDateTime, formatTime } from "@/lib/formatters";
 import { whatsappShareUrl } from "@/lib/appInvite";
 import { PhotoMessage, VoiceNote } from "@/components/chat/MessageMedia";
-import { formatDuration, startVoiceRecording, type Recording } from "@/lib/chatMedia";
+import { formatDuration, prepareChatImage, startVoiceRecording, type Recording } from "@/lib/chatMedia";
 import {
   useFarmerMessagesStore,
   type AssignableOfficer,
@@ -96,6 +96,10 @@ export default function FarmerThreadPage() {
   const [preview, setPreview] = useState<{ blob: Blob; mimeType: string; durationMs: number; url: string } | null>(null);
   const [mediaBusy, setMediaBusy] = useState(false);
   const imageInput = useRef<HTMLInputElement | null>(null);
+  // A picked photo waits here, already compressed, so it can be looked at and given a caption
+  // before it is sent — a picture cannot be unsent any more than a voice note can.
+  const [photoPreview, setPhotoPreview] = useState<{ file: File; url: string; bytes: number } | null>(null);
+  const [photoCaption, setPhotoCaption] = useState("");
 
   const [openAsk, setOpenAsk] = useState<AskRef | null>(null);
   const [offerTotal, setOfferTotal] = useState("");
@@ -270,8 +274,11 @@ export default function FarmerThreadPage() {
       setPreview(null);
       atBottomRef.current = true;
       await loadThread(farmerId, { markRead: false });
-    } catch {
-      setError(t("messages.actionFailed"));
+    } catch (cause) {
+      // The reason the server gave, when it gave one: "try again" on its own is what made this
+      // failure unanswerable from the screen.
+      const detail = cause instanceof Error ? cause.message : "";
+      setError(detail && !/^HTTP \d+$/.test(detail) ? detail : t("messages.actionFailed"));
     } finally {
       setMediaBusy(false);
     }
@@ -282,8 +289,39 @@ export default function FarmerThreadPage() {
     event.target.value = "";
     if (!file) return;
     setMediaBusy(true);
+    setError("");
     try {
-      await sendImage(farmerId, file);
+      // Compressed before it is even shown: the farmer receives exactly what is previewed here,
+      // so the 400 KB ceiling belongs to the send rather than to a step someone can skip.
+      const prepared = await prepareChatImage(file);
+      if (photoPreview) URL.revokeObjectURL(photoPreview.url);
+      setPhotoCaption("");
+      setPhotoPreview({
+        file: prepared.file,
+        url: URL.createObjectURL(prepared.file),
+        bytes: prepared.bytes,
+      });
+    } catch (cause) {
+      const tooLarge = cause instanceof Error && cause.message.startsWith("VALIDATION");
+      setError(t(tooLarge ? "messages.photoTooLarge" : "messages.actionFailed"));
+    } finally {
+      setMediaBusy(false);
+    }
+  }
+
+  function discardPhoto() {
+    if (photoPreview) URL.revokeObjectURL(photoPreview.url);
+    setPhotoPreview(null);
+    setPhotoCaption("");
+  }
+
+  async function sendPhoto() {
+    if (!photoPreview || mediaBusy) return;
+    setMediaBusy(true);
+    setError("");
+    try {
+      await sendImage(farmerId, photoPreview.file, photoCaption);
+      discardPhoto();
       atBottomRef.current = true;
       await loadThread(farmerId, { markRead: false });
     } catch {
@@ -478,7 +516,13 @@ export default function FarmerThreadPage() {
         </button>
         <button
           type="button"
-          onClick={() => navigate(`${base}/messages/${farmerId}/profile`)}
+          onClick={() =>
+            navigate(`${base}/messages/${farmerId}/profile`, {
+              // The profile's arrow comes back here, not to the list: a conversation and its
+              // contact card are one visit, and the list is behind both of them.
+              state: { from: `${base}/messages/${farmerId}` },
+            })
+          }
           aria-label={t("messages.openProfileAria", { name: farmer.name })}
           className="flex items-center gap-2.5 min-w-0 flex-1 text-start"
           data-testid="farmer-open-profile"
@@ -491,6 +535,11 @@ export default function FarmerThreadPage() {
             <span className="text-11 truncate" style={{ color: "var(--text-secondary)" }}>
               {[farmer.village, farmer.phone].filter(Boolean).join(" · ")}
             </span>
+            {current.shop?.name && (
+              <span className="text-10 truncate" style={{ color: "var(--text-tertiary)" }} data-testid="thread-branch">
+                {t("messages.branchLabel")} · {current.shop.name}
+              </span>
+            )}
           </span>
         </button>
         <button
@@ -933,6 +982,38 @@ export default function FarmerThreadPage() {
             </p>
           </div>
         )}
+
+        <Sheet
+          open={Boolean(photoPreview)}
+          title={t("messages.photoPreviewTitle")}
+          onClose={discardPhoto}
+        >
+          {photoPreview && (
+            <div className="px-4 pb-6 flex flex-col gap-3" data-testid="photo-preview">
+              <img
+                src={photoPreview.url}
+                alt={t("messages.photoAlt")}
+                className="w-full rounded-[var(--radius-card)] object-contain"
+                style={{ maxHeight: 280, background: "var(--tone-sunken)" }}
+              />
+              <span className="text-10 text-center" style={{ color: "var(--text-tertiary)" }}>
+                {t("messages.photoSize", { kb: Math.max(1, Math.round(photoPreview.bytes / 1024)) })}
+              </span>
+              <Input
+                label={t("messages.photoCaption")}
+                value={photoCaption}
+                onChange={(event) => setPhotoCaption(event.target.value)}
+                data-testid="photo-caption"
+              />
+              <Button fullWidth loading={mediaBusy} onClick={() => void sendPhoto()} testId="photo-preview-send">
+                {t("messages.photoSendNow")}
+              </Button>
+              <Button variant="ghost" fullWidth disabled={mediaBusy} onClick={discardPhoto}>
+                {t("common.cancel")}
+              </Button>
+            </div>
+          )}
+        </Sheet>
 
         <SelectSheet
           open={officerPickerOpen}

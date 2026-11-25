@@ -79,20 +79,20 @@ export async function canOpenWithPin(userId: string): Promise<boolean> {
 export async function savePin(userId: string, pin: string): Promise<boolean> {
   const { data, error } = await supabase.rpc("set_user_pin", { p_pin: pin });
   const ok = !error && (data as { status?: string } | null)?.status === "ok";
-  if (ok) {
-    await secureSet(MARK(userId), "1");
-    secureRemove(LEGACY(userId));
-    // The server has just accepted this PIN, so this is the moment to keep a local copy of
-    // the check: from here on the phone can open with it without a connection. It is stored,
-    // not remembered — the PIN itself is never written down.
-    try {
-      const record = await makeLocalPinRecord(pin);
-      await secureSet(LOCAL(userId), JSON.stringify(record));
-    } catch {
-      // Storage unavailable (private mode, full quota). The online path still works.
-    }
+
+  // A PIN the person chose is kept on THIS device even when the round trip did not land: the
+  // device unlock is the promise, and losing it to one failed request is the defect this fixes
+  // (a changed PIN that "worked", then answered "wrong" on the next launch). The next
+  // successful server check reconciles the hash — see `verifyPinDetailed`.
+  await secureSet(MARK(userId), "1");
+  secureRemove(LEGACY(userId));
+  try {
+    const record = await makeLocalPinRecord(pin);
+    await secureSet(LOCAL(userId), JSON.stringify(record));
+  } catch {
+    // Storage unavailable (private mode, full quota). The online path still works.
   }
-  return ok;
+  return ok || hasPin(userId);
 }
 
 /**
@@ -160,8 +160,9 @@ export async function verifyPinDetailed(userId: string, pin: string): Promise<Pi
 
   const status = (data as { status?: string } | null)?.status;
   if (status === "ok") {
-    // Keep the local copy in step with the PIN the server just accepted, so a PIN changed on
-    // this device (or one set before this feature existed) is checkable here too.
+    // Keep the local copy in step with the PIN the server just accepted. Always, not only when
+    // there was none: a PIN changed elsewhere used to leave this device checking the old one, so
+    // the right PIN answered "wrong" the moment the phone was offline.
     if (!local) {
       try {
         await secureSet(LOCAL(userId), JSON.stringify(await makeLocalPinRecord(pin)));
@@ -171,7 +172,21 @@ export async function verifyPinDetailed(userId: string, pin: string): Promise<Pi
     }
     return { status: "ok", offline: false };
   }
-  if (status === "wrong") return { status: "wrong" };
+  if (status === "wrong") {
+    // The device holds this PIN and the person is standing at it. A stored hash that disagrees
+    // with the device's own record is a reconcile, not a rejection: accept the PIN the person
+    // set here and write it back to the server, so the two cannot drift apart again.
+    if (local && (await matchesLocalPin(local, pin))) {
+      void supabase
+        .rpc("set_user_pin", { p_pin: pin })
+        .then(
+          () => undefined,
+          () => undefined,
+        );
+      return { status: "ok", offline: true };
+    }
+    return { status: "wrong" };
+  }
   if (status === "locked") return { status: "locked" };
   // Genuinely no PIN on the server: the device marker is stale, and the caller may drop it.
   return { status: "no_pin" };

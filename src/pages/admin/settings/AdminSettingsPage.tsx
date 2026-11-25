@@ -347,7 +347,18 @@ export default function AdminSettingsPage() {
               }
             />
             <ListRow
-              onClick={() => navigate("/login/pin-set", { state: { returnTo: "/admin/settings" } })}
+              onClick={() => {
+                // Changing an existing PIN confirms the person first, with a code to the phone on
+                // the account, and only then lets them choose a new one. Reusing the reset flow
+                // is what makes that true without a second implementation: it already proves the
+                // number by OTP and ends on the PIN screen. A first PIN needs no proof — the
+                // person is already signed in and has none to replace.
+                if (user && hasPin(user.id)) {
+                  navigate("/login/forgot-pin", { state: { user, returnTo: "/admin/settings" } });
+                  return;
+                }
+                navigate("/login/pin-set", { state: { returnTo: "/admin/settings" } });
+              }}
               icon={Lock}
               title={user && hasPin(user.id) ? t("settings.changePin") : t("settings.setupPin")}
               trailing={<ChevronRight size={14} style={{ color: "var(--text-secondary)" }} className="shrink-0" />}

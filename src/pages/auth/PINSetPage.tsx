@@ -85,7 +85,28 @@ export default function PINSetPage() {
 
   return (
     <AuthLayout>
-      <NavHeader title={step === "set" ? t("auth.setPinBtn") : t("auth.confirmPinBtn")} noBack />
+      {/*
+        The arrow goes back to where the screen was opened from — Settings, when a PIN is being
+        changed — and to the account when onboarding has no screen behind it. It used to have no
+        arrow at all, so the phone's own back button walked out of the app's stack and landed on
+        the sign-in screen, which reads as being signed out.
+      */}
+      <NavHeader
+        title={step === "set" ? t("auth.setPinBtn") : t("auth.confirmPinBtn")}
+        onBack={() => {
+          if (returnTo) {
+            navigate(returnTo, { replace: true });
+            return;
+          }
+          if (step === "confirm") {
+            setStep("set");
+            setFirstPin("");
+            setConfirmPin("");
+            return;
+          }
+          navigate(user ? homePathForUser(user) : "/login", { replace: true });
+        }}
+      />
       {/* Same measurement as the other PIN screens (see `.ds-auth-screen`): the keypad scales
           with the height the screen actually has, so choosing a PIN is one screen on every
           phone rather than a screen with the last row of keys below the fold. */}

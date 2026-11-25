@@ -110,6 +110,26 @@ export function getPendingCount(): number {
 }
 
 /**
+ * Work that will never be delivered, and that must therefore stop blocking the app.
+ *
+ * An item that has used every retry is kept for inspection but is no longer "waiting to send":
+ * counting it as pending is what left a shop unable to change branch for ever, with the banner
+ * "Some of your work has not been sent yet" and no way to clear it.
+ */
+export function getBlockingPendingCount(): number {
+  return loadQueue().filter((item) => item.retries < MAX_RETRIES).length;
+}
+
+/** Drop the items that exhausted their retries. Returns how many were dropped. */
+export function discardExhausted(): number {
+  const queue = loadQueue();
+  const keep = queue.filter((item) => item.retries < MAX_RETRIES);
+  const dropped = queue.length - keep.length;
+  if (dropped > 0) saveQueue(keep);
+  return dropped;
+}
+
+/**
  * Sync all pending items to Supabase.
  * Uses the provided supabase client (from @/lib/supabase).
  * Returns { synced, failed } counts.

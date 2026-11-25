@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
-import { uploadChatMedia, type ChatMediaMeta } from "@/lib/chatMedia";
+import { prepareChatImage, uploadChatMedia, type ChatMediaMeta } from "@/lib/chatMedia";
 
 /**
  * Farmer conversations: the store behind the Messages tab.
@@ -64,6 +64,18 @@ export interface VisitRequest {
 }
 
 export interface FarmerThread {
+  /**
+   * The branch this conversation belongs to. Two branches of one business have two separate
+   * threads with the same farmer, and this is what tells them apart on screen (0338).
+   */
+  shop?: {
+    id: string;
+    name: string;
+    city: string | null;
+    address: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  };
   farmer: {
     id: string;
     name: string;
@@ -285,11 +297,18 @@ export const useFarmerMessagesStore = create<FarmerMessagesState>((set, get) => 
   },
 
   async sendImage(farmerId, file, caption) {
-    const mimeType = file.type || "image/jpeg";
+    // The upload is the compressed file, never the camera original: the receiver is the farmer app
+    // on a rural connection, and 400 KB is the agreed ceiling.
+    const prepared = await prepareChatImage(
+      file instanceof File
+        ? file
+        : new File([file as Blob], "photo.jpg", { type: file.type || "image/jpeg" }),
+    );
+    const mimeType = prepared.file.type || "image/jpeg";
     const uploaded = await uploadChatMedia({
       farmerId,
       kind: "image",
-      bytes: file,
+      bytes: prepared.file,
       mimeType,
     });
     const { error } = await supabase.rpc("send_farmer_attachment", {

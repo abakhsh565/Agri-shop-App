@@ -252,7 +252,17 @@ function encode(canvas: HTMLCanvasElement, type: string, quality: number): Promi
  * Prepare one picture and report what changed. The returned file is marked, so a second call on
  * the same object (for example upload after a crop) does not recompress it.
  */
-export async function prepareImage(file: File): Promise<PreparedImage> {
+export async function prepareImage(
+  file: File,
+  options: { maxBytes?: number } = {},
+): Promise<PreparedImage> {
+  // A caller may need a tighter ceiling than the app-wide one. The chat asks for 400 KB, so a
+  // photo travels over a rural connection inside that budget instead of the 500 KB default.
+  const hardMax =
+    Number.isFinite(options.maxBytes) && (options.maxBytes ?? 0) > 0
+      ? Math.floor(options.maxBytes as number)
+      : HARD_MAX_IMAGE_BYTES;
+  const softMax = Math.min(SOFT_MAX_IMAGE_BYTES, Math.floor(hardMax * 0.92));
   const mime = imageMime(file);
   const unchanged: PreparedImage = {
     file,
@@ -268,7 +278,7 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
 
   // A crop is already high-quality and must not be encoded twice — unless it is still over the
   // ceiling, in which case this pass is the one that makes it acceptable.
-  if (PREPARED.has(file) && file.size <= HARD_MAX_IMAGE_BYTES) return unchanged;
+  if (PREPARED.has(file) && file.size <= hardMax) return unchanged;
   // GIFs may be animated and SVGs are vector: rasterising either would destroy information.
   if (!RASTER.has(mime)) return unchanged;
   // A small JPEG/WebP is already doing the job; decoding it just to re-encode would lose quality.
@@ -286,14 +296,14 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
 
     // An image already within the ceiling and its planned edge is not spending a generation of
     // quality for a few kilobytes. Above the ceiling, compression is mandatory.
-    if (file.size <= HARD_MAX_IMAGE_BYTES && Math.max(width, height) <= plan.maxEdge) return unchanged;
+    if (file.size <= hardMax && Math.max(width, height) <= plan.maxEdge) return unchanged;
 
     const initialScale = Math.min(1, plan.maxEdge / Math.max(width, height));
     const initialWidth = Math.max(1, Math.round(width * initialScale));
     const initialHeight = Math.max(1, Math.round(height * initialScale));
     const outputPixels = initialWidth * initialHeight;
     const softBudget = Math.min(
-      SOFT_MAX_IMAGE_BYTES,
+      softMax,
       file.size * 0.92,
       Math.max(MIN_SOFT_BUDGET, outputPixels * plan.bytesPerPixel),
     );
@@ -355,7 +365,7 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
 
     // Browser encoders occasionally disagree with the estimate. A last, small JPEG is the
     // guaranteed way to honour the ceiling rather than upload a file that merely looks close.
-    if (best && best.blob.size > HARD_MAX_IMAGE_BYTES) {
+    if (best && best.blob.size > hardMax) {
       for (const cap of [480, 320]) {
         const emergencyScale = Math.min(1, cap / Math.max(width, height));
         const emergencyWidth = Math.max(1, Math.round(width * emergencyScale));
@@ -364,16 +374,16 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
         if (emergency && emergency.blob.size < best.blob.size) {
           best = { ...emergency, width: emergencyWidth, height: emergencyHeight };
         }
-        if (best.blob.size <= HARD_MAX_IMAGE_BYTES) break;
+        if (best.blob.size <= hardMax) break;
       }
     }
 
     if (!best) return unchanged;
     // If the original already met the ceiling and re-encoding did not improve it, keep the
     // original rather than spend quality for no smaller file.
-    if (best.blob.size >= file.size * 0.96 && file.size <= HARD_MAX_IMAGE_BYTES) return unchanged;
+    if (best.blob.size >= file.size * 0.96 && file.size <= hardMax) return unchanged;
     // The ceiling wins over the original whenever the original was over it.
-    if (best.blob.size > HARD_MAX_IMAGE_BYTES && file.size <= HARD_MAX_IMAGE_BYTES) return unchanged;
+    if (best.blob.size > hardMax && file.size <= hardMax) return unchanged;
 
     const blobType = best.blob.type || chosenType;
     const extension = extensionForImageMime(blobType);
