@@ -124,6 +124,17 @@ async function readError(response: Response): Promise<string> {
  * The path is decided by the function (`<shop>/<farmer>/<uuid>.<ext>`), so nothing here can point
  * an upload at another conversation.
  */
+/**
+ * The container name of a recorded mime type.
+ *
+ * `MediaRecorder.mimeType` reports the codec as a parameter — `audio/webm;codecs=opus` — while
+ * storage and the media function speak bare types. Forwarding the parameter is what made a
+ * perfectly good recording fail with "unsupported mime type": the clip was fine, the label was not.
+ */
+export function baseMimeType(mimeType: string): string {
+  return (mimeType || "").split(";")[0].trim().toLowerCase();
+}
+
 export async function uploadChatMedia(input: {
   farmerId: string;
   kind: ChatMediaKind;
@@ -131,6 +142,7 @@ export async function uploadChatMedia(input: {
   mimeType: string;
   durationMs?: number | null;
 }): Promise<{ storage_path: string; size_bytes: number }> {
+  const mimeType = baseMimeType(input.mimeType);
   if (input.bytes.size <= 0) throw new Error("VALIDATION: empty file");
   if (input.bytes.size > BUCKET_LIMIT) throw new Error("VALIDATION: a file is at most 10 MB");
   if (input.kind === "voice" && !Number.isFinite(input.durationMs ?? NaN)) {
@@ -139,7 +151,7 @@ export async function uploadChatMedia(input: {
 
   const params = new URLSearchParams({
     kind: input.kind,
-    mime: input.mimeType,
+    mime: mimeType,
     farmer_id: input.farmerId,
   });
   if (input.kind === "voice") params.set("duration_ms", String(Math.round(input.durationMs ?? 0)));
@@ -148,7 +160,7 @@ export async function uploadChatMedia(input: {
   const response = await fetchWithRetry(() =>
     fetch(`${functionsBase()}?${params.toString()}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": input.mimeType },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": mimeType },
       body: input.bytes,
     }),
   );
@@ -172,7 +184,15 @@ export async function chatMediaLink(messageId: string): Promise<ChatMediaLink> {
     }),
   );
   if (!response.ok) throw new Error(await readError(response));
-  return (await response.json()) as ChatMediaLink;
+  const link = (await response.json()) as ChatMediaLink;
+  // The function signs against the storage base URL IT was given, which can be a host only the
+  // server can reach (the local container name, or the edge runtime's own port). The signature
+  // covers the object path, not the host, and the caller already reaches storage on the project
+  // origin it called the function on — so the link is re-based there, or a clip that uploaded
+  // fine plays as a decode error.
+  const origin = new URL(functionsBase()).origin;
+  const absolute = new URL(link.url, origin);
+  return { ...link, url: `${origin}${absolute.pathname}${absolute.search}` };
 }
 
 /**
@@ -228,7 +248,7 @@ export async function startVoiceRecording(): Promise<Recording> {
       new Promise((resolve, reject) => {
         const finish = () => {
           closeStream();
-          const type = recorder.mimeType || mimeType || "audio/webm";
+          const type = baseMimeType(recorder.mimeType || mimeType || "audio/webm") || "audio/webm";
           const blob = new Blob(chunks, { type });
           if (blob.size === 0) return reject(new Error("VALIDATION: nothing was recorded"));
           resolve({ blob, mimeType: type, durationMs: Math.max(1, Date.now() - startedAt) });

@@ -50,6 +50,13 @@ export interface QueueItem {
   syncedId?: string;
   /** Error message from last failed attempt */
   lastError?: string;
+  /**
+   * Set once the item has used every retry. A parked item is kept forever with its full payload:
+   * an unsent sale is the shop's money, so it is never deleted on the shop's behalf. It stops
+   * blocking the app (it is not "waiting to send") and waits for a person to retry it.
+   */
+  parked?: boolean;
+  parkedAt?: string;
 }
 
 const STORAGE_KEY = "agrishop_write_queue";
@@ -109,24 +116,73 @@ export function getPendingCount(): number {
   return loadQueue().length;
 }
 
+/** Whether an item is still going to be delivered by itself. */
+function isDeliverable(item: QueueItem): boolean {
+  return !item.parked && item.retries < MAX_RETRIES;
+}
+
 /**
  * Work that will never be delivered, and that must therefore stop blocking the app.
  *
- * An item that has used every retry is kept for inspection but is no longer "waiting to send":
- * counting it as pending is what left a shop unable to change branch for ever, with the banner
- * "Some of your work has not been sent yet" and no way to clear it.
+ * An item that used every retry is no longer "waiting to send": counting it as pending is what
+ * left a shop unable to change branch for ever, with the banner "Some of your work has not been
+ * sent yet" and no way to clear it.
  */
 export function getBlockingPendingCount(): number {
-  return loadQueue().filter((item) => item.retries < MAX_RETRIES).length;
+  return loadQueue().filter(isDeliverable).length;
 }
 
-/** Drop the items that exhausted their retries. Returns how many were dropped. */
-export function discardExhausted(): number {
+/**
+ * Park the items that exhausted their retries. Returns how many were parked.
+ *
+ * PARKED, NOT DISCARDED. These payloads are unsent sales, payments and returns — the shop's
+ * money. Deleting them to unblock a branch switch would lose a sale the cashier believed was
+ * taken, silently. Parking keeps every byte (`operation`, `context`, `lastError`, `queuedAt`),
+ * removes the item from the blocking count, and leaves it to a person to retry or to throw away
+ * on purpose; `syncPendingOperations` never touches parked work either.
+ */
+export function parkExhausted(): number {
+  const now = new Date().toISOString();
+  let parked = 0;
+  const queue = loadQueue().map((item) => {
+    if (item.parked || item.retries < MAX_RETRIES) return item;
+    parked += 1;
+    return { ...item, parked: true, parkedAt: now };
+  });
+  if (parked > 0) saveQueue(queue);
+  return parked;
+}
+
+/** The work that gave up, for the screen that shows it. Newest failure first. */
+export function getParkedItems(): QueueItem[] {
+  return loadQueue()
+    .filter((item) => item.parked || item.retries >= MAX_RETRIES)
+    .sort((a, b) => (b.parkedAt ?? b.queuedAt).localeCompare(a.parkedAt ?? a.queuedAt));
+}
+
+/** Put a parked item back in the queue with a clean retry budget. */
+export function retryParked(id: string): boolean {
   const queue = loadQueue();
-  const keep = queue.filter((item) => item.retries < MAX_RETRIES);
-  const dropped = queue.length - keep.length;
-  if (dropped > 0) saveQueue(keep);
-  return dropped;
+  const item = queue.find((q) => q.id === id);
+  if (!item) return false;
+  saveQueue(
+    queue.map((q) =>
+      q.id === id ? { ...q, parked: false, parkedAt: undefined, retries: 0, lastError: undefined } : q,
+    ),
+  );
+  return true;
+}
+
+/**
+ * Throw a parked item away. Only ever called because a person chose to: the queue will not do this
+ * on its own, so an unsent sale cannot disappear between two branch switches.
+ */
+export function discardParkedItem(id: string): boolean {
+  const queue = loadQueue();
+  const item = queue.find((q) => q.id === id);
+  if (!item) return false;
+  saveQueue(queue.filter((q) => q.id !== id));
+  return true;
 }
 
 /**
@@ -148,8 +204,14 @@ export async function syncPendingOperations(
 
   try {
     for (const item of queue) {
-      if (item.retries >= MAX_RETRIES) {
+      // Parked work is waiting for a person, not for a connection: leave it exactly as it is so
+      // this pass cannot wear it down or report it as a new failure.
+      if (item.parked) {
         remaining.push(item);
+        continue;
+      }
+      if (item.retries >= MAX_RETRIES) {
+        remaining.push({ ...item, parked: true, parkedAt: item.parkedAt ?? new Date().toISOString() });
         failed++;
         errors.push(`${item.operation.type}: max retries exceeded (${item.lastError ?? "unknown"})`);
         continue;
@@ -175,6 +237,12 @@ export async function syncPendingOperations(
         const msg = err instanceof Error ? err.message : String(err);
         item.retries += 1;
         item.lastError = msg;
+        if (item.retries >= MAX_RETRIES) {
+          // The last allowed attempt has just failed. Park it here rather than leaving work that
+          // the next pass will ignore: whoever looks at the phone must see it in the queue.
+          item.parked = true;
+          item.parkedAt = new Date().toISOString();
+        }
         remaining.push(item);
         failed++;
         errors.push(`${item.operation.type}: ${msg}`);

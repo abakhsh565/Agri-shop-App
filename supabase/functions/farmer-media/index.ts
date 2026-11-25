@@ -140,7 +140,10 @@ serve(async (req: Request) => {
   // ── Upload ────────────────────────────────────────────────────────────────────────────────
   if (req.method === "POST") {
     const kind = (url.searchParams.get("kind") ?? "").trim().toLowerCase();
-    const mime = (url.searchParams.get("mime") ?? "").trim().toLowerCase();
+    // A recorder reports its codec as a parameter (`audio/webm;codecs=opus`) and that is what a
+    // client naturally forwards. Only the bare type names a container, so the parameter is
+    // dropped here rather than rejecting a clip the device just recorded successfully.
+    const mime = (url.searchParams.get("mime") ?? "").trim().toLowerCase().split(";")[0].trim();
     const durationRaw = url.searchParams.get("duration_ms");
     const duration = durationRaw === null ? null : Number(durationRaw);
 
@@ -240,6 +243,14 @@ serve(async (req: Request) => {
       return json({ error: "SIGN_FAILED", message: signError?.message ?? "no url" }, 500);
     }
 
+    // The storage client signs against the base URL the function itself was given, which inside the
+    // local stack is the container hostname (`http://kong:8000`) — a name the caller's browser or
+    // phone cannot resolve, so a clip that uploaded fine would look unplayable. Storage lives on the
+    // same origin as this function in every environment (local gateway, hosted project), so the
+    // link is re-based onto the origin the caller actually reached.
+    const absolute = new URL(signed.signedUrl, url.origin);
+    const playableUrl = `${url.origin}${absolute.pathname}${absolute.search}`;
+
     return json({
       message_id: data.message_id,
       kind: data.kind,
@@ -248,7 +259,7 @@ serve(async (req: Request) => {
       duration_ms: data.duration_ms,
       sender: data.sender,
       created_at: data.created_at,
-      url: signed.signedUrl,
+      url: playableUrl,
       expires_in: SIGNED_URL_SECONDS,
     });
   }

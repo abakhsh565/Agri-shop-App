@@ -11,7 +11,7 @@ import { useRolesStore } from "@/stores/rolesStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useCartStore } from "@/stores/cartStore";
 import {
-  discardExhausted,
+  parkExhausted,
   getBlockingPendingCount,
   getPendingCount,
   syncPendingOperations,
@@ -653,7 +653,9 @@ export const useShopStore = create<ShopState>((set, get) => ({
     // the sync below gets its one honest chance, so only genuinely sendable work blocks.
     if (getPendingCount() > 0) {
       await syncPendingOperations(supabase).catch(() => undefined);
-      discardExhausted();
+      // Park, never delete: an unsent sale is the shop's money, so it leaves the blocking count
+      // and stays in the queue for a person to retry.
+      parkExhausted();
       if (getBlockingPendingCount() > 0) return { ok: false, code: "pending_sync" };
     }
     set({ switching: true });

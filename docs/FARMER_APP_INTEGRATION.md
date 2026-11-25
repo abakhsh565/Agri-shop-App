@@ -75,6 +75,14 @@ ratio and as much edge resolution as fits). The farmer app should do the same be
 `farmer_api_send_attachment`: the server validates size, kind and duration, and will refuse an
 object outside the farmer's own `shop/farmer` folder, but it cannot shrink a file after the fact.
 
+### Voice notes: send the container, not the codec
+
+`MediaRecorder.mimeType` reports `audio/webm;codecs=opus`, and that label is **not** a container
+name. Send the bare type in `p_mime_type` (`audio/webm`, `audio/ogg`, `audio/mp4`, `audio/mpeg`) —
+the dealer app and the media function now strip a codec parameter for older builds, but the stored
+row and the bucket allowlist want the bare type. A record-then-refuse loop costs the farmer the
+clip he just spoke.
+
 Errors come back as `{ code: "P0001", message: "NOT_AUTHORIZED: …" }`. Treat `NOT_AUTHORIZED` as
 "the credential is gone — ask the shop for a new invitation", and `NOT_FOUND`/`VALIDATION` as
 something to show the farmer.
