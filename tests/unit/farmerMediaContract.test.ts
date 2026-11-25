@@ -107,6 +107,17 @@ describe('0336 — voice and image files', () => {
     expect(sql0337).not.toMatch(/=\s*public\.resolve_active_shop\(/);
   });
 
+  test('a transient auth failure is never reported as a bad credential', () => {
+    // Measured on staging: the same JWT answered 200 at /auth/v1/user at the moment the function
+    // answered 401, and every retry a second later succeeded. Only an explicit rejection of the
+    // token (400/401/403 from the auth API) may become 401; rate limits, 5xx and transport errors
+    // are 503 AUTH_UNAVAILABLE so the client retries instead of refreshing a session that is fine.
+    expect(functionSource).toContain('AUTH_UNAVAILABLE');
+    expect(functionSource).toMatch(/status === 400 \|\| status === 401 \|\| status === 403/);
+    expect(functionSource).toMatch(/status: 503/);
+    expect(functionSource).toContain('Retry-After');
+  });
+
   test('the function mints a short-lived link and verifies a JWT properly', () => {
     expect(functionSource).toContain('createSignedUrl');
     expect(functionSource).toContain('SIGNED_URL_SECONDS = 60');

@@ -49,6 +49,30 @@ async function dealerToken(): Promise<string> {
   return token;
 }
 
+/** Statuses that mean "the server could not answer", never "your credential is wrong". */
+const RETRYABLE = new Set([502, 503, 504]);
+
+/**
+ * One retry for a transient answer. The function now answers `503 AUTH_UNAVAILABLE` when the auth
+ * service itself did not respond, and a dropped connection is the same class of event; neither says
+ * anything about the dealer's session, so the screen should not show a failure for it.
+ */
+async function fetchWithRetry(send: () => Promise<Response>): Promise<Response> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const response = await send();
+      if (attempt === 0 && RETRYABLE.has(response.status)) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      if (attempt > 0) throw error instanceof Error ? error : new Error("MEDIA_UNAVAILABLE");
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  }
+}
+
 async function readError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { error?: string; message?: string };
@@ -84,14 +108,14 @@ export async function uploadChatMedia(input: {
   });
   if (input.kind === "voice") params.set("duration_ms", String(Math.round(input.durationMs ?? 0)));
 
-  const response = await fetch(`${functionsBase()}?${params.toString()}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${await dealerToken()}`,
-      "Content-Type": input.mimeType,
-    },
-    body: input.bytes,
-  });
+  const token = await dealerToken();
+  const response = await fetchWithRetry(() =>
+    fetch(`${functionsBase()}?${params.toString()}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": input.mimeType },
+      body: input.bytes,
+    }),
+  );
   if (!response.ok) throw new Error(await readError(response));
 
   const body = (await response.json()) as { storage_path: string; size_bytes: number };
@@ -105,9 +129,12 @@ export async function uploadChatMedia(input: {
  * what keeps another conversation's audio out of reach.
  */
 export async function chatMediaLink(messageId: string): Promise<ChatMediaLink> {
-  const response = await fetch(`${functionsBase()}?message_id=${encodeURIComponent(messageId)}`, {
-    headers: { Authorization: `Bearer ${await dealerToken()}` },
-  });
+  const token = await dealerToken();
+  const response = await fetchWithRetry(() =>
+    fetch(`${functionsBase()}?message_id=${encodeURIComponent(messageId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+  );
   if (!response.ok) throw new Error(await readError(response));
   return (await response.json()) as ChatMediaLink;
 }

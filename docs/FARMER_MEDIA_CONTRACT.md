@@ -44,7 +44,8 @@ Body:     the raw bytes (1 byte … 10 MB)
 200 → `{ "storage_path": "<shop>/<farmer>/<uuid>.webm", "content_type": "audio/webm", "size_bytes": 4211, "farmer_id": "…", "duration_ms": 4200 }`
 
 Refusals: `400 VALIDATION` (kind/mime/duration/size), `401 NOT_AUTHORIZED` (bad or missing
-credential), `403 NOT_LINKED` (dealer uploading for a farmer of another shop), `413 TOO_LARGE`.
+credential), `403 NOT_LINKED` (dealer uploading for a farmer of another shop), `413 TOO_LARGE`,
+`503 AUTH_UNAVAILABLE` (the auth service did not answer — **not** a verdict on the token; retry).
 
 Allowed types: `audio/webm`, `audio/ogg`, `audio/mp4`, `audio/mpeg`, `image/jpeg`, `image/png`,
 `image/webp`. A voice note **must** carry `duration_ms` (1 … 600000); an image must not.
@@ -121,7 +122,12 @@ it immediately, and re-request after `expires_in`. It cannot be cached in a mess
 replayed later.
 
 Refusals: `401 NOT_AUTHORIZED` (no credential), `404 NOT_FOUND` (not there **or** not yours — the
-server deliberately does not distinguish, so a caller cannot probe another conversation).
+server deliberately does not distinguish, so a caller cannot probe another conversation),
+`503 AUTH_UNAVAILABLE` (the auth service did not answer — retry; the dealer app does this once).
+
+`401` always means the credential itself was rejected. A transient failure of the auth service behind
+the function used to be reported as `401`, which told a signed-in dealer his session was invalid while
+the same JWT answered `200` at `/auth/v1/user`; that is now `503`, and the token is not judged.
 
 ## 6. Why the bucket is private and has no client policy
 

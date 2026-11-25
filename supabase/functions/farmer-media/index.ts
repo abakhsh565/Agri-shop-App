@@ -59,17 +59,51 @@ const EXT: Record<string, string> = {
   "image/webp": "webp",
 };
 
-/** The caller's dealer identity, or null. A JWT is verified by the auth API, never by decoding it. */
-async function dealerIdentity(req: Request, admin: ReturnType<typeof createClient>) {
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * The caller's dealer identity: an identity, `null` (no usable credential), or `"unavailable"`.
+ *
+ * WHY THE THIRD STATE, and why this function used to report a false 401. A JWT is verified by the
+ * auth API, never by decoding it — but that call is a network hop, and it can fail for reasons that
+ * say nothing about the caller: a 429 from the auth service, a 5xx, a dropped connection on a cold
+ * isolate (`status: 0`). The old body collapsed every one of those into `null`, which the caller
+ * then reported as `401 NOT_AUTHORIZED`, i.e. "your session is not valid". Measured on staging: the
+ * same JWT answered `200` at `/auth/v1/user` at the moment the function answered `401`, and every
+ * retry a second later succeeded. That is a lie about the credential, and a client that refreshes
+ * its session on a 401 is chasing a problem it does not have.
+ *
+ * So: only an explicit rejection of THIS token (400/401/403 from the auth API) is `null`. Anything
+ * transient is retried once here, then reported as `"unavailable"` and answered `503`, which the
+ * dealer app retries — the token was never judged.
+ */
+async function dealerIdentity(
+  req: Request,
+  admin: ReturnType<typeof createClient>,
+): Promise<{ userId: string } | "unavailable" | null> {
   const header = req.headers.get("Authorization") ?? "";
   const jwt = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
   if (!jwt) return null;
-  const { data, error } = await admin.auth.getUser(jwt);
-  if (error || !data?.user) return null;
-  // The user id is all this function asserts. WHICH shop, and whether that shop links the farmer,
-  // is a membership question and is answered by `farmer_media_upload_target` in SQL — the service
-  // role has no grant on the link table, and it should not: one authority for one rule.
-  return { userId: data.user.id as string };
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const { data, error } = await admin.auth.getUser(jwt);
+      if (!error && data?.user) {
+        // The user id is all this function asserts. WHICH shop, and whether that shop links the
+        // farmer, is a membership question and is answered by `farmer_media_upload_target` in SQL —
+        // the service role has no grant on the link table, and it should not: one authority, one rule.
+        return { userId: data.user.id as string };
+      }
+      const status = (error as { status?: number } | null)?.status ?? 0;
+      if (status === 400 || status === 401 || status === 403) return null;
+      // 0 (transport), 429 (rate limit), 5xx (auth service) — not a verdict on this token.
+      if (attempt === 0) await sleep(150);
+    } catch {
+      if (attempt === 0) await sleep(150);
+    }
+  }
+
+  return "unavailable";
 }
 
 serve(async (req: Request) => {
@@ -85,7 +119,21 @@ serve(async (req: Request) => {
   const farmerToken = (req.headers.get("x-farmer-token") ?? "").trim();
   const dealer = await dealerIdentity(req, admin);
 
-  if (!farmerToken && !dealer) {
+  // The auth service did not answer: say so, and say it in a way a client retries. A farmer token
+  // is judged by SQL and does not depend on this call, so it is never blocked by it.
+  if (!farmerToken && dealer === "unavailable") {
+    return new Response(
+      JSON.stringify({ error: "AUTH_UNAVAILABLE", message: "the auth service did not answer; retry" }),
+      {
+        status: 503,
+        headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": "1" },
+      },
+    );
+  }
+
+  const dealerUserId = dealer && dealer !== "unavailable" ? dealer.userId : null;
+
+  if (!farmerToken && !dealerUserId) {
     return json({ error: "NOT_AUTHORIZED", message: "a farmer token or a signed-in dealer is required" }, 401);
   }
 
@@ -128,7 +176,7 @@ serve(async (req: Request) => {
       // The folder comes from the database's answer, never from the request: it is one of THIS
       // dealer's shops AND a shop that really links this farmer.
       const { data: target, error: targetError } = await admin.rpc("farmer_media_upload_target", {
-        p_user_id: dealer!.userId,
+        p_user_id: dealerUserId,
         p_farmer_id: requestedFarmer,
       });
       if (targetError) {
@@ -176,7 +224,7 @@ serve(async (req: Request) => {
     const { data, error } = await admin.rpc("farmer_media_attachment", {
       p_message_id: messageId,
       p_farmer_token: farmerToken || null,
-      p_user_id: dealer?.userId ?? null,
+      p_user_id: dealerUserId,
     });
     if (error) {
       // The SQL refuses with NOT_FOUND for "not yours" as well as "not there": a caller must not be
