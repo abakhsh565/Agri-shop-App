@@ -1,4 +1,4 @@
--- 0341 — the upload names its shop, so a farmer with two shops can still send.
+-- 0343 — the upload names its shop, so a farmer with two shops can still send.
 --
 -- WHAT WAS WRONG. `farmer_media_identity(p_token)` resolved the upload's folder with
 -- `farmer_shop_scope(v_farmer, null)`. That helper is deliberately strict: with no shop named it

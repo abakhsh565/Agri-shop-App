@@ -1,4 +1,4 @@
--- 0342 — the farmer can ring the shop.
+-- 0344 — the farmer can ring the shop.
 --
 -- WHAT WAS WRONG. `farmer_shop_profile` published `phone` and `whatsapp_phone`, and on the QA shops
 -- both are null: a branch created by the onboarding flow keeps the owner's number on his user
