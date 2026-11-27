@@ -47,6 +47,18 @@ export default function CartPage() {
   const createSale = useSalesStore((s) => s.createSale);
   const setCreditLimit = useCustomersStore((s) => s.setCreditLimit);
   const requestCreditLimitIncrease = useCustomersStore((s) => s.requestCreditLimitIncrease);
+  /**
+   * The live customer row, not the copy frozen into the draft when they were picked.
+   *
+   * A draft survives reloads and an unpaid sale, and the customer's due date, limit and balance
+   * move in the meantime — a date set on the customer's page yesterday is still their date at the
+   * till today. The customers feed reloads this list on any change, so the cart reads the current
+   * value instead of a snapshot that can disagree with the page the owner just edited
+   * (owner, 2026-11-27).
+   */
+  const liveCustomer = useCustomersStore((s) =>
+    customer?.id ? s.customers.find((c) => c.id === customer.id) ?? null : null,
+  );
   const { user } = useAuthStore();
 
   const [paymentType, setPaymentType] = useState<"full" | "partial">("full");
@@ -61,6 +73,8 @@ export default function CartPage() {
   const [pendingLimitRequest, setPendingLimitRequest] = useState<LocalCreditRequest | null>(null);
   const [amountTouched, setAmountTouched] = useState(false);
   const [dueDate, setDueDate] = useState(customer?.dueDate ?? "");
+  /** Once the cashier types a date, the till stops following the customer's own. */
+  const [dueDateTouched, setDueDateTouched] = useState(false);
   const [completing, setCompleting] = useState(false);
   const completingRef = useRef(false);
   // One key per logical attempt. The database claims it (0134), so a double tap or
@@ -94,10 +108,12 @@ export default function CartPage() {
    * the effect only fills an empty field.
    */
   useEffect(() => {
-    const agreed = customer?.dueDate;
-    if (!agreed) return;
-    setDueDate((current) => current || agreed);
-  }, [customer?.id, customer?.dueDate]);
+    // Until the cashier types one, the till shows the customer's date — and keeps showing it as
+    // that date changes (a different customer, or an edit made on the customer's page while this
+    // sale is open). Both screens therefore read the same value, not just the same value once.
+    if (dueDateTouched) return;
+    setDueDate(liveCustomer?.dueDate ?? customer?.dueDate ?? "");
+  }, [customer?.id, customer?.dueDate, liveCustomer?.dueDate, dueDateTouched]);
 
   // Show cart even without customer — user can scan products first, select customer later
 
@@ -508,7 +524,9 @@ export default function CartPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-bold text-foreground">{item.productName}</p>
-                    <p className="text-xs text-caption">
+                    {/* Pack size, price and quantity are one reading left to right; in Urdu the
+                        bidi algorithm was re-joining them as "… Rs. 2,500 × 128". */}
+                    <p className="text-xs text-caption" dir="ltr">
                       {item.variantName} · {formatCurrency(item.unitPrice)} × {item.qty}
                       {item.discount ? ` · −${formatCurrency(item.discount)}` : ""}
                     </p>
@@ -634,7 +652,10 @@ export default function CartPage() {
           <DateField
             value={dueDate}
             min={new Date().toISOString().split("T")[0]}
-            onChange={setDueDate}
+            onChange={(value) => {
+              setDueDateTouched(true);
+              setDueDate(value);
+            }}
             testId="sale-due-date"
           />
 
