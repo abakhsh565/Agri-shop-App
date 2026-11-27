@@ -263,7 +263,81 @@ it fail with the discloses-margin message, and the migration ledger hash stays i
 
 ---
 
-## 7. Change control
+## 7. The live integration (0339) — what a consumer subscribes to
+
+The public contract above is unchanged. Everything in this section is on the **token-gated** side,
+so it is available only to a caller holding a farmer credential.
+
+### 7.1 What a farmer learns about a branch
+
+`farmer_api_shops`, `farmer_api_products` (the `shop` block) and `farmer_api_thread` (the `shop`
+block) all answer the same profile, defined once in `farmer_shop_profile`:
+
+| Field | Meaning |
+|---|---|
+| `shop_id`, `name`, `city`, `address`, `shop_type`, `logo_url` | Identity as before |
+| `phone`, `whatsapp_phone` | The business numbers a farmer calls or messages |
+| `latitude`, `longitude` | The pin, rounded to 4 d.p. (~11 m) — the same rounding as the public contract |
+| `location_label` | The place name the owner accepted when pinning |
+| `owner_name` | The display name of the person the farmer is dealing with |
+| `is_verified` | The business has a registration number on file (the number itself is never published) |
+
+Withheld on purpose: `join_code`, email, licence and CNIC image URLs, `owner_id` as an
+identifier, and the registration number.
+
+### 7.2 One availability rule
+
+A pack is sellable only when it is active, has stock **and** has a price above zero —
+`farmer_variant_is_available`. Discovery (`marketplace_listings` / `search_marketplace`) and the
+catalogue (`farmer_api_products`) therefore answer the same question the same way; a zero-price
+pack is not "in stock" on one screen and missing from the other.
+
+### 7.3 Sub-second delivery
+
+A write broadcasts in the same transaction that stores it — there is no job to fall behind.
+
+| Direction | Topic | Channel | Authorisation |
+|---|---|---|---|
+| shop → farmer | `farmer:<first 40 hex chars of the token's sha256>` | public broadcast | The topic is derived from the credential; only its holder can compute or learn it (`farmer_api_me` returns it), and rotating the token changes it |
+| farmer → shop | `shop:<shop_id>` | **private** broadcast | One RLS policy on `realtime.messages`: an active member of that shop, and only for that shop's topic |
+
+Events: `message` (every message, with `direction` so neither side mistakes its own for the
+other's), `request` (a credit ask created, an offer revised, or an answer), `visit` (a visit
+scheduled or moved). Payloads carry ids and state, never a cost, a stock count or a message from
+another branch.
+
+The farmer app subscribes like this:
+
+```ts
+const me = await supabase.rpc('farmer_api_me', { p_token: token });
+const channel = supabase.channel(me.data.realtime_topic);
+channel.on('broadcast', { event: 'message' }, ({ payload }) => {
+  if (payload.direction === 'owner') appendMessage(payload);
+});
+channel.on('broadcast', { event: 'request' }, ({ payload }) => upsertRequest(payload));
+channel.on('broadcast', { event: 'visit' }, ({ payload }) => upsertVisit(payload));
+channel.subscribe();
+```
+
+The dealer app subscribes to `shop:<shop_id>` with `{ config: { private: true } }` on a signed-in
+session. The dealer's Messages screen also keeps a slow poll as a fallback for a dropped socket.
+
+### 7.4 Push
+
+A queued delivery now wakes `push_dispatch_tick()` in the writing transaction instead of waiting
+for the next minute. The once-a-minute cron stays as the safety net; a push failure never fails
+the business write that produced it.
+
+### 7.5 Evidence
+
+Measured on the local Development stack with real rows (a real shop, product, price, farmer and
+token, and a genuine signed-in dealer session): farmer → dealer **36 ms**, dealer → farmer
+**125 ms** end to end, and a price change visible to the farmer on the next read in **15 ms**.
+The harness is `.tmp/farmer-sync-proof.mjs` (gitignored) and it cleans up every row it creates.
+
+---
+
+## 8. Change control
 
 The column names, the ordering, the farmer-only radius rule and the redaction list are this
 contract. Changing any of them is a contract change, not a refactor:
