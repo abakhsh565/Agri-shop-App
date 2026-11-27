@@ -18,6 +18,7 @@ import { useShellBase } from "@/lib/useShellBase";
 import { useReturnTo } from "@/lib/useReturnTo";
 import { formatTime } from "@/lib/formatters";
 import { copyText } from "@/lib/clipboard";
+import { useShopStore } from "@/stores/shopStore";
 import { useFarmerMessagesStore, type FarmerThreadRow } from "@/stores/farmerMessagesStore";
 
 /**
@@ -51,6 +52,7 @@ export default function AdminMessagesPage() {
   const threads = useFarmerMessagesStore((s) => s.threads);
   const loading = useFarmerMessagesStore((s) => s.threadsLoading);
   const loadThreads = useFarmerMessagesStore((s) => s.loadThreads);
+  const activeShopId = useShopStore((s) => s.activeShopId);
   const registerFarmer = useFarmerMessagesStore((s) => s.registerFarmer);
   const shopJoinCode = useFarmerMessagesStore((s) => s.shopJoinCode);
 
@@ -82,8 +84,32 @@ export default function AdminMessagesPage() {
   }, [search, loadThreads]);
 
   // The list is a live inbox too: a farmer who writes while the owner is looking at it should see
-  // his row rise without a manual refresh. Twenty seconds is deliberately slower than the open
-  // thread's twelve — a conversation is where an answer is expected, the list only announces it.
+  // his row rise without a manual refresh. The branch channel pushes that (0339); the poll below is
+  // the fallback for a socket that could not be opened.
+  //
+  // The subscription reads the search from a ref rather than closing over it: `search` changes on
+  // every keystroke, and a dependency on it would tear the channel down and rebuild it per letter.
+  const searchRef = useRef(search);
+  useEffect(() => {
+    searchRef.current = search;
+  }, [search]);
+
+  useEffect(() => {
+    if (!activeShopId) return;
+    let stop: (() => Promise<void>) | null = null;
+    void useFarmerMessagesStore
+      .getState()
+      .subscribeShop(activeShopId, () => {
+        void loadThreads(searchRef.current).catch(() => undefined);
+      })
+      .then((close) => {
+        stop = close;
+      });
+    return () => {
+      void stop?.();
+    };
+  }, [activeShopId, loadThreads]);
+
   useEffect(() => {
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;

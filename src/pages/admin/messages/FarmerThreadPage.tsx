@@ -177,16 +177,20 @@ export default function FarmerThreadPage() {
   const shopId = current?.shop?.id ?? "";
   useEffect(() => {
     if (!shopId) return;
-    let live = false;
-    const subscribeShop = useFarmerMessagesStore.getState().subscribeShop;
-    void subscribeShop(shopId, () => {
-      live = true;
-      void loadThread(farmerId, { markRead: document.visibilityState === "visible" }).catch(() => undefined);
-    });
+    let stop: (() => Promise<void>) | null = null;
+    void useFarmerMessagesStore
+      .getState()
+      .subscribeShop(shopId, () => {
+        void loadThread(farmerId, { markRead: document.visibilityState === "visible" }).catch(
+          () => undefined,
+        );
+      })
+      .then((close) => {
+        stop = close;
+      });
     return () => {
       // Leave the channel with the screen; a closed conversation has nothing to listen to.
-      void useFarmerMessagesStore.getState().unsubscribeShop();
-      void live;
+      void stop?.();
     };
   }, [shopId, farmerId, loadThread]);
 

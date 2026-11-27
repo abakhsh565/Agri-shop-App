@@ -187,14 +187,14 @@ interface FarmerMessagesState {
   advanceVisit: (visitId: string, status: string, note?: string | null) => Promise<void>;
   listOfficers: () => Promise<AssignableOfficer[]>;
   /**
-   * Listen to the branch's own conversation. Returns once the channel has settled (subscribed or
-   * refused), so the screen can fall back to its poll rather than wait forever.
+   * Listen to the branch's own conversation. Resolves to the screen's own stop function, so a
+   * screen that closes can only ever tear down the channel it opened — never the one the screen
+   * replacing it just subscribed.
    */
   subscribeShop: (
     shopId: string,
     onChange: (event: "message" | "request" | "visit") => void,
-  ) => Promise<void>;
-  unsubscribeShop: () => Promise<void>;
+  ) => Promise<() => Promise<void>>;
 }
 
 function fail(error: { message: string } | null): never {
@@ -403,8 +403,13 @@ export const useFarmerMessagesStore = create<FarmerMessagesState>((set, get) => 
   },
 
   async subscribeShop(shopId, onChange) {
-    await get().unsubscribeShop();
-    if (!shopId) return;
+    // One channel at a time: the previous screen's is closed before this one opens.
+    if (shopChannel) {
+      const previous = shopChannel;
+      shopChannel = null;
+      await supabase.removeChannel(previous);
+    }
+    if (!shopId) return async () => undefined;
 
     const channel = supabase.channel(`shop:${shopId}`, {
       config: { private: true, broadcast: { self: false } },
@@ -425,12 +430,10 @@ export const useFarmerMessagesStore = create<FarmerMessagesState>((set, get) => 
         }
       });
     });
-  },
 
-  async unsubscribeShop() {
-    if (!shopChannel) return;
-    const channel = shopChannel;
-    shopChannel = null;
-    await supabase.removeChannel(channel);
+    return async () => {
+      if (shopChannel === channel) shopChannel = null;
+      await supabase.removeChannel(channel);
+    };
   },
 }));
