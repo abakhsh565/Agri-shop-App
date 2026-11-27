@@ -4,13 +4,14 @@ import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import Button from "@/components/ui/Button";
 import DateField from "@/components/ui/DateField";
+import SegmentedTabs from "@/components/ui/SegmentedTabs";
 import QuantityCounter from "@/components/ui/QuantityCounter";
 import { useCartStore } from "@/stores/cartStore";
 import RollingNumber from "@/components/ui/RollingNumber";
 import { useSalesStore } from "@/stores/salesStore";
 import { useAuthStore } from "@/stores/authStore";
 import { formatCurrency, getCreditHealth, getCreditHealthColor } from "@/lib/formatters";
-import { Plus, AlertTriangle, Clock, X, Percent, Pencil } from "lucide-react";
+import { Plus, Minus, AlertTriangle, Clock, X, Percent, Pencil } from "lucide-react";
 import Photo from "@/components/ui/Photo";
 import Sheet from "@/components/ui/Sheet";
 import { useUIStore } from "@/stores/uiStore";
@@ -23,6 +24,7 @@ import { useCustomersStore } from "@/stores/customersStore";
 import { hasPermission } from "@/lib/tenantContext";
 import CreditLimitSheet from "@/components/customers/CreditLimitSheet";
 import type { LocalCreditRequest } from "@/lib/localGroupRegistry";
+import { discountFor, percentOf } from "@/lib/discount";
 
 export default function CartPage() {
   const navigate = useNavigate();
@@ -85,6 +87,18 @@ export default function CartPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the customer in the cart
   }, [customerId]);
 
+  /*
+   * The customer's own due date, carried into the till (owner, 2026-11-27). One arrangement, two
+   * screens: if this customer already agreed a date, the credit form opens on it instead of on an
+   * empty field that would send the sale without one. A date the cashier has already typed wins —
+   * the effect only fills an empty field.
+   */
+  useEffect(() => {
+    const agreed = customer?.dueDate;
+    if (!agreed) return;
+    setDueDate((current) => current || agreed);
+  }, [customer?.id, customer?.dueDate]);
+
   // Show cart even without customer — user can scan products first, select customer later
 
   // PRD §38.3: When last item is removed, redirect to product selection
@@ -96,35 +110,114 @@ export default function CartPage() {
     }
   }, [items.length, base, navigate]);
 
-  // While redirecting, render nothing
-  if (items.length === 0 && !completingRef.current) return null;
-
   const total = cartTotal();
   /**
-   * The discount sheet's own state. One sheet for both scopes because the question is the same —
-   * how much off, and off what — and because a second screen for "discount this line" would leave
-   * the review screen without the number it is about to charge.
+   * The discount sheet's state: one whole-sale reduction, and one typed reduction per line.
+   *
+   * Two scopes, never both at once (owner, 2026-11-27). "Whole sale" is a single number taken off
+   * the bill. "Each product" gives the same Rs/% control to every line in the cart, so the cashier
+   * marks the goods the arrangement covers by typing on them — a checkbox list would need a second
+   * answer (what amount applies to the boxes) and would leave lines nobody discounted looking
+   * marked.
    */
   const [discountOpen, setDiscountOpen] = useState(false);
-  const [discountScope, setDiscountScope] = useState<string>("sale");
-  const [discountMode, setDiscountMode] = useState<"percent" | "amount">("percent");
+  const [discountScope, setDiscountScope] = useState<"sale" | "products">("sale");
+  const [discountMode, setDiscountMode] = useState<"percent" | "amount">("amount");
   const [discountValue, setDiscountValue] = useState("");
+  const [lineDrafts, setLineDrafts] = useState<
+    Record<string, { mode: "percent" | "amount"; value: string }>
+  >({});
 
-  const discountLine = items.find((i) => i.variantId === discountScope) ?? null;
-  /** What the chosen scope is worth before any discount — a percent is taken against this. */
-  const discountBase = discountScope === "sale"
-    ? subtotal()
-    : discountLine
-      ? discountLine.qty * discountLine.unitPrice
-      : 0;
+  /** What one line is worth before any reduction — a percent is taken against this. */
+  const grossOf = (item: { qty: number; unitPrice: number }) =>
+    Math.round(item.qty * item.unitPrice * 100) / 100;
+  const discountBase = subtotal();
   const typedDiscount = Number(discountValue) || 0;
-  const discountAmount = Math.max(
-    0,
-    Math.min(
-      discountBase,
-      discountMode === "percent" ? (discountBase * typedDiscount) / 100 : typedDiscount,
-    ),
-  );
+  const discountAmount = discountFor(discountBase, discountMode, typedDiscount);
+
+  const draftForLine = (variantId: string) =>
+    lineDrafts[variantId] ?? { mode: "amount" as const, value: "" };
+  const lineAmount = (item: { variantId: string; qty: number; unitPrice: number }) => {
+    const draft = draftForLine(item.variantId);
+    return discountFor(grossOf(item), draft.mode, Number(draft.value) || 0);
+  };
+  const lineDiscountTotal = items.reduce((sum, item) => sum + lineAmount(item), 0);
+  /** What this sheet is about to take off, in the scope it is showing. */
+  const previewAmount = discountScope === "sale" ? discountAmount : lineDiscountTotal;
+  /** Everything already off this sale at both levels — what the trigger row reports. */
+  const reductionOnSale = discount + items.reduce((sum, item) => sum + (item.discount ?? 0), 0);
+
+  /**
+   * Open the sheet on a scope, showing what is already off.
+   *
+   * It used to open empty, so a sale that already had Rs. 400 off looked like a sale with nothing
+   * off — and pressing Apply without retyping it wrote zero and removed the reduction the cashier
+   * had already agreed with the customer.
+   */
+  const openDiscountSheet = (scope: "sale" | "products" = "sale") => {
+    setDiscountScope(scope);
+    setDiscountMode("amount");
+    setDiscountValue(discount > 0 ? String(discount) : "");
+    const drafts: Record<string, { mode: "percent" | "amount"; value: string }> = {};
+    for (const item of items) {
+      drafts[item.variantId] = { mode: "amount", value: item.discount ? String(item.discount) : "" };
+    }
+    setLineDrafts(drafts);
+    setDiscountOpen(true);
+  };
+
+  /** Rs → % and back carry the same money across, so the preview never jumps to zero. */
+  const switchDiscountMode = (next: "percent" | "amount") => {
+    if (next === discountMode) return;
+    const money = discountFor(discountBase, discountMode, typedDiscount);
+    setDiscountMode(next);
+    setDiscountValue(
+      money <= 0 ? "" : String(next === "percent" ? percentOf(discountBase, money) : money),
+    );
+  };
+
+  /** The same switch, on one line's own field. */
+  const switchLineMode = (variantId: string, next: "percent" | "amount") => {
+    const item = items.find((i) => i.variantId === variantId);
+    if (!item) return;
+    const draft = draftForLine(variantId);
+    if (draft.mode === next) return;
+    const gross = grossOf(item);
+    const money = discountFor(gross, draft.mode, Number(draft.value) || 0);
+    setLineDrafts((prev) => ({
+      ...prev,
+      [variantId]: {
+        mode: next,
+        value: money <= 0 ? "" : String(next === "percent" ? percentOf(gross, money) : money),
+      },
+    }));
+  };
+
+  const setLineDraftValue = (variantId: string, value: string) =>
+    setLineDrafts((prev) => ({
+      ...prev,
+      [variantId]: { mode: prev[variantId]?.mode ?? "amount", value },
+    }));
+
+  /** One button for both scopes: write what the fields say, then close. */
+  const applyDiscount = () => {
+    if (discountScope === "sale") setDiscount(discountAmount);
+    else for (const item of items) setLineDiscount(item.variantId, lineAmount(item));
+    setDiscountOpen(false);
+  };
+
+  /**
+   * Put every discount on this sale back to nothing — the applied bill reduction, every applied
+   * line reduction, and the numbers still sitting in the fields. The sheet stays open, because
+   * "clear" is a correction, not a decision to leave.
+   */
+  const clearDiscounts = () => {
+    setDiscount(0);
+    for (const item of items) setLineDiscount(item.variantId, 0);
+    setDiscountValue("");
+    setLineDrafts({});
+  };
+
   /**
    * A walk-in sale is paid at the counter — there is no account to owe the difference and nobody
    * to remind, so credit is not offered at all until a customer is added. */
@@ -268,6 +361,14 @@ export default function CartPage() {
       setCompleting(false);
     }
   }
+
+  /*
+   * While redirecting, render nothing — but only here, after every hook has run. This guard sat
+   * above the discount sheet's `useState` calls, so deleting the last line in the cart changed
+   * the number of hooks React saw on the next render and the whole screen crashed instead of
+   * going back to product selection.
+   */
+  if (items.length === 0 && !completingRef.current) return null;
 
   return (
     <div className="flex flex-col bg-background w-full min-h-full">
@@ -570,12 +671,7 @@ export default function CartPage() {
       <div className="px-4 pt-4">
         <button
           type="button"
-          onClick={() => {
-            setDiscountScope("sale");
-            setDiscountMode("percent");
-            setDiscountValue("");
-            setDiscountOpen(true);
-          }}
+          onClick={() => openDiscountSheet("sale")}
           className="w-full h-12 px-4 rounded-[var(--radius-tile)] flex items-center justify-between ds-pressable"
           style={{ background: "var(--tone-card)", border: "1px solid var(--divider)" }}
           data-testid="sale-discount"
@@ -584,8 +680,8 @@ export default function CartPage() {
             <Percent size={15} />
             {t("sale.discount")}
           </span>
-          <span className="text-sm font-semibold" style={{ color: discount > 0 ? "var(--error)" : "var(--brand-dark)" }}>
-            {discount > 0 ? `−${formatCurrency(discount)}` : t("sale.addDiscount")}
+          <span className="text-sm font-semibold" style={{ color: reductionOnSale > 0 ? "var(--error)" : "var(--brand-dark)" }}>
+            {reductionOnSale > 0 ? `−${formatCurrency(reductionOnSale)}` : t("sale.addDiscount")}
           </span>
         </button>
       </div>
@@ -654,115 +750,121 @@ export default function CartPage() {
       <Sheet
         open={discountOpen}
         title={t("sale.discount")}
+        closeButton={false}
         onClose={() => setDiscountOpen(false)}
       >
         <div className="px-4 flex flex-col gap-4">
-          <div>
-            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-              {t("sale.discountScope")}
-            </p>
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => setDiscountScope("sale")}
-                className="h-11 px-4 rounded-[var(--radius-tile)] text-sm font-medium text-start flex items-center justify-between"
-                style={{
-                  border: `1px solid ${discountScope === "sale" ? "var(--brand)" : "var(--divider)"}`,
-                  color: "var(--text-primary)",
-                }}
-              >
-                <span>{t("sale.wholeSale")}</span>
-                <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{formatCurrency(subtotal())}</span>
-              </button>
-              {items.map((it) => (
-                <button
-                  key={it.variantId}
-                  type="button"
-                  onClick={() => setDiscountScope(it.variantId)}
-                  className="h-11 px-4 rounded-[var(--radius-tile)] text-sm font-medium text-start flex items-center justify-between gap-2"
-                  style={{
-                    border: `1px solid ${discountScope === it.variantId ? "var(--brand)" : "var(--divider)"}`,
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  <span className="truncate">{it.productName} · {it.variantName}</span>
-                  <span className="text-xs shrink-0" style={{ color: "var(--text-secondary)" }}>
-                    {formatCurrency(it.qty * it.unitPrice)}
-                  </span>
-                </button>
-              ))}
-            </div>
+          {/* The sheet's own header already says "Discount"; this row only holds the way to empty
+              it, so the word is not printed twice on one screen. */}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={clearDiscounts}
+              disabled={reductionOnSale <= 0 && previewAmount <= 0}
+              className="text-12 font-semibold px-2 py-1 rounded-full disabled:opacity-40 ds-pressable"
+              style={{ color: "var(--text-secondary)", background: "transparent" }}
+              data-testid="sale-discount-clear"
+            >
+              {t("common.clear")}
+            </button>
           </div>
 
-          <div>
-            <p className="ds-section-label mb-2" style={{ color: "var(--text-secondary)" }}>
-              {t("sale.discountHow")}
-            </p>
-            <div className="flex gap-2">
-              {(["percent", "amount"] as const).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  onClick={() => setDiscountMode(kind)}
-                  aria-pressed={discountMode === kind}
-                  className="flex-1 h-11 rounded-full text-sm font-medium ds-pressable"
-                  style={{
-                    border: `1px solid ${discountMode === kind ? "var(--brand-dark)" : "var(--border)"}`,
-                    color: discountMode === kind ? "var(--brand-dark)" : "var(--text-primary)",
-                  }}
-                >
-                  {kind === "percent" ? t("sale.percentOff") : t("sale.amountOff")}
-                </button>
-              ))}
-            </div>
-          </div>
+          <SegmentedTabs
+            items={[
+              { key: "sale" as const, label: t("sale.wholeSale") },
+              { key: "products" as const, label: t("sale.eachProduct") },
+            ]}
+            value={discountScope}
+            onChange={setDiscountScope}
+            ariaLabel={t("sale.discountScope")}
+            semantics="tab"
+            testId="sale-discount-scope"
+            itemTestId={(key) => `sale-discount-scope-${key}`}
+          />
 
-          <div>
-            <input
-              type="number"
-              inputMode="decimal"
+          {discountScope === "sale" ? (
+            <DiscountField
+              mode={discountMode}
               value={discountValue}
-              onChange={(e) => setDiscountValue(e.target.value)}
-              placeholder={discountMode === "percent" ? "0" : "0.00"}
-              className="w-full h-12 rounded-[var(--radius-input)] px-4 text-sm text-foreground outline-none"
-              style={{ border: "1.5px solid var(--brand)" }}
-              data-testid="sale-discount-value"
+              max={discountBase}
+              onModeChange={switchDiscountMode}
+              onValueChange={setDiscountValue}
+              ariaLabel={t("sale.discount")}
+              testId="sale-discount-value"
             />
-            <div className="flex justify-between mt-2 px-1">
-              <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("sale.discountOff")}</span>
-              <span className="text-13 font-bold" style={{ color: "var(--text-primary)" }}>
-                {formatCurrency(discountAmount)}
-              </span>
+          ) : (
+            <div className="flex flex-col gap-2 ds-tab-swap">
+              {items.map((it) => {
+                const draft = draftForLine(it.variantId);
+                const off = lineAmount(it);
+                return (
+                  <div
+                    key={it.variantId}
+                    className="rounded-[var(--radius-tile)] p-3"
+                    style={{ background: "var(--tone-card)" }}
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-13 font-semibold truncate min-w-0">
+                        {it.productName} · {it.variantName}
+                      </p>
+                      <p className="text-12 tabular-nums shrink-0" style={{ color: "var(--text-secondary)" }}>
+                        {formatCurrency(grossOf(it))}
+                      </p>
+                    </div>
+                    <div className="mt-2">
+                      <DiscountField
+                        mode={draft.mode}
+                        value={draft.value}
+                        max={grossOf(it)}
+                        onModeChange={(mode) => switchLineMode(it.variantId, mode)}
+                        onValueChange={(value) => setLineDraftValue(it.variantId, value)}
+                        ariaLabel={`${it.productName} ${it.variantName}`}
+                        testId={`sale-line-discount-${it.variantId}`}
+                        compact
+                      />
+                    </div>
+                    {off > 0 && (
+                      <p
+                        className="text-11 mt-1.5 text-end tabular-nums"
+                        style={{ color: "var(--warning-text, var(--text-secondary))" }}
+                      >
+                        −<RollingNumber value={off} format={formatCurrency} />
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
+          )}
+
+          <div className="flex justify-between px-1">
+            <span className="text-12" style={{ color: "var(--text-secondary)" }}>{t("sale.discountOff")}</span>
+            <span className="text-13 font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>
+              <RollingNumber value={previewAmount} format={formatCurrency} />
+            </span>
           </div>
 
-          <div className="flex gap-2 pb-2">
-            {(discountScope === "sale" ? discount : discountLine?.discount ?? 0) > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (discountScope === "sale") setDiscount(0);
-                  else setLineDiscount(discountScope, 0);
-                  setDiscountOpen(false);
-                }}
-                className="h-12 px-5 rounded-[var(--radius-tile)] text-sm font-semibold"
-                style={{ background: "var(--surface-2)", color: "var(--text-primary)" }}
-              >
-                {t("sale.removeDiscount")}
-              </button>
-            )}
-            <div className="flex-1">
-              <Button
-                fullWidth
-                onClick={() => {
-                  if (discountScope === "sale") setDiscount(discountAmount);
-                  else setLineDiscount(discountScope, discountAmount);
-                  setDiscountOpen(false);
-                }}
-              >
-                {t("sale.applyDiscount")}
-              </Button>
-            </div>
+          <div className="flex flex-col gap-1 pb-2">
+            <Button
+              fullWidth
+              disabled={
+                discountScope === "sale"
+                  ? discountValue.trim() === ""
+                  : !items.some((it) => (lineDrafts[it.variantId]?.value ?? "").trim() !== "")
+              }
+              onClick={applyDiscount}
+            >
+              {t("sale.applyDiscount")}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setDiscountOpen(false)}
+              className="h-11 rounded-full text-13 font-medium ds-pressable"
+              style={{ color: "var(--text-secondary)", background: "transparent" }}
+              data-testid="sale-discount-cancel"
+            >
+              {t("common.cancel")}
+            </button>
           </div>
         </div>
       </Sheet>
@@ -776,6 +878,123 @@ export default function CartPage() {
         onClose={() => setLimitMode(null)}
         onSave={handleSaveCreditLimit}
       />
+    </div>
+  );
+}
+
+/**
+ * The amount field, used twice: once for the whole sale, once on every line in "Each product".
+ *
+ * The unit sits inside the field it changes, so "how much" and "in what" are one decision. The
+ * segments are rounded rectangles on the design system's own tones — a sunken field, a raised
+ * pill-like thumb — because a brand-green fill is the one thing DESIGN-SYSTEM §7 forbids on a
+ * segmented control, and a circle here would read as a different control from every other tab bar
+ * in the app.
+ *
+ * The steppers on the right are the same gesture as the cart's quantity counter: a discount is a
+ * number a shopkeeper moves, and moving it should not require the keyboard.
+ */
+function DiscountField({
+  mode,
+  value,
+  max,
+  onModeChange,
+  onValueChange,
+  ariaLabel,
+  testId,
+  compact = false,
+}: {
+  mode: "percent" | "amount";
+  value: string;
+  max: number;
+  onModeChange: (mode: "percent" | "amount") => void;
+  onValueChange: (value: string) => void;
+  ariaLabel: string;
+  testId: string;
+  compact?: boolean;
+}) {
+  const t = useT();
+  /** One percent, or fifty rupees: the two steps a counter actually uses. */
+  const step = mode === "percent" ? 1 : 50;
+  const current = Number(value) || 0;
+  const nudge = (direction: 1 | -1) => {
+    const next = Math.round((current + direction * step) * 100) / 100;
+    onValueChange(next <= 0 ? "" : String(Math.min(next, mode === "percent" ? 100 : max)));
+  };
+
+  return (
+    <div
+      className="flex items-stretch rounded-[var(--radius-input)] overflow-hidden"
+      style={{ background: "var(--tone-sunken)", height: compact ? 52 : 56 }}
+    >
+      <div className="flex items-center gap-1 p-1.5 shrink-0">
+        {([
+          { key: "amount" as const, label: t("sale.amountUnit") },
+          { key: "percent" as const, label: t("sale.percentUnit") },
+        ]).map((unit) => (
+          <button
+            key={unit.key}
+            type="button"
+            onClick={() => onModeChange(unit.key)}
+            aria-pressed={mode === unit.key}
+            className="h-full min-w-12 px-3 rounded-full text-14 font-bold ds-pressable"
+            style={{
+              background: mode === unit.key ? "var(--seg-pill)" : "transparent",
+              color: mode === unit.key ? "var(--seg-pill-fg)" : "var(--text-secondary)",
+              boxShadow: mode === unit.key ? "var(--seg-pill-shadow)" : "none",
+              transform: mode === unit.key ? "scale(1)" : "scale(0.96)",
+              transition:
+                "background 180ms var(--ease-out), color 180ms var(--ease-out), transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out)",
+            }}
+            data-testid={`${testId}-unit-${unit.key}`}
+          >
+            {unit.label}
+          </button>
+        ))}
+      </div>
+
+      <input
+        type="number"
+        inputMode="decimal"
+        min="0"
+        value={value}
+        onChange={(e) => onValueChange(e.target.value)}
+        placeholder="0"
+        aria-label={ariaLabel}
+        className="flex-1 min-w-0 h-full bg-transparent px-2 text-sm text-foreground border-0 outline-none focus:outline-none focus:ring-0 appearance-none placeholder:text-caption"
+        data-testid={testId}
+      />
+
+      <div className="flex items-center gap-1 pe-1 shrink-0">
+        <button
+          type="button"
+          onClick={() => nudge(-1)}
+          aria-label={t("common.decrease")}
+          className="size-11 rounded-full flex items-center justify-center ds-pressable"
+          style={{
+            background: "var(--tone-card)",
+            color: "var(--text-primary)",
+            transition: "transform 160ms var(--ease-out), background 160ms var(--ease-out)",
+          }}
+          data-testid={`${testId}-minus`}
+        >
+          <Minus size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={() => nudge(1)}
+          aria-label={t("common.increase")}
+          className="size-11 rounded-full flex items-center justify-center ds-pressable"
+          style={{
+            background: "var(--tone-card)",
+            color: "var(--text-primary)",
+            transition: "transform 160ms var(--ease-out), background 160ms var(--ease-out)",
+          }}
+          data-testid={`${testId}-plus`}
+        >
+          <Plus size={14} />
+        </button>
+      </div>
     </div>
   );
 }
