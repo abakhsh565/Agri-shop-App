@@ -14,8 +14,11 @@
 //     public, and the URL cannot be reused after it expires.
 //
 // CONTRACT (shared with the farmer app; see docs/FARMER_MEDIA_CONTRACT.md)
-//   POST /functions/v1/farmer-media?kind=voice&mime=audio/webm&duration_ms=4200
+//   POST /functions/v1/farmer-media?kind=voice&mime=audio/webm&duration_ms=4200&shop_id=<uuid>
 //        headers: x-farmer-token: <token>            (farmer)
+//        `shop_id` is the shop the farmer is talking to. It is required when the farmer is linked
+//        to more than one shop: the folder is `<shop>/<farmer>`, and guessing the shop is how one
+//        counter's voice note ends up in another counter's conversation.
 //                 Authorization: Bearer <jwt>        (dealer)
 //        body:    raw bytes (audio/* or image/*)
 //        200 { storage_path, content_type, size_bytes }
@@ -167,9 +170,19 @@ serve(async (req: Request) => {
     let folder: string;
     let farmerId: string;
     if (farmerToken) {
-      const { data, error } = await admin.rpc("farmer_media_identity", { p_token: farmerToken });
+      // The shop the farmer is talking to, when the app names one. A farmer linked to two shops
+      // cannot be guessed at: `farmer_shop_scope` raises and this answers with its sentence, so
+      // the app can say "name the shop" instead of repeating a generic 401.
+      const requestedShop = (url.searchParams.get("shop_id") ?? "").trim();
+      const { data, error } = await admin.rpc("farmer_media_identity", {
+        p_token: farmerToken,
+        p_shop_id: requestedShop || null,
+      });
       if (error || !data) {
-        return json({ error: "NOT_AUTHORIZED", message: "that farmer token is not valid" }, 401);
+        return json(
+          { error: "NOT_AUTHORIZED", message: error?.message ?? "that farmer token is not valid" },
+          401,
+        );
       }
       folder = `${data.shop_id}/${data.farmer_id}`;
       farmerId = data.farmer_id as string;
