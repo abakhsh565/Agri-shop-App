@@ -47,6 +47,7 @@ export default function CartPage() {
   const createSale = useSalesStore((s) => s.createSale);
   const setCreditLimit = useCustomersStore((s) => s.setCreditLimit);
   const requestCreditLimitIncrease = useCustomersStore((s) => s.requestCreditLimitIncrease);
+  const saveCustomerDueDate = useCustomersStore((s) => s.updateDueDate);
   /**
    * The live customer row, not the copy frozen into the draft when they were picked.
    *
@@ -74,7 +75,7 @@ export default function CartPage() {
   const [amountTouched, setAmountTouched] = useState(false);
   const [dueDate, setDueDate] = useState(customer?.dueDate ?? "");
   /** Once the cashier types a date, the till stops following the customer's own. */
-  const [dueDateTouched, setDueDateTouched] = useState(false);
+  const dueDateTouchedRef = useRef(false);
   const [completing, setCompleting] = useState(false);
   const completingRef = useRef(false);
   // One key per logical attempt. The database claims it (0134), so a double tap or
@@ -111,9 +112,11 @@ export default function CartPage() {
     // Until the cashier types one, the till shows the customer's date — and keeps showing it as
     // that date changes (a different customer, or an edit made on the customer's page while this
     // sale is open). Both screens therefore read the same value, not just the same value once.
-    if (dueDateTouched) return;
+    // The flag is a ref because it answers "has a hand touched this", which is a fact about the
+    // field, not something the screen draws.
+    if (dueDateTouchedRef.current) return;
     setDueDate(liveCustomer?.dueDate ?? customer?.dueDate ?? "");
-  }, [customer?.id, customer?.dueDate, liveCustomer?.dueDate, dueDateTouched]);
+  }, [customer?.id, customer?.dueDate, liveCustomer?.dueDate]);
 
   // Show cart even without customer — user can scan products first, select customer later
 
@@ -653,8 +656,17 @@ export default function CartPage() {
             value={dueDate}
             min={new Date().toISOString().split("T")[0]}
             onChange={(value) => {
-              setDueDateTouched(true);
+              dueDateTouchedRef.current = true;
               setDueDate(value);
+              // The customer's page is the same fact, so a date chosen here is written to the
+              // customer now rather than at checkout: the owner watching that page sees the new
+              // date without waiting for the sale to finish, and two tills on one customer cannot
+              // each keep a private answer (owner, 2026-11-27).
+              if (customer?.id) {
+                void saveCustomerDueDate(customer.id, value || null).catch(() => {
+                  addToast(t("sale.dueDateSyncFailed"), "error");
+                });
+              }
             }}
             testId="sale-due-date"
           />

@@ -8,21 +8,24 @@ import { SkeletonList } from "@/components/ui/Skeleton";
 import BusinessProfileSheet, { type BusinessField } from "@/components/shop/BusinessProfileSheet";
 import { useAuthStore } from "@/stores/authStore";
 import { useShopStore } from "@/stores/shopStore";
+import { useEmployeesStore } from "@/stores/employeesStore";
 import { useUIStore } from "@/stores/uiStore";
 import { useT } from "@/lib/i18n";
 import { useShellBase } from "@/lib/useShellBase";
 import { copyText } from "@/lib/clipboard";
-import { formatPhoneDisplay } from "@/lib/formatters";
+import { formatDate, formatPhoneDisplay } from "@/lib/formatters";
 import { supabase } from "@/lib/supabase";
 import { usePickedLocation } from "@/lib/usePickedLocation";
 import type { PickedPlace } from "@/lib/geo";
 import { businessDocumentUrl, uploadBusinessDocument, uploadImage } from "@/lib/storage";
 import {
   loadBusinessProfile,
+  setBusinessDetails,
   updateBusinessProfile,
   type BusinessPatch,
   type BusinessProfile,
 } from "@/lib/businessProfile";
+import RecordDetailSheet, { type DetailField } from "@/components/shop/RecordDetailSheet";
 import { resolveImageUrl } from "@/lib/storage";
 import Photo from "@/components/ui/Photo";
 
@@ -65,10 +68,19 @@ export default function BusinessProfilePage() {
   const user = useAuthStore((s) => s.user);
 
   const activeShopId = useShopStore((s) => s.activeShopId);
+  const branches = useShopStore((s) => s.branches);
+  const employees = useEmployeesStore((s) => s.employees);
+  const loadEmployees = useEmployeesStore((s) => s.load);
 
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [editing, setEditing] = useState<BusinessField | null>(null);
+  /**
+   * The two company-level groups this screen owns, opened together because their facts only make
+   * sense read as one record: what the business is registered as, and the two conventions every
+   * report in it follows. Both belong to the COMPANY; no branch may hold a different answer.
+   */
+  const [editingGroup, setEditingGroup] = useState<null | "legal" | "global">(null);
   const [savingPlace, setSavingPlace] = useState(false);
   const [placeError, setPlaceError] = useState<string | null>(null);
   /** Whichever picture is being read full size — the logo, or one of the papers. */
@@ -93,8 +105,33 @@ export default function BusinessProfilePage() {
 
   const read = useCallback(async () => {
     try {
-      setProfile(await loadBusinessProfile());
+      const next = await loadBusinessProfile();
+      setProfile(next);
       setState("ready");
+      /*
+       * One business, one name.
+       *
+       * The home header, the account card and the person's profile read the business name from
+       * the shop store, so a rename saved here used to live only on this page until the next
+       * reload — the same shop introduced by two different names on two screens. The store is
+       * moved to the name that was just saved, and the working branch follows only when it was
+       * showing the old name, so a branch that was renamed on purpose is not overwritten
+       * (owner, 2026-11-27).
+       */
+      const nextName = next?.shop?.name;
+      const store = useShopStore.getState();
+      const previousName = store.activeShopName;
+      if (nextName && previousName && nextName !== previousName) {
+        useShopStore.setState({
+          activeShopName: nextName,
+          activeBranchName: store.activeBranchName === previousName ? nextName : store.activeBranchName,
+          branches: store.branches.map((branch) =>
+            branch.id === store.activeBranchId && branch.name === previousName
+              ? { ...branch, name: nextName }
+              : branch,
+          ),
+        });
+      }
     } catch {
       setProfile(null);
       setState("failed");
@@ -102,6 +139,13 @@ export default function BusinessProfilePage() {
   }, []);
 
   useEffect(() => { void read(); }, [read, activeShopId]);
+
+  // The organisation's size is a fact about the company, so it is read here from the same lists the
+  // rest of the app uses rather than counted by a second query that could disagree with them.
+  useEffect(() => {
+    if (employees.length === 0) void loadEmployees();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, for a page that was opened directly
+  }, []);
 
   const shop = profile?.shop ?? null;
 
@@ -261,6 +305,70 @@ export default function BusinessProfilePage() {
 
   const changeCta = (has: boolean) => (has ? t("common.change") : t("business.add"));
 
+  /**
+   * The company's legal identity, as the sheet edits it.
+   *
+   * NTN is the tax number a business is registered under (7 digits, optional check digit); STRN
+   * is the sales-tax registration (11 digits in three groups). The hints say the shapes, because a
+   * number typed in the wrong shape is a number that fails at the bank later, not here.
+   */
+  const legalFields: DetailField[] = [
+    {
+      key: "registration",
+      label: t("business.regNumber"),
+      kind: "text",
+      value: shop?.registration_number ?? "",
+      maxLength: 100,
+    },
+    {
+      key: "legal_name",
+      label: t("business.legalName"),
+      kind: "text",
+      value: shop?.legal_name ?? "",
+      placeholder: t("business.legalNamePlaceholder"),
+      maxLength: 160,
+    },
+    {
+      key: "ntn",
+      label: t("business.ntn"),
+      kind: "text",
+      value: shop?.ntn ?? "",
+      placeholder: "1234567-8",
+      maxLength: 9,
+      inputMode: "numeric",
+    },
+    {
+      key: "strn",
+      label: t("business.strn"),
+      kind: "text",
+      value: shop?.strn ?? "",
+      placeholder: "12-3456789-0",
+      maxLength: 12,
+      inputMode: "numeric",
+    },
+  ];
+
+  const organizationFields = {
+    branches: branches.length,
+    people: employees.filter((person) => person.isActive !== false).length,
+  };
+
+  const globalFields: DetailField[] = [
+    {
+      key: "currency",
+      label: t("business.currency"),
+      kind: "choice",
+      value: shop?.default_currency ?? "PKR",
+      options: ["PKR", "USD", "AED", "SAR"].map((code) => ({ value: code, label: code })),
+    },
+    {
+      key: "financial_year_start",
+      label: t("business.financialYear"),
+      kind: "date",
+      value: shop?.financial_year_start ?? "",
+    },
+  ];
+
   return (
     <div
       className="flex flex-col w-full min-h-full"
@@ -378,6 +486,13 @@ export default function BusinessProfilePage() {
               <h2 className="ds-section-label">{t("business.information")}</h2>
 
               <div className="mt-4 flex flex-col gap-4">
+                {/* Established is read from the record, never typed: the business was created on
+                    a date, and a year typed by hand could disagree with every document. */}
+                <DetailLine
+                  label={t("business.established")}
+                  value={shop?.created_at ? new Date(shop.created_at).getFullYear().toString() : null}
+                  testId="business-field-established"
+                />
                 <DetailLine
                   label={t("business.name")}
                   value={shop?.name}
@@ -406,13 +521,7 @@ export default function BusinessProfilePage() {
                   onChange={() => setEditing("type")}
                   changeLabel={changeCta(Boolean(shopType))}
                 />
-                <DetailLine
-                  label={t("business.regNumber")}
-                  value={shop?.registration_number}
-                  testId="business-field-registration"
-                  onChange={() => setEditing("registration")}
-                  changeLabel={changeCta(Boolean(shop?.registration_number))}
-                />
+
                 {/* The shop id is not a fact the owner may edit: it is the code their staff and
                     customers use to reach this business, so it only ever gets copied. */}
                 <DetailLine
@@ -447,7 +556,7 @@ export default function BusinessProfilePage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <h2 className="ds-section-label">{t("common.address")}</h2>
+                  <h2 className="ds-section-label">{t("business.headOffice")}</h2>
                   {/* The place's own name leads, as the branch screen does: it is what a person
                       says out loud, and the full address under it is what a courier reads. */}
                   <p
@@ -481,6 +590,108 @@ export default function BusinessProfilePage() {
             {placeError && (
               <p className="px-5 pb-4 text-12" style={{ color: "var(--error)" }} role="alert">{placeError}</p>
             )}
+          </section>
+
+          {/* ── What the company is registered as ──────────────────────────────── */}
+          {/* These three facts belong to the COMPANY and to nothing else: they are the identity a
+              bank, a supplier and a tax officer ask for, and no branch may hold a different
+              answer. They are written by their own function (0342), not by the trading-identity
+              patch the Details lines above use, so a missing tax number can never blank the
+              name the shop trades under. */}
+          <section style={{ borderTop: "1px solid var(--divider)" }} data-testid="business-legal">
+            <div className="px-5 py-5">
+              <h2 className="ds-section-label">{t("business.legal")}</h2>
+              <div className="mt-4 flex flex-col gap-4">
+                <DetailLine
+                  label={t("business.regNumber")}
+                  value={shop?.registration_number}
+                  testId="business-field-registration"
+                  onChange={() => setEditingGroup("legal")}
+                  changeLabel={changeCta(Boolean(shop?.registration_number))}
+                />
+                <DetailLine
+                  label={t("business.legalName")}
+                  value={shop?.legal_name}
+                  testId="business-field-legal-name"
+                  onChange={() => setEditingGroup("legal")}
+                  changeLabel={changeCta(Boolean(shop?.legal_name))}
+                />
+                <DetailLine
+                  label={t("business.ntn")}
+                  value={shop?.ntn}
+                  testId="business-field-ntn"
+                  onChange={() => setEditingGroup("legal")}
+                  changeLabel={changeCta(Boolean(shop?.ntn))}
+                />
+                <DetailLine
+                  label={t("business.strn")}
+                  value={shop?.strn}
+                  testId="business-field-strn"
+                  onChange={() => setEditingGroup("legal")}
+                  changeLabel={changeCta(Boolean(shop?.strn))}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ── How the whole business counts ──────────────────────────────────── */}
+          {/* The two defaults every report and every bill follows unless a branch overrides them.
+              Read here, set once: a currency or a year start that differs between branches would
+              make the same business's totals incomparable. */}
+          <section style={{ borderTop: "1px solid var(--divider)" }} data-testid="business-global">
+            <div className="px-5 py-5">
+              <h2 className="ds-section-label">{t("business.global")}</h2>
+              <div className="mt-4 flex flex-col gap-4">
+                <DetailLine
+                  label={t("business.currency")}
+                  value={shop?.default_currency ?? "PKR"}
+                  testId="business-field-currency"
+                  onChange={() => setEditingGroup("global")}
+                  changeLabel={changeCta(Boolean(shop?.default_currency))}
+                />
+                <DetailLine
+                  label={t("business.financialYear")}
+                  value={shop?.financial_year_start ? formatDate(shop.financial_year_start) : null}
+                  testId="business-field-financial-year"
+                  onChange={() => setEditingGroup("global")}
+                  changeLabel={changeCta(Boolean(shop?.financial_year_start))}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ── How big the company is ─────────────────────────────────────────── */}
+          {/* Two counts and nothing else: what the business owns, not how it is trading. Sales,
+              profit and stock live in the reports, and a company screen that repeated them would
+              be a second, staler dashboard (owner, 2026-11-27). Each count opens its own list. */}
+          <section style={{ borderTop: "1px solid var(--divider)" }} data-testid="business-organization">
+            <div className="px-5 py-5">
+              <h2 className="ds-section-label">{t("business.organization")}</h2>
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => navigate(`${base}/settings/hub/branches`)}
+                  className="text-start ds-pressable"
+                  data-testid="business-count-branches"
+                >
+                  <p className="text-22 font-bold leading-none">{organizationFields.branches}</p>
+                  <p className="mt-1.5 text-11" style={{ color: "var(--text-secondary)" }}>
+                    {t("business.branchesCount")}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`${base}/employees`)}
+                  className="text-start ds-pressable"
+                  data-testid="business-count-people"
+                >
+                  <p className="text-22 font-bold leading-none">{organizationFields.people}</p>
+                  <p className="mt-1.5 text-11" style={{ color: "var(--text-secondary)" }}>
+                    {t("business.peopleCount")}
+                  </p>
+                </button>
+              </div>
+            </div>
           </section>
 
           {/* ── The pictures the business keeps ──────────────────────────────────── */}
@@ -546,6 +757,18 @@ export default function BusinessProfilePage() {
           <div className="pb-8" />
         </>
       )}
+
+      <RecordDetailSheet
+        open={editingGroup !== null && shop !== null}
+        title={editingGroup === "global" ? t("business.global") : t("business.legal")}
+        fields={editingGroup === "global" ? globalFields : legalFields}
+        onClose={() => setEditingGroup(null)}
+        onSave={async (patch) => {
+          await setBusinessDetails(patch);
+          await read();
+          addToast(t("business.saved"), "success");
+        }}
+      />
 
       {editing && (
         <BusinessProfileSheet

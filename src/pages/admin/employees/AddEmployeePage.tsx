@@ -94,6 +94,16 @@ export default function AddEmployeePage() {
   const [roleDefaults, setRoleDefaults] = useState<string[]>([]);
   const [accessValue, setAccessValue] = useState<Set<string>>(new Set());
   const [roleAccess, setRoleAccess] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  /**
+   * The owner pressed Next on the role step while that role's access was still being read.
+   *
+   * The review step cannot describe an access set that has not arrived, so the press used to be
+   * refused with "access is still loading" — and a press made a moment too early left the owner on
+   * the role screen believing the button was broken (measured in the QA lane, 2026-11-27). The
+   * decision has already been made at that point, so the press is remembered and the step advances
+   * as soon as the panel is ready.
+   */
+  const [advanceWhenReady, setAdvanceWhenReady] = useState(false);
   const [roleFacts, setRoleFacts] = useState<Record<string, { permissions: number; widgets: number }>>({});
   const [branchScope, setBranchScope] = useState<string[] | null>([]);
   const [branches, setBranches] = useState<{ id: string; name: string; is_default: boolean; address: string | null }[]>([]);
@@ -280,6 +290,14 @@ export default function AddEmployeePage() {
     return true;
   }
 
+  // A press remembered on the role step completes by itself once the access panel is ready.
+  useEffect(() => {
+    if (!advanceWhenReady) return;
+    if (step !== "role" || roleAccess !== "ready") return;
+    setAdvanceWhenReady(false);
+    setStep("where");
+  }, [advanceWhenReady, step, roleAccess]);
+
   function next() {
     setError("");
     if (step === "who") {
@@ -292,11 +310,15 @@ export default function AddEmployeePage() {
         setError(t("addEmployee.errRole"));
         return;
       }
-      if (roleAccess !== "ready") {
+      if (roleAccess === "ready") {
+        setStep("where");
+        return;
+      }
+      if (roleAccess === "error") {
         setError(t("addEmployee.accessLoading"));
         return;
       }
-      setStep("where");
+      setAdvanceWhenReady(true);
       return;
     }
     if (step === "where") {
