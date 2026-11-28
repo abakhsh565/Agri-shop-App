@@ -169,11 +169,31 @@ export default function FarmerThreadPage() {
       .catch(() => setOfficers([]));
   }, [openAsk, officers.length, listOfficers]);
 
-  // A conversation is live. While this screen is open and visible, re-read the thread so a farmer
-  // answering from his app arrives without the owner pulling to refresh — the other half of
-  // "seamless" is that the shop does not have to ask. Twelve seconds keeps polling cheap on a
-  // rural connection, and the same call advances the read watermark, so an open chat never
-  // accumulates unread.
+  // A conversation is live. The database broadcasts a message, a credit move and a visit move to
+  // this branch's channel in the same transaction that writes it (0339), so a farmer answering
+  // from his app appears in well under a second instead of on the next refresh. The poll below is
+  // now only the fallback for a channel that could not be opened — a rural connection that drops
+  // its socket still converges without the owner doing anything.
+  const shopId = current?.shop?.id ?? "";
+  useEffect(() => {
+    if (!shopId) return;
+    let stop: (() => Promise<void>) | null = null;
+    void useFarmerMessagesStore
+      .getState()
+      .subscribeShop(shopId, () => {
+        void loadThread(farmerId, { markRead: document.visibilityState === "visible" }).catch(
+          () => undefined,
+        );
+      })
+      .then((close) => {
+        stop = close;
+      });
+    return () => {
+      // Leave the channel with the screen; a closed conversation has nothing to listen to.
+      void stop?.();
+    };
+  }, [shopId, farmerId, loadThread]);
+
   useEffect(() => {
     if (!farmerId) return;
     const id = window.setInterval(() => {

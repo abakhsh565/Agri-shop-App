@@ -225,7 +225,11 @@ export default function DateField({
         }
         style={{ background: "var(--field-bg)", color: value ? "var(--text-primary)" : "var(--text-tertiary)" }}
       >
-        <span className="truncate">{value ? displayDate(value) : t("dateField.empty")}</span>
+        {/* A date is one token, not words to reorder: left-to-right even in Urdu, so 30 Jan 2027
+            never reads as "Jan 2027 30" on the credit form (owner, 2026-11-27). */}
+        <span className="truncate" dir="ltr">
+          {value ? displayDate(value) : t("dateField.empty")}
+        </span>
         <Calendar size={15} className="shrink-0" style={{ color: "var(--text-secondary)" }} />
       </button>
 

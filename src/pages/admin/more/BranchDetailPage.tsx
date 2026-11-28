@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowRightLeft, Crown, Loader2, MapPin, ShieldCheck } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import NavHeader from "@/components/ui/NavHeader";
 import BranchEditor from "@/components/shop/BranchEditor";
 import BranchIdentity from "@/components/shop/BranchIdentity";
-import BranchPerformance from "@/components/shop/BranchPerformance";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Input from "@/components/ui/Input";
 import ListCard from "@/components/ui/ListCard";
@@ -20,6 +19,14 @@ import { useShopStore } from "@/stores/shopStore";
 import { useEmployeesStore } from "@/stores/employeesStore";
 import { useCoOwnersStore, type BranchCoOwner } from "@/stores/coOwnersStore";
 import { loadBusinessProfile } from "@/lib/businessProfile";
+import RecordDetailSheet, { type DetailField } from "@/components/shop/RecordDetailSheet";
+import {
+  BRANCH_TYPES,
+  loadBranchRecord,
+  setBranchDetails,
+  timeValue,
+  type BranchRecord,
+} from "@/lib/branchDetails";
 import { resolveImageUrl } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 
@@ -69,6 +76,17 @@ export default function BranchDetailPage() {
   const loadEmployees = useEmployeesStore((s) => s.load);
   const getBranchCoOwners = useCoOwnersStore((s) => s.getBranchCoOwners);
   const [coOwners, setCoOwners] = useState<BranchCoOwner[]>([]);
+  /**
+   * This branch's operational record: code, kind, opening hours, status.
+   *
+   * The branch LIST answers the directory's question (which branches, how many people, how much
+   * money) and is shaped to it, so these facts are read on their own from the branch's record
+   * (0342). The company's registration, tax numbers and currency are deliberately NOT read here:
+   * they belong to the Business Profile, and repeating them would make two screens claim the
+   * same fact (owner, 2026-11-27).
+   */
+  const [record, setRecord] = useState<BranchRecord | null>(null);
+  const [editingOps, setEditingOps] = useState(false);
 
   async function readCoOwners() {
     if (!branchId || !isOwner) return;
@@ -113,6 +131,17 @@ export default function BranchDetailPage() {
       .catch(() => { if (live) setLogoUrl(null); });
     return () => { live = false; };
   }, []);
+
+  const readRecord = useCallback(async () => {
+    if (!branchId) return;
+    try {
+      setRecord(await loadBranchRecord(branchId));
+    } catch {
+      setRecord(null);
+    }
+  }, [branchId]);
+
+  useEffect(() => { void readRecord(); }, [readRecord]);
 
   useEffect(() => {
     void readCoOwners();
@@ -199,6 +228,45 @@ export default function BranchDetailPage() {
     }
   }
 
+  const hoursLine = record?.opens_at && record?.closes_at
+    ? `${timeValue(record.opens_at)} – ${timeValue(record.closes_at)}`
+    : null;
+  const opsFields: DetailField[] = [
+    {
+      key: "name",
+      label: t("branchPage.name"),
+      kind: "text",
+      value: record?.name ?? branch.name,
+      maxLength: 120,
+    },
+    {
+      key: "code",
+      label: t("branchPage.code"),
+      kind: "text",
+      value: record?.code ?? "",
+      maxLength: 20,
+    },
+    {
+      key: "branch_type",
+      label: t("branchPage.type"),
+      kind: "choice",
+      value: record?.branch_type ?? "store",
+      options: BRANCH_TYPES.map((type) => ({ value: type, label: t(`branchPage.type.${type}`) })),
+    },
+    {
+      key: "opens_at",
+      label: t("branchPage.opensAt"),
+      kind: "time",
+      value: timeValue(record?.opens_at ?? null),
+    },
+    {
+      key: "closes_at",
+      label: t("branchPage.closesAt"),
+      kind: "time",
+      value: timeValue(record?.closes_at ?? null),
+    },
+  ];
+
   const employeeLine = branch.employeeCount != null
     ? t(branch.employeeCount === 1 ? "branches.employeeOne" : "branches.employeeOther", {
         count: String(branch.employeeCount),
@@ -266,13 +334,76 @@ export default function BranchDetailPage() {
         <BranchIdentity branch={branch} imageUrl={logoUrl} />
       </div>
 
-      <div className="px-4 pt-5">
-        <BranchPerformance branch={branch} />
-      </div>
-
       {/* Location and the marketplace decision — the branch's own configuration, in the order a
           reader checks it: where it is, then whether farmers can find it. */}
       <BranchEditor branch={branch} />
+
+      {/* This branch as a place to work in: what staff call it, what kind of place it is, when it
+          is open. The company's legal identity and its reporting defaults are on the Business
+          Profile and are not repeated here — one fact, one screen (owner, 2026-11-27). */}
+      <div className="px-4 pt-6" data-testid="branch-operations">
+        <p className="ds-section-label mb-2">{t("branchPage.operations")}</p>
+        <ListCard>
+          {/* The branch's own name is the first fact about the place and the one people say out
+              loud, so it is edited here like every other fact on the record rather than through a
+              separate "rename" screen. It goes through `rename_branch`, the database function that
+              owns the rules (a name is required, a duplicate inside this business is refused). */}
+          <ListRow
+            title={t("branchPage.name")}
+            value={record?.name ?? branch.name}
+            testId="branch-field-name"
+            onClick={() => setEditingOps(true)}
+          />
+          <ListRow
+            title={t("branchPage.code")}
+            value={record?.code ?? t("branchPage.notSet")}
+            testId="branch-field-code"
+            onClick={() => setEditingOps(true)}
+          />
+          <ListRow
+            title={t("branchPage.type")}
+            value={t(`branchPage.type.${record?.branch_type ?? "store"}`)}
+            testId="branch-field-type"
+            onClick={() => setEditingOps(true)}
+          />
+          <ListRow
+            title={t("branchPage.hours")}
+            value={hoursLine ?? t("branchPage.notSet")}
+            testId="branch-field-hours"
+            onClick={() => setEditingOps(true)}
+          />
+          <ListRow
+            title={t("branchPage.status")}
+            value={t(record?.is_active === false ? "branchPage.statusArchived" : "branchPage.statusActive")}
+            testId="branch-field-status"
+          />
+        </ListCard>
+      </div>
+
+      <RecordDetailSheet
+        open={editingOps && record !== null}
+        title={t("branchPage.operations")}
+        fields={opsFields}
+        onClose={() => setEditingOps(false)}
+        onSave={async (patch) => {
+          if (!branchId) return;
+          const { name, ...rest } = patch;
+          if (name && name.trim() && name.trim() !== (record?.name ?? "")) {
+            const renamed = await useShopStore.getState().renameBranch(branchId, name.trim());
+            if (!renamed.ok) {
+              addToast(
+                t(renamed.code === "name_taken" ? "branches.nameTaken" : "branches.saveFailed"),
+                "error",
+              );
+              throw new Error(renamed.code);
+            }
+          }
+          if (Object.keys(rest).length > 0) await setBranchDetails(branchId, rest);
+          await readRecord();
+          await loadBranches();
+          addToast(t("business.saved"), "success");
+        }}
+      />
 
       {/* One section for everyone connected to this branch: who runs it day to day, who co-owns
           it, and the door to the roles themselves. Three titled blocks became one list. */}

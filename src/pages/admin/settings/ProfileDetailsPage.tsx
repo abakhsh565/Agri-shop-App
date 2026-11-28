@@ -72,6 +72,7 @@ export default function ProfileDetailsPage() {
   const { user } = useAuthStore();
   const { theme, language } = useThemeStore();
   const activeBranchName = useShopStore((s) => s.activeBranchName);
+  const shopName = useShopStore((s) => s.activeShopName);
   const isUrdu = language === "ur";
 
   const [editingName, setEditingName] = useState(false);
@@ -195,7 +196,11 @@ export default function ProfileDetailsPage() {
     : experience === "co_owner"
       ? t("profile.coOwner")
       : user.roleName || (user.membershipRole === "admin" ? t("emp.admin") : t("search.employee"));
-  const branchLabel = activeBranchName ?? t("audit.noBranch");
+  // One naming for one thing (owner, 2026-11-27): what a person belongs to is their business —
+  // the shop they signed up with — not a second "branch" label that reads as a different entity
+  // from the business profile it points at. The shop's own name wins; the working branch is the
+  // fallback for an account whose shop row has not loaded yet.
+  const businessLabel = shopName || activeBranchName || t("audit.noBranch");
   const shownPhone = formatPhoneDisplay(user.phone) ?? user.phone;
 
   function openPhoneChange() {
@@ -356,7 +361,7 @@ export default function ProfileDetailsPage() {
           <span className="text-11 font-bold h-6 px-2 rounded-full flex items-center" style={{ background: "var(--brand)", color: "var(--ink-fg)" }} data-testid="profile-role">
             {roleLabel}
           </span>
-          <span className="text-12" style={{ color: "var(--text-secondary)" }}>{branchLabel}</span>
+          <span className="text-12" style={{ color: "var(--text-secondary)" }}>{businessLabel}</span>
         </div>
         <p className="mt-2 flex items-center gap-1.5 text-13 font-medium" dir="ltr" data-testid="profile-phone">
           {shownPhone}
@@ -420,7 +425,7 @@ export default function ProfileDetailsPage() {
             testId="profile-row-phone"
           />
           <InfoRow icon={ShieldCheck} label={t("profile.role")} value={roleLabel} testId="profile-row-role" />
-          <InfoRow icon={Building2} label={t("profile.branch")} value={branchLabel} testId="profile-row-branch" />
+          <InfoRow icon={Building2} label={t("profile.business")} value={businessLabel} testId="profile-row-branch" />
           {user.employeeNumber && (
             <InfoRow icon={Hash} label={t("profile.employeeId")} value={user.employeeNumber} valueDir="ltr" testId="profile-row-employee" />
           )}

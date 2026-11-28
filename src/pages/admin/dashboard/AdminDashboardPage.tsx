@@ -24,7 +24,7 @@ import { useT } from "@/lib/i18n";
 import { branchContextLabel } from "@/lib/branchContext";
 import { canSeeDashboard } from "@/lib/tenantContext";
 import { branchIdentity } from "@/lib/branchKind";
-import { AlertTriangle, CalendarDays, ChevronRight, ChevronDown, PackageX, ShoppingCart, Search, Bell, Truck, Wallet, CheckCircle2, HandCoins, PackagePlus, Store, Mic, RefreshCw } from "lucide-react";
+import { AlertTriangle, CalendarDays, ChevronRight, ChevronDown, PackageX, ShoppingCart, Search, Bell, MessageCircle, Truck, Wallet, CheckCircle2, HandCoins, PackagePlus, Store, Mic, RefreshCw } from "lucide-react";
 import StatusBar from "@/components/ui/StatusBar";
 import RollingNumber from "@/components/ui/RollingNumber";
 import { useCartStore } from "@/stores/cartStore";
@@ -639,6 +639,18 @@ export default function AdminDashboardPage() {
                 {filledDrafts.length}
               </span>
             )}
+          </button>
+                    {/* Messages sit beside the bell: the bell is what the app did, the message icon is what
+              the people on the other side said. Opened from here instead of through More, because
+              an unread message is the one thing an owner should not have to go looking for. */}
+          <button
+            onClick={() => navigate("/admin/messages")}
+            aria-label={t("admin.messages")}
+            data-testid="home-messages"
+            className="flex items-center justify-center rounded-full size-9 relative transition-colors active:opacity-60"
+            style={{ background: "var(--surface-2)" }}
+          >
+            <MessageCircle size={16} style={{ color: "var(--text-primary)" }} />
           </button>
           <button
             onClick={() => setShowNotifs((v) => !v)}

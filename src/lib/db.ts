@@ -58,8 +58,16 @@ export async function rpcCreateSale(payload: {
   paymentMethod: PaymentMethod;
   amountPaid: number;
   note?: string;
+  /**
+   * Money off the whole bill, in rupees. Each line carries its own reduction in `items`. Both
+   * are amounts, never percentages: 0322 makes the database apply the same caps, so a client
+   * that sends the wrong arithmetic cannot create a negative sale.
+   */
+  discount?: number;
+  /** When the unpaid part is due. Written by `create_sale` atomically with the sale. */
+  dueDate?: string;
   items: SaleLineInput[];
-}): Promise<{ id: string; saleNumber: string; totalAmount: number; amountPaid: number; outstandingBalance: number }> {
+}): Promise<{ id: string; saleNumber: string; totalAmount: number; discount?: number; amountPaid: number; outstandingBalance: number }> {
   const userId = useAuthStore.getState().user?.id ?? null;
   const { data, error } = await scopedRpc("create_sale", { payload: { ...payload, userId } });
   if (error) throw new Error(friendly(error.message));

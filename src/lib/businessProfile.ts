@@ -41,6 +41,18 @@ export interface BusinessProfileShop {
   location_label: string | null;
   owner_name: string | null;
   owner_phone: string | null;
+  /*
+   * The company's legal identity and the two organisation-wide defaults (migration 0342).
+   *
+   * These belong to the COMPANY, not to a branch: they are what the business is registered as and
+   * the conventions every report in it follows. A branch can be opened, renamed or archived
+   * without any of them changing.
+   */
+  legal_name: string | null;
+  ntn: string | null;
+  strn: string | null;
+  financial_year_start: string | null;
+  default_currency: string | null;
 }
 
 export interface BusinessProfileRegistration {
@@ -116,6 +128,30 @@ export type BusinessPatch = Partial<{
   cnic_front: string;
   cnic_back: string;
 }>;
+
+/**
+ * The company-level facts, written by their own function.
+ *
+ * `update_business_profile` speaks about the trading identity (name, contact, documents) and
+ * answers a patch with the same keys. The legal/tax identity and the defaults are a different
+ * record with a different owner question, so they are written separately rather than widening the
+ * patch the older screens already send (0342).
+ */
+export type BusinessDetailsPatch = Partial<{
+  legal_name: string;
+  ntn: string;
+  strn: string;
+  financial_year_start: string;
+  currency: string;
+}>;
+
+export async function setBusinessDetails(patch: BusinessDetailsPatch): Promise<BusinessProfileShop> {
+  const { data, error } = await supabase.rpc("set_business_details", { p_patch: patch });
+  if (error) throw new Error(error.message);
+  const parsed = typeof data === "string" ? JSON.parse(data) : data;
+  if (!parsed?.id) throw new Error("NO_RECORD");
+  return parsed as BusinessProfileShop;
+}
 
 export async function updateBusinessProfile(patch: BusinessPatch): Promise<BusinessProfileShop> {
   const { data, error } = await supabase.rpc("update_business_profile", { p_patch: patch });

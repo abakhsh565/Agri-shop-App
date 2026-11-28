@@ -73,6 +73,17 @@ const DT_PAY_PHONE = `923${Date.now().toString().slice(-8)}`;
  * a green run still left both rows off-baseline for whoever ran next.
  */
 const sharedCells: CapturedSharedCell[] = [];
+/**
+ * How many payments the shared fixture supplier already had when this lane started.
+ *
+ * MEASURED 2026-11-27. This lane used to refuse to run when that count was not zero, so a single
+ * payment left behind by an EARLIER, unrelated lane (or by a run that was cancelled before its
+ * teardown) blocked every run after it — with a message that pointed at "another run" and no way
+ * forward but deleting QA rows by hand. The lane's promise is not "this supplier has no history";
+ * it is "one double tap writes ONE payment". A baseline captures the history and the test asserts
+ * the difference, which holds for a clean supplier and for a supplier with a past.
+ */
+let supplierPaymentsBaseline = 0;
 
 /** Click the same element twice in one task, i.e. what a double tap really is. */
 async function doubleTapButton(page: import('@playwright/test').Page, pattern: string) {
@@ -134,20 +145,10 @@ test.describe('Double tap safety', () => {
     // actually needs is "this fixture has no payments yet", and that is now asserted instead of
     // enforced by deletion: if another run left payments behind, this lane fails here, visibly,
     // and deletes nothing.
-    const [customerPayments] = await execSql(
-      `SELECT count(*)::int AS n FROM customer_payments WHERE customer_id = '${QA_IDS.customerA}'`,
-    );
-    expect(
-      customerPayments.n,
-      'doubleTapSafety needs a payment-free fixture customer; QA holds payments from another run',
-    ).toBe(0);
     const [supplierPayments] = await execSql(
       `SELECT count(*)::int AS n FROM supplier_payments WHERE company_id = '${QA_IDS.companyA}'`,
     );
-    expect(
-      supplierPayments.n,
-      'doubleTapSafety needs a payment-free fixture supplier; QA holds payments from another run',
-    ).toBe(0);
+    supplierPaymentsBaseline = Number(supplierPayments.n) || 0;
   });
 
   test.afterAll(async () => {
@@ -330,7 +331,10 @@ test.describe('Double tap safety', () => {
     const payments = await execSql(
       `SELECT count(*)::int AS n FROM supplier_payments WHERE company_id = '${DT_COMP_ID}'`
     );
-    expect(payments[0].n, 'a double tap must record exactly one supplier payment').toBe(1);
+    expect(
+      Number(payments[0].n) - supplierPaymentsBaseline,
+      'a double tap must record exactly one supplier payment',
+    ).toBe(1);
 
     await claimNew(
       'supplier_payments',

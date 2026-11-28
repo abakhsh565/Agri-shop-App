@@ -107,7 +107,28 @@ export const useCartStore = create<CartState>()(
        * Every mutation writes the active draft into the account's slot and re-projects it onto the
        * fields the screens read. One writer, so the visible cart and the stored one cannot drift.
        */
-      const writeDrafts = (drafts: CartDraft[], activeId: string | null) => {
+      const writeDrafts = (rawDrafts: CartDraft[], activeId: string | null) => {
+        /**
+         * The cap lives here, on every write, rather than at each call site: a reduction is money
+         * off something, and the something can shrink afterwards (a quantity lowered, a line
+         * deleted). Without this a line could keep a Rs. 1,000 discount after its quantity halved
+         * its value, and the review screen would print a reduction larger than the goods.
+         */
+        const drafts = rawDrafts.map((draft) => {
+          const items = draft.items.map((item) => {
+            const gross = Math.round(item.qty * item.unitPrice * 100) / 100;
+            const discount = Math.min(Math.max(item.discount ?? 0, 0), gross);
+            const lineTotal = lineNet(item.qty, item.unitPrice, discount);
+            return item.discount === discount && item.lineTotal === lineTotal
+              ? item
+              : { ...item, discount, lineTotal };
+          });
+          const cap = items.reduce((sum, item) => sum + item.lineTotal, 0);
+          const discount = Math.min(Math.max(draft.discount, 0), cap);
+          return discount === draft.discount && items.every((item, i) => item === draft.items[i])
+            ? draft
+            : { ...draft, items, discount };
+        });
         const scope = get().scopeKey;
         const carts = scope ? { ...get().carts, [scope]: { drafts, activeId } } : get().carts;
         const active = drafts.find((d) => d.id === activeId) ?? null;

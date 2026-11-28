@@ -1,6 +1,15 @@
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase";
 import { prepareChatImage, uploadChatMedia, type ChatMediaMeta } from "@/lib/chatMedia";
+
+/**
+ * The branch's live channel. The database broadcasts a message, a credit move and a visit move to
+ * `shop:<shop_id>` in the same transaction that writes it (0339), and an active member of that
+ * shop is the only subscriber the channel's policy admits. One channel per open screen: a second
+ * subscriber replaces the first rather than stacking listeners.
+ */
+let shopChannel: RealtimeChannel | null = null;
 
 /**
  * Farmer conversations: the store behind the Messages tab.
@@ -177,6 +186,15 @@ interface FarmerMessagesState {
   }) => Promise<void>;
   advanceVisit: (visitId: string, status: string, note?: string | null) => Promise<void>;
   listOfficers: () => Promise<AssignableOfficer[]>;
+  /**
+   * Listen to the branch's own conversation. Resolves to the screen's own stop function, so a
+   * screen that closes can only ever tear down the channel it opened — never the one the screen
+   * replacing it just subscribed.
+   */
+  subscribeShop: (
+    shopId: string,
+    onChange: (event: "message" | "request" | "visit") => void,
+  ) => Promise<() => Promise<void>>;
 }
 
 function fail(error: { message: string } | null): never {
@@ -382,5 +400,40 @@ export const useFarmerMessagesStore = create<FarmerMessagesState>((set, get) => 
     const { data, error } = await supabase.rpc("list_assignable_officers");
     if (error) fail(error);
     return (data as AssignableOfficer[]) ?? [];
+  },
+
+  async subscribeShop(shopId, onChange) {
+    // One channel at a time: the previous screen's is closed before this one opens.
+    if (shopChannel) {
+      const previous = shopChannel;
+      shopChannel = null;
+      await supabase.removeChannel(previous);
+    }
+    if (!shopId) return async () => undefined;
+
+    const channel = supabase.channel(`shop:${shopId}`, {
+      config: { private: true, broadcast: { self: false } },
+    });
+    channel.on("broadcast", { event: "message" }, () => onChange("message"));
+    channel.on("broadcast", { event: "request" }, () => onChange("request"));
+    channel.on("broadcast", { event: "visit" }, () => onChange("visit"));
+    shopChannel = channel;
+
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      channel.subscribe((status) => {
+        if (settled) return;
+        // `CHANNEL_ERROR` is a real answer too: the screen keeps its poll instead of hanging.
+        if (status === "SUBSCRIBED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          settled = true;
+          resolve();
+        }
+      });
+    });
+
+    return async () => {
+      if (shopChannel === channel) shopChannel = null;
+      await supabase.removeChannel(channel);
+    };
   },
 }));
