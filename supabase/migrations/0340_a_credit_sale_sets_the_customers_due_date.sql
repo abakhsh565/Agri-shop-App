@@ -30,7 +30,7 @@ DECLARE
   v_stock_after numeric(14,4); v_stock_change numeric(14,4);
   v_gross numeric(14,4); v_line_discount numeric(14,4); v_line numeric(14,4);
   v_discount numeric(14,4):=GREATEST(COALESCE((payload->>'discount')::numeric,0),0);
-  v_due date;
+  v_due date:=NULLIF(COALESCE(payload->>'dueDate',payload->>'due_date'),'')::date;
 BEGIN
   v_resolved:=resolve_shop_and_actor(NULLIF(payload->>'shopId','')::uuid,NULLIF(payload->>'userId','')::uuid,NULLIF(payload->>'createdBy','')::uuid);
   v_shop_id:=(v_resolved->>'shop_id')::uuid; v_actor:=(v_resolved->>'actor_id')::uuid;
@@ -40,10 +40,7 @@ BEGIN
   v_sale_number:='SALE-'||LPAD(FLOOR(RANDOM()*99999)::text,5,'0');
 
   INSERT INTO sales(id,sale_number,customer_id,customer_name_snapshot,employee_id,employee_name,total_amount,discount,payment_type,payment_method,amount_paid,amount_due,due_date,status,shop_id,created_at,updated_at)
-  VALUES(gen_random_uuid(),v_sale_number,v_customer_id,COALESCE((SELECT name FROM customers WHERE id=v_customer_id AND shop_id=v_shop_id),COALESCE(payload->>'customerName','Walk-in')),v_actor,COALESCE(payload->>'employeeName',(SELECT name FROM users WHERE id=v_actor)),0,0,COALESCE(payload->>'paymentType','full')::payment_type,COALESCE(payload->>'paymentMethod','cash')::payment_method,v_paid,0,NULLIF(COALESCE(payload->>'dueDate',payload->>'due_date'),'')::date,'completed',v_shop_id,now(),now()) RETURNING id INTO v_sale_id;
-  -- Read back the date the row actually holds, rather than re-deriving it from the payload: the
-  -- customer's date is the sale's date, whatever else happens to the payload on the way in.
-  SELECT due_date INTO v_due FROM sales WHERE id=v_sale_id;
+  VALUES(gen_random_uuid(),v_sale_number,v_customer_id,COALESCE((SELECT name FROM customers WHERE id=v_customer_id AND shop_id=v_shop_id),COALESCE(payload->>'customerName','Walk-in')),v_actor,COALESCE(payload->>'employeeName',(SELECT name FROM users WHERE id=v_actor)),0,0,COALESCE(payload->>'paymentType','full')::payment_type,COALESCE(payload->>'paymentMethod','cash')::payment_method,v_paid,0,v_due,'completed',v_shop_id,now(),now()) RETURNING id INTO v_sale_id;
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(COALESCE(payload->'items','[]'::jsonb)) LOOP
     v_gross:=ROUND((v_item->>'qty')::numeric*(v_item->>'unitPrice')::numeric,2);
