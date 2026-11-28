@@ -647,7 +647,9 @@ export default function BusinessProfilePage() {
                   value={shop?.default_currency ?? "PKR"}
                   testId="business-field-currency"
                   onChange={() => setEditingGroup("global")}
-                  changeLabel={changeCta(Boolean(shop?.default_currency))}
+                  // The column has a default, so there is always a currency to change — "Add" here
+                  // would describe a missing fact that cannot be missing.
+                  changeLabel={t("common.change")}
                 />
                 <DetailLine
                   label={t("business.financialYear")}
